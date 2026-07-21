@@ -1,4 +1,5 @@
 import { DEMO_RECIPE_ID, getDemoRecipeStatus } from "@/lib/mock/demoBuildFlow";
+import { VECTOR_DEMO_RECIPE_ID } from "@/lib/mock/demoVectorSearchFlow";
 
 /**
  * Deep-link for a build flow (recipe) by status. Kept in sync with all-chats routing.
@@ -11,6 +12,12 @@ export function getRecipeRedirectUrl(recipe: {
 }): string {
   const recipeId = recipe.id || recipe.recipe_id;
   const status = (recipe.status || "").toUpperCase();
+
+  // Seeded, fully-generated flow: land on the spec so the presenter can walk
+  // Spec -> Plan -> Code through the build-flow tabs (all unlocked by status).
+  if (recipeId === VECTOR_DEMO_RECIPE_ID) {
+    return `/task/${recipeId}/spec`;
+  }
 
   if (recipeId === DEMO_RECIPE_ID) {
     const demoStatus = getDemoRecipeStatus().toUpperCase();

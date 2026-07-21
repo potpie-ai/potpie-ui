@@ -33,6 +33,23 @@ export const DEMO_REPO_ID = "demo-potpietools-redis";
 export const DEMO_REPO_FULL_NAME = "potpietools/redis";
 export const DEMO_REPO_BRANCH = "unstable";
 
+/**
+ * Pinned repo option for the new-chat dropdown. Rendered from these constants in
+ * every account so the demo is selectable while the real repo list is still
+ * loading, and even when the backend is unreachable.
+ */
+export const DEMO_REPO_ENTRY = {
+  id: DEMO_REPO_ID,
+  name: "redis",
+  full_name: DEMO_REPO_FULL_NAME,
+  url: `https://github.com/${DEMO_REPO_FULL_NAME}`,
+  default_branch: DEMO_REPO_BRANCH,
+};
+
+export function isDemoRepoName(repoName?: string | null) {
+  return repoName?.trim().toLowerCase() === DEMO_REPO_FULL_NAME;
+}
+
 type DemoState = {
   questionsStarted: boolean;
   questionsGenerated: boolean;

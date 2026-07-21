@@ -1,0 +1,268 @@
+{
+  "prs": [
+    {
+      "number": 15366,
+      "title": "Client compression for replication",
+      "sha": "82d0e3f85",
+      "merged_date": "2026-07-20",
+      "kind": "feature",
+      "touches": ["repl-compression", "replication-core", "networking", "io-threads", "config-engine", "server-core", "test-suite"],
+      "bug_candidate": false,
+      "symptom": null,
+      "summary": "Adds an on-the-wire compression layer for replication traffic: a new client_comp.c (~850 lines) compresses the master-to-replica command stream, with config knobs in redis.conf and integration into networking, IO threads, and the replication path. Cuts replication bandwidth for write-heavy workloads at the cost of CPU on both ends."
+    },
+    {
+      "number": 15490,
+      "title": "Fix redis.conf and README for repl compression",
+      "sha": "b8e84a8d3",
+      "merged_date": "2026-07-20",
+      "kind": "docs",
+      "touches": ["repl-compression"],
+      "bug_candidate": false,
+      "symptom": null,
+      "summary": "Follow-up documentation fix for the replication compression feature: corrects the redis.conf directive descriptions and README build/usage notes shipped with #15366 so operators enable the feature with accurate defaults."
+    },
+    {
+      "number": 15329,
+      "title": "Fix IO thread busy looping for repl clients",
+      "sha": "aa301bfd3",
+      "merged_date": "2026-07-14",
+      "kind": "fix",
+      "touches": ["io-threads", "replication-core", "test-suite"],
+      "bug_candidate": true,
+      "symptom": "IO thread spins at 100% CPU when replica clients are bound to it, even with no traffic",
+      "summary": "One-line fix in iothread.c stopping IO threads from busy looping when they own replication clients, plus a new 149-line replication-iothreads integration test suite. Eliminates a full core of wasted CPU on masters running with io-threads and attached replicas."
+    },
+    {
+      "number": 15338,
+      "title": "Support atomic slot migration in redis-cli",
+      "sha": "47b39347b",
+      "merged_date": "2026-07-01",
+      "kind": "feature",
+      "touches": ["cli-internals", "atomic-slot-migration", "test-suite"],
+      "bug_candidate": false,
+      "symptom": null,
+      "summary": "Teaches redis-cli's cluster tooling (~344 lines in redis-cli.c) to drive the server-side atomic slot migration protocol instead of legacy MIGRATE-based resharding, so reshard/rebalance operations become atomic per slot with no client-visible ASK window."
+    },
+    {
+      "number": 15493,
+      "title": "Fix flaky cluster-topology-change test by waiting for ASM to finish",
+      "sha": "e4b41c32a",
+      "merged_date": "2026-07-20",
+      "kind": "test",
+      "touches": ["test-suite", "atomic-slot-migration", "cluster-core"],
+      "bug_candidate": true,
+      "symptom": "cluster-topology-change test fails intermittently in CI because assertions run while an atomic slot migration is still in flight",
+      "summary": "Deflakes the cluster-topology-change test by moving an ASM-completion wait helper into shared cluster_util.tcl and calling it before asserting topology state, so the test no longer races an in-progress atomic slot migration."
+    },
+    {
+      "number": 15412,
+      "title": "Fix unit mismatch that disabled the FAST expire cycle stale trigger",
+      "sha": "3071bf6d7",
+      "merged_date": "2026-07-13",
+      "kind": "fix",
+      "touches": ["expire-cycle"],
+      "bug_candidate": true,
+      "symptom": "expired keys linger far longer than expected because the FAST expire cycle stale-data trigger never fires (microseconds vs milliseconds comparison)",
+      "summary": "One-character-class fix in expire.c: a time-unit mismatch in the stale-percentage trigger condition meant the FAST expire cycle effectively never activated, so active expiration fell back to the slow cycle alone under expired-key pressure."
+    },
+    {
+      "number": 15447,
+      "title": "Feed replicas mid command-stream under heavy write load",
+      "sha": "9e5614d83",
+      "merged_date": "2026-07-13",
+      "kind": "perf",
+      "touches": ["networking", "replication-core", "server-core"],
+      "bug_candidate": false,
+      "symptom": null,
+      "summary": "Lets the master flush accumulated replication stream data to replicas in the middle of processing a command batch instead of only at end-of-event-loop, smoothing replica feed latency and replication buffer growth under heavy write load."
+    },
+    {
+      "number": 15436,
+      "title": "Fix AOF rewrite crash on module types with a NULL aof_rewrite callback",
+      "sha": "f5b2cba56",
+      "merged_date": "2026-07-20",
+      "kind": "fix",
+      "touches": ["aof-persistence", "module-system", "vector-sets-module"],
+      "bug_candidate": true,
+      "symptom": "redis-server segfaults during BGREWRITEAOF when the dataset contains a module datatype that registered no aof_rewrite callback",
+      "summary": "Guards the AOF rewrite path in aof.c against module datatypes whose type methods leave aof_rewrite NULL (as vector sets do), instead of dereferencing the missing callback and crashing; adds a vector-sets aof_rewrite regression test."
+    },
+    {
+      "number": 15466,
+      "title": "Avoid duplicate KeyMeta restoration in RESTORE-based AOF rewrites",
+      "sha": "534377d66",
+      "merged_date": "2026-07-17",
+      "kind": "fix",
+      "touches": ["key-metadata", "cluster-core", "atomic-slot-migration", "test-suite"],
+      "bug_candidate": true,
+      "symptom": "key metadata gets restored twice when an AOF rewrite emits RESTORE payloads that already embed KeyMeta, corrupting per-key metadata after reload",
+      "summary": "Makes the RESTORE path (shared by AOF rewrites and atomic slot migration in cluster.c/cluster_asm.c) skip re-applying KeyMeta that is already embedded in the serialized payload, preventing duplicate metadata registration on reload; covered by new keymeta module tests."
+    },
+    {
+      "number": 15462,
+      "title": "Fix dictMemUsage() over-counting no_value entries",
+      "sha": "ad642d95a",
+      "merged_date": "2026-07-17",
+      "kind": "fix",
+      "touches": ["dict"],
+      "bug_candidate": true,
+      "symptom": "MEMORY USAGE and dict memory reporting inflated for key-only dicts because no_value entries are counted as full key-value entries",
+      "summary": "Corrects dictMemUsage() in dict.c to account for no_value dict entries (key-only sets) at their true allocation size instead of the full dictEntry size, fixing over-reported memory metrics for structures built on key-only dicts."
+    },
+    {
+      "number": 15405,
+      "title": "Add LMOVEM/BLMOVEM commands",
+      "sha": "b48e4abe4",
+      "merged_date": "2026-07-09",
+      "kind": "feature",
+      "touches": ["list-type", "blocked-clients", "command-table", "test-suite"],
+      "bug_candidate": false,
+      "symptom": null,
+      "summary": "Introduces LMOVEM and blocking BLMOVEM, multi-source variants of LMOVE that atomically pop from the first non-empty of several source lists and push to a destination (~284 lines in t_list.c plus blocked-client plumbing), enabling fan-in queue consumption without client-side polling."
+    },
+    {
+      "number": 15345,
+      "title": "Optimize wide HSET/HMSET on a fresh hash with a single batched listpack append",
+      "sha": "42bd63b3c",
+      "merged_date": "2026-07-09",
+      "kind": "perf",
+      "touches": ["hash-type", "test-suite"],
+      "bug_candidate": false,
+      "symptom": null,
+      "summary": "When a wide HSET/HMSET creates a brand-new listpack-encoded hash, all field-value pairs are now appended in one batched listpack operation instead of pair-by-pair reallocation, speeding up bulk hash creation."
+    },
+    {
+      "number": 15364,
+      "title": "Introduce hinted hash templates",
+      "sha": "ba99faa23",
+      "merged_date": "2026-07-18",
+      "kind": "feature",
+      "touches": ["hash-type", "listpack", "rdb-persistence", "dict", "defrag", "command-table", "keyspace", "config-engine"],
+      "bug_candidate": false,
+      "symptom": null,
+      "summary": "Large feature (~2350 lines in t_hash.c plus rdb.c, listpack.c, dict.c, defrag.c) adding template-hinted hashes: a new HIMPORT command family (PREPARE/SET/DISCARD) lets many hashes share a field-name template, deduplicating repeated schemas across millions of similar hashes with new RDB encodings and defrag support."
+    },
+    {
+      "number": 15347,
+      "title": "Add total command argument count to SLOWLOG GET reply",
+      "sha": "117681f6a",
+      "merged_date": "2026-07-13",
+      "kind": "feature",
+      "touches": ["slowlog", "command-table", "test-suite"],
+      "bug_candidate": false,
+      "symptom": null,
+      "summary": "SLOWLOG GET entries now include the total argument count of the logged command, so consumers can tell how many arguments were truncated out of the stored sample when diagnosing slow wide commands."
+    },
+    {
+      "number": 15433,
+      "title": "Fix signed overflow in BITFIELD #offset parsing",
+      "sha": "c5ac97143",
+      "merged_date": "2026-07-10",
+      "kind": "fix",
+      "touches": ["bitops", "test-suite"],
+      "bug_candidate": true,
+      "symptom": "BITFIELD with a huge #-prefixed offset silently wraps negative via signed integer overflow instead of returning an error",
+      "summary": "Adds overflow checking to the #offset multiplication in bitops.c BITFIELD parsing so out-of-range typed offsets are rejected with an error rather than triggering signed-overflow undefined behavior and wrapped offsets."
+    },
+    {
+      "number": 15478,
+      "title": "Fix ACL key checks for SORT, GEORADIUS/GEORADIUSBYMEMBER, and XREAD/XREADGROUP",
+      "sha": "d3315247f",
+      "merged_date": "2026-07-18",
+      "kind": "fix",
+      "touches": ["acl-engine", "keyspace", "command-table", "test-suite"],
+      "bug_candidate": true,
+      "symptom": "ACL-restricted users can touch keys outside their permitted patterns via SORT STORE, GEORADIUS STORE/STOREDIST, and XREAD/XREADGROUP key handling",
+      "summary": "Corrects key-permission metadata and lookup-time checks (db.c plus command JSON key specs) for SORT, GEORADIUS/GEORADIUSBYMEMBER, and XREAD/XREADGROUP so ACL enforcement covers their store/read targets with the proper read/write flags; adds acl-v2 regression tests."
+    },
+    {
+      "number": 15371,
+      "title": "Fix ACL key-name leak in BCAST client-side caching invalidations",
+      "sha": "3869512c9",
+      "merged_date": "2026-07-08",
+      "kind": "fix",
+      "touches": ["client-tracking", "acl-engine", "networking"],
+      "bug_candidate": true,
+      "symptom": "clients using CLIENT TRACKING in BCAST mode receive invalidation messages naming keys their ACL user has no permission to read",
+      "summary": "Reworks BCAST client-side caching (~224 lines in tracking.c plus acl.c) to filter invalidation broadcasts through the receiving client's ACL key permissions, closing an information leak where key names outside a user's allowed patterns were disclosed."
+    },
+    {
+      "number": 15350,
+      "title": "Add RedisModuleEvent_ClusterTopologyChange server event",
+      "sha": "889734803",
+      "merged_date": "2026-07-13",
+      "kind": "feature",
+      "touches": ["module-system", "cluster-bus", "test-suite"],
+      "bug_candidate": false,
+      "symptom": null,
+      "summary": "Adds a new module server event fired from cluster_legacy.c whenever cluster topology changes (nodes added/removed, slot ownership moves), letting modules react to reconfiguration without polling CLUSTER commands; ships a dedicated test module and tcl suite."
+    },
+    {
+      "number": 15352,
+      "title": "redis-cli: add configurable latency percentiles to --latency modes",
+      "sha": "81ac97cbe",
+      "merged_date": "2026-07-10",
+      "kind": "feature",
+      "touches": ["cli-internals", "test-suite"],
+      "bug_candidate": false,
+      "symptom": null,
+      "summary": "redis-cli --latency, --latency-history, and --latency-dist gain user-configurable percentile output (e.g. p50/p99/p99.9) instead of only min/max/avg, making CLI latency probing directly comparable to production SLO metrics."
+    },
+    {
+      "number": 15441,
+      "title": "Backup & Restore",
+      "sha": "30379f310",
+      "merged_date": "2026-07-18",
+      "kind": "feature",
+      "touches": ["aof-persistence", "command-table", "config-engine", "server-core", "test-suite"],
+      "bug_candidate": false,
+      "symptom": null,
+      "summary": "Adds a BACKUP command family (START/SEAL/STATUS/LIST/ABORT/CLEANUP) built on the AOF machinery (~687 lines in aof.c) for producing consistent, sealed on-disk backups of a running instance with configurable retention, without an external orchestrator."
+    },
+    {
+      "number": 15392,
+      "title": "Fix server crash on VRANDMEMBER with LLONG_MIN count",
+      "sha": "7662d3ff5",
+      "merged_date": "2026-07-13",
+      "kind": "fix",
+      "touches": ["vector-sets-module"],
+      "bug_candidate": true,
+      "symptom": "redis-server crashes on VRANDMEMBER with count -9223372036854775808 because negating LLONG_MIN overflows",
+      "summary": "Guards vector sets' VRANDMEMBER against a count of LLONG_MIN, whose negation is undefined and crashed the server; the module now rejects the value cleanly, with a regression test in the vector-sets python suite."
+    },
+    {
+      "number": 15282,
+      "title": "Add MAXCOUNT and MAXSIZE options to XREAD and XREADGROUP",
+      "sha": "08b465e4f",
+      "merged_date": "2026-06-26",
+      "kind": "feature",
+      "touches": ["streams-core", "stream-consumer-groups", "command-table", "test-suite"],
+      "bug_candidate": false,
+      "symptom": null,
+      "summary": "XREAD/XREADGROUP gain MAXCOUNT and MAXSIZE options (~152 lines in t_stream.c) to cap the total entries and total reply bytes returned across all requested streams, letting consumers bound reply sizes when reading many streams at once."
+    },
+    {
+      "number": 15256,
+      "title": "rax: leaf-inlining for fixed-length-key rax trees",
+      "sha": "d397d2517",
+      "merged_date": "2026-06-23",
+      "kind": "perf",
+      "touches": ["rax", "streams-core", "client-tracking", "defrag"],
+      "bug_candidate": false,
+      "symptom": null,
+      "summary": "Major rax rework (~947 lines in rax.c) that inlines leaf nodes for trees whose keys are all fixed length -- the common case for stream IDs -- shrinking per-entry memory and pointer chasing; callers in t_stream.c, tracking.c, and defrag.c updated to the new API."
+    },
+    {
+      "number": 15409,
+      "title": "Fix crash on CONFIG SET of TLS options in non-TLS builds",
+      "sha": "57a00274b",
+      "merged_date": "2026-07-07",
+      "kind": "fix",
+      "touches": ["config-engine", "tls-layer", "test-suite"],
+      "bug_candidate": true,
+      "symptom": "CONFIG SET tls-* crashes a redis-server binary compiled without TLS support instead of returning an error",
+      "summary": "Hardens config.c so setting TLS-related options on a build compiled without TLS returns a clean error instead of dereferencing missing TLS handlers and crashing the server; adds an introspection test covering the non-TLS path."
+    }
+  ]
+}

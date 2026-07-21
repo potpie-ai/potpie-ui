@@ -1,0 +1,177 @@
+{
+  "subsystem": "replication",
+  "components": [
+    {
+      "slug": "replication-core",
+      "name": "Replication Core",
+      "paths": ["src/replication.c"],
+      "summary": "Master-replica async replication: PSYNC2 partial resync, backlog, diskless sync, WAIT, FAILOVER.",
+      "description": "Implements Redis master-replica synchronization (replication.c): PSYNC2 partial resync via masterTryPartialResynchronization/slaveTryPartialResynchronization matching dual replication IDs server.replid/replid2 (shiftReplicationId keeps the old history valid up to second_replid_offset so a promoted replica can serve +CONTINUE after failover); the replication backlog is a shared circular history (replBacklog struct, createReplicationBacklog, rax blocks_index, incrementalTrimReplicationBacklog to avoid trim-induced stalls) sized by repl-backlog-size. Also covers diskless sync (RDB streamed child-to-socket, startBgsaveForReplication, rdbPipeReadHandler) and diskless load (readSyncBulkPayload with swapdb/flushdb/on-empty-db modes), the newer rdb-channel full sync where the replica opens a second connection so RDB transfer and live repl stream flow in parallel (rdbChannelFullSyncWithMaster, replica-full-sync-buffer-limit, hidden config repl-rdb-channel), chained replicas / sub-replicas that proxy the master stream verbatim (replicationFeedStreamFromMasterStream), WAIT/WAITAOF synchronous barriers (waitCommand, replicationCountAcksByOffset, REPLCONF ACK), REPLCONF capability negotiation including compression, the coordinated FAILOVER command (failoverCommand, updateFailoverStatus), and replicationCron heartbeats/timeouts. Searchable as 'partial resynchronization', 'full resync', 'replication lag', 'master_link_status down', 'broken link with master', 'replica promotion', 'replid mismatch'; failure symptoms: repeated full syncs from too-small backlog, 'Unable to partial resync ... lack of backlog', replica timeout during bulk transfer.",
+      "part_of": "service:redis-server",
+      "depends_on": ["server-core", "networking", "connection-layer", "sync-io", "repl-compression", "rdb-persistence", "background-io", "io-threads", "rax"],
+      "uses_datastores": ["rdb-snapshot"],
+      "exposes_interfaces": ["psync2"],
+      "config_vars": ["repl-diskless-sync", "repl-diskless-sync-delay", "repl-diskless-sync-max-replicas", "repl-diskless-load", "repl-backlog-size", "repl-backlog-ttl", "repl-ping-replica-period", "repl-timeout", "replica-serve-stale-data", "replica-read-only", "replica-priority", "replica-full-sync-buffer-limit", "min-replicas-to-write", "min-replicas-max-lag"],
+      "loc": 5598
+    },
+    {
+      "slug": "sync-io",
+      "name": "Synchronous I/O Helpers",
+      "paths": ["src/syncio.c"],
+      "summary": "Blocking socket read/write with millisecond timeouts for SYNC handshake and MIGRATE.",
+      "description": "Tiny utility layer (syncio.c, ~125 lines) providing blocking-with-timeout socket I/O in an otherwise nonblocking server: syncWrite, syncRead, syncReadLine poll via aeWait at 10ms resolution (SYNCIO__RESOLUTION) and return -1/ETIMEDOUT on expiry. Header comment states it exists for the replication handshake (replica-side SYNC/PSYNC negotiation) and for MIGRATE, which must be blocking to stay atomic across two instances. Searchable as 'blocking socket IO', 'syncReadLine timeout', 'handshake timeout'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["server-core", "event-loop"],
+      "loc": 125
+    },
+    {
+      "slug": "repl-compression",
+      "name": "Replication Stream Compression",
+      "paths": ["src/client_comp.c"],
+      "summary": "New zstd streaming compression of the replication link, negotiated via REPLCONF compression.",
+      "description": "New client-connection compression layer (client_comp.c) that transparently compresses the master-to-replica replication stream with zstd when built with BUILD_COMPRESSION=yes (code guarded by USE_COMPRESSION; stubs return errors otherwise). compressionState wraps ZSTD_CStream/ZSTD_DStream with input/output tempBufs; clientConnWrite/clientConnRead replace raw connection I/O, with clientCompressAndWrite, clientReadBufAndDecompress, and event-loop pending-decompression draining (clientCompressionProcessPendingData). The replica requests it during handshake with REPLCONF compression <level> (syncWithMaster REPL_STATE_RECEIVE_CLIENT_COMP); the master accepts only if its own repl-compression level matches exactly, and setReplCompression forces level 0 on non-compression builds. Flushing uses ZSTD_e_end (ends the frame) rather than ZSTD_e_flush to keep decompression latency low; repl-compression-max-latency bounds buffering delay, and the feature only works with io-threads > 1. Searchable as 'replication compression', 'zstd replication stream', 'REPLCONF compression rejected', 'compression levels differ'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["server-core", "networking", "io-threads", "zmalloc-layer"],
+      "uses_deps": ["zstd"],
+      "uses_adapters": ["zstd-compression"],
+      "config_vars": ["repl-compression", "repl-compression-max-latency"],
+      "loc": 849
+    },
+    {
+      "slug": "sentinel-core",
+      "name": "Sentinel Core",
+      "paths": ["src/sentinel.c"],
+      "summary": "Redis Sentinel: SDOWN/ODOWN detection, quorum, leader election by epoch, automatic failover.",
+      "description": "Full Redis Sentinel implementation (sentinel.c): monitors masters/replicas/peer sentinels as sentinelRedisInstance objects (SRI_MASTER/SRI_SLAVE/SRI_SENTINEL flags), pings them each SENTINEL_PING_PERIOD and marks SRI_S_DOWN (subjectively down) in sentinelCheckSubjectivelyDown after down-after-milliseconds, escalating to SRI_O_DOWN (objectively down) in sentinelCheckObjectivelyDown once quorum sentinels agree via 'SENTINEL is-master-down-by-addr' (sentinelAskMasterStateToOtherSentinels). Failover runs an epoch-based leader election (sentinelGetLeader, sentinelVoteLeader, current_epoch/failover_epoch, sentinel_election_timeout) then a state machine sentinelFailoverStateMachine: select replica (sentinelFailoverSelectSlave, replica-priority), SLAVEOF NO ONE, wait promotion, reconfigure remaining replicas parallel-syncs at a time, switch config. Peer discovery and config propagation use the __sentinel__:hello pub/sub channel (sentinelSendHello/sentinelProcessHelloMessage) over hiredis async connections (TLS-capable when built with OpenSSL); TILT mode guards against clock/scheduling anomalies. Searchable as 'sdown odown', 'quorum not reached', '+failover-state', 'sentinel leader election', 'master rebooting', '-BUSY script kill'; runs as service redis-sentinel on port 26379.",
+      "part_of": "service:redis-sentinel",
+      "depends_on": ["server-core", "event-loop", "replication-core", "pubsub", "tls-layer"],
+      "uses_deps": ["hiredis"],
+      "uses_adapters": ["openssl-tls"],
+      "config_vars": ["sentinel monitor", "sentinel down-after-milliseconds", "sentinel failover-timeout", "sentinel parallel-syncs"],
+      "loc": 5528
+    }
+  ],
+  "interfaces": [
+    {
+      "slug": "psync2",
+      "name": "PSYNC2 Replication Protocol",
+      "summary": "Wire protocol for replica sync: PSYNC replid offset, +FULLRESYNC/+CONTINUE, REPLCONF capabilities.",
+      "description": "The replication handshake and streaming protocol spoken between masters, replicas, and chained sub-replicas: replica sends REPLCONF listening-port / capa eof capa psync2 (plus optional rdb-channel and compression capabilities) then PSYNC <replid> <offset>; master answers +FULLRESYNC <replid> <offset> or +CONTINUE [<replid>] when masterTryPartialResynchronization finds the offset in its backlog under replid or the secondary replid2. PSYNC2 semantics (dual replication IDs with second_replid_offset) let partial resync survive replica promotion and failover. Liveness flows over REPLCONF ACK <offset> from replica and REPLCONF GETACK from master; also carried by Sentinel-triggered SLAVEOF/REPLICAOF reconfiguration. Searchable as 'PSYNC handshake', '+CONTINUE', 'FULLRESYNC', 'replconf ack'.",
+      "exposed_by": "service:redis-server",
+      "implemented_by": ["replication-core"]
+    }
+  ],
+  "adapters": [
+    {
+      "slug": "zstd-compression",
+      "name": "zstd Streaming Adapter",
+      "summary": "compressionType vtable binding client_comp.c to zstd's streaming API.",
+      "description": "Adapter in client_comp.c abstracting the compression library behind a compressionType vtable (init_compress/init_decompress/compress/decompress/end) with zstd as the only backend: zstdInitCompress/zstdCompress drive ZSTD_CStream via ZSTD_compressStream2, zstdInitDecompress/zstdDecompress drive ZSTD_DStream, buffers sized by ZSTD_CStreamInSize/OutSize. Compiled only under USE_COMPRESSION (BUILD_COMPRESSION=yes); compression levels 0-22 map directly to ZSTD_c_compressionLevel. Flush path deliberately uses ZSTD_e_end to close frames so the replica-side decompressor never stalls waiting for more data.",
+      "used_by": ["repl-compression"]
+    }
+  ],
+  "config_vars": [
+    {"name": "repl-diskless-sync", "summary": "Stream RDB child-to-socket during full sync instead of writing to disk first.", "description": "When yes (the default in redis.conf), the master forks a child that writes the full-sync RDB directly to replica sockets, skipping disk; better with slow disks and fast networks. Drives socket_target in startBgsaveForReplication.", "configures": "replication-core", "default": "yes"},
+    {"name": "repl-diskless-sync-delay", "summary": "Seconds to wait before starting a diskless transfer so more replicas can join.", "description": "Once a diskless socket transfer starts, late replicas queue for the next one, so the master waits this many seconds to batch replicas into one child. 0 disables the wait.", "configures": "replication-core", "default": "5"},
+    {"name": "repl-diskless-sync-max-replicas", "summary": "Start diskless sync early once this many replicas connected.", "description": "With a diskless delay configured, replication starts before the full delay if this many replicas are already waiting; 0 means always wait the full delay.", "configures": "replication-core", "default": "0"},
+    {"name": "repl-diskless-load", "summary": "Replica-side parsing of RDB straight from the socket: disabled/swapdb/flushdb/on-empty-db.", "description": "Controls whether readSyncBulkPayload parses the RDB directly from the replication socket instead of saving to a temp file: disabled, swapdb (keep old dataset in RAM while loading, needs memory), flushdb (drop dataset first, data loss if load fails), on-empty-db (diskless only when empty). redis.conf warns modules not handling I/O errors can abort the server on read errors.", "configures": "replication-core", "default": "disabled"},
+    {"name": "repl-backlog-size", "summary": "Size of the replication backlog that makes partial resync possible.", "description": "Circular buffer of recent replication stream retained for disconnected replicas; bigger backlog tolerates longer replica disconnects before forcing full resync. Allocated only once at least one replica connects (createReplicationBacklogIfNeeded); enforced minimum CONFIG_REPL_BACKLOG_MIN_SIZE.", "configures": "replication-core", "default": "1mb"},
+    {"name": "repl-backlog-ttl", "summary": "Seconds after the last replica disconnects before the master frees the backlog.", "description": "Masters release the backlog this many seconds after losing their last replica; 0 never releases. Replicas never free the backlog on timeout so they can serve partial resyncs if later promoted (per redis.conf comment).", "configures": "replication-core", "default": "3600"},
+    {"name": "repl-ping-replica-period", "summary": "Interval in seconds at which the master pings replicas.", "description": "replicationCron sends PINGs to replicas at this period; interacts with repl-timeout, which must be larger to avoid spurious timeouts.", "configures": "replication-core", "default": "10"},
+    {"name": "repl-timeout", "summary": "Replication timeout for bulk transfer I/O, master data/pings, and replica ACKs.", "description": "Single timeout covering bulk transfer I/O during SYNC from replica POV, master silence from replica POV, and missing REPLCONF ACK from master POV. Symptoms of too-low values: repeated 'MASTER timeout' disconnects during large full syncs.", "configures": "replication-core", "default": "60"},
+    {"name": "replica-full-sync-buffer-limit", "summary": "Cap on repl-stream data a replica accumulates during rdb-channel full sync.", "description": "During dual-connection (rdb-channel) full sync the replica buffers the live replication stream while the RDB loads; this limits that accumulation, 0 meaning inherit the replica class client-output-buffer-limit.", "configures": "replication-core", "default": "0"},
+    {"name": "min-replicas-to-write", "summary": "Refuse writes unless at least N good replicas are connected.", "description": "With min-replicas-max-lag, the master stops accepting writes when fewer than N replicas with lag under the max are online (refreshGoodSlavesCount/checkGoodReplicasStatus). 0 disables the feature.", "configures": "replication-core", "default": "0"},
+    {"name": "min-replicas-max-lag", "summary": "Max replica ACK lag in seconds counted toward min-replicas-to-write.", "description": "A replica counts as 'good' for min-replicas-to-write only if its last REPLCONF ACK is within this many seconds.", "configures": "replication-core", "default": "10"},
+    {"name": "repl-compression", "summary": "zstd compression level (0-22) for the replication stream; 0 disables.", "description": "Replica requests this level via REPLCONF compression during handshake; master accepts only when its own level matches exactly. Immutable config, forced to 0 unless built with BUILD_COMPRESSION=yes, and per redis.conf only works when io-threads > 1.", "configures": "repl-compression", "default": "0"},
+    {"name": "repl-compression-max-latency", "summary": "Max ms before buffered compressed replication data is flushed to the socket.", "description": "Bounds how long the compressor may hold data for better ratio before forcing a frame flush (ZSTD_e_end) and socket write; compressionState.last_write tracks the deadline.", "configures": "repl-compression", "default": "100"},
+    {"name": "sentinel monitor", "summary": "Declares a master to watch: sentinel monitor <name> <ip> <port> <quorum>.", "description": "sentinel.conf directive creating a sentinelRedisInstance for the master with the quorum needed for ODOWN; parsed in sentinelHandleConfiguration, quorum must be >= 1. Replicas and peer sentinels are auto-discovered from INFO and the hello channel.", "configures": "sentinel-core", "default": "sentinel monitor mymaster 127.0.0.1 6379 2"},
+    {"name": "sentinel down-after-milliseconds", "summary": "Silence period before a Sentinel marks an instance SDOWN.", "description": "Per-master ms of no valid PING reply before SRI_S_DOWN is set (sentinelCheckSubjectivelyDown); sentinel_default_down_after is 30000.", "configures": "sentinel-core", "default": "30000"},
+    {"name": "sentinel parallel-syncs", "summary": "How many replicas reconfigure to the new master simultaneously after failover.", "description": "Limits replicas doing SLAVEOF <newmaster> at once in sentinelFailoverReconfNextSlave so most keep serving stale-but-available data during resync; default 1.", "configures": "sentinel-core", "default": "1"},
+    {"name": "sentinel failover-timeout", "summary": "Timeout bounding failover retry and each failover state.", "description": "Per-master ms after which an in-progress failover is considered failed/retriable (sentinel_default_failover_timeout is 3 minutes); also spaces out retries of failover against the same master.", "configures": "sentinel-core", "default": "180000"}
+  ],
+  "features": [
+    {
+      "slug": "psync2-partial-resync",
+      "name": "PSYNC2 Partial Resynchronization",
+      "summary": "Replicas resume from an offset in the backlog instead of full RDB transfer, surviving promotions.",
+      "description": "Partial resync matches the replica-supplied replid/offset against server.replid or the secondary replid2 (valid up to second_replid_offset) and replays only the missing backlog bytes with +CONTINUE. shiftReplicationId on promotion preserves the old history ID so ex-siblings can partially resync with a newly promoted master; replicationCacheMaster/replicationResurrectCachedMaster let a replica resume after transient disconnects.",
+      "lifecycle": "active",
+      "implemented_in": ["replication-core"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "rdb-channel-full-sync",
+      "name": "RDB Channel Full Sync",
+      "summary": "Dual-connection full sync: RDB on one channel, live repl stream buffered on the other.",
+      "description": "Newer full-sync mode (file header: 'RDB Channel for Full Sync') where the replica opens a second connection (CLIENT_REPL_RDB_CHANNEL, main_ch_client_id pairing) so the master ships the RDB while the replica concurrently buffers the live replication stream (rdbChannelBufferReplData, replDataBuf) and applies it after load (rdbChannelStreamReplDataToDb), shifting fullsync buffering cost from master to replica. Controlled by hidden modifiable config repl-rdb-channel (default on) and bounded by replica-full-sync-buffer-limit; replicationLogicalReplicaCount collapses the two connections into one logical replica.",
+      "lifecycle": "active",
+      "implemented_in": ["replication-core"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "replication-zstd-compression",
+      "name": "Replication Stream zstd Compression",
+      "summary": "Opt-in zstd compression of the master-replica link, negotiated at handshake.",
+      "description": "New build-gated feature (USE_COMPRESSION / BUILD_COMPRESSION=yes): replica sends REPLCONF compression <level> during syncWithMaster; on exact level match with the master's repl-compression, both ends wrap the connection with clientConnWrite/clientConnRead zstd streaming (enableMasterClientDecompressionIfNeeded on the replica). Reduces replication bandwidth at some CPU cost; requires io-threads > 1 and repl-compression-max-latency bounds added latency.",
+      "lifecycle": "active",
+      "implemented_in": ["repl-compression", "replication-core"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "wait-synchronous-replication",
+      "name": "WAIT / WAITAOF Barriers",
+      "summary": "Block a client until N replicas (or AOF fsyncs) acknowledge the current offset.",
+      "description": "waitCommand blocks the caller until numreplicas have ACKed the client's write offset (replicationRequestAckFromSlaves broadcasts REPLCONF GETACK, replicationCountAcksByOffset tallies), with waitaofCommand doing the same for local/replica AOF fsync counts via replicationCountAOFAcksByOffset; processClientsWaitingReplicas unblocks in beforeSleep. Best-effort durability, not consensus.",
+      "lifecycle": "active",
+      "implemented_in": ["replication-core"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "sentinel-automatic-failover",
+      "name": "Sentinel Automatic Failover",
+      "summary": "Quorum-based failure detection and epoch-elected leader promotes a replica automatically.",
+      "description": "Sentinels agree a master is ODOWN via quorum over 'SENTINEL is-master-down-by-addr', elect a leader for the failover_epoch (sentinelGetLeader/sentinelVoteLeader with majority of all known sentinels), and the leader drives sentinelFailoverStateMachine: WAIT_START, SELECT_SLAVE, SEND_SLAVEOF_NOONE, WAIT_PROMOTION, RECONF_SLAVES, UPDATE_CONFIG, then publishes the new layout on __sentinel__:hello. Manual trigger via SENTINEL FAILOVER sets SRI_FORCE_FAILOVER.",
+      "lifecycle": "active",
+      "implemented_in": ["sentinel-core"],
+      "provided_by": "service:redis-sentinel"
+    }
+  ],
+  "decisions": [
+    {
+      "slug": "dual-replid-history",
+      "title": "Keep two replication IDs so promotion does not force full resync",
+      "statement": "A promoted replica moves its old replid into replid2 (valid up to second_replid_offset) and mints a new replid, instead of discarding the old history.",
+      "rationale": "Replicas of the failed master share history with the promoted node up to the promotion offset; accepting PSYNC against the secondary ID (offset+1 semantics) lets the whole shard avoid full RDB transfers after failover.",
+      "description": "shiftReplicationId copies replid to replid2 and sets second_replid_offset = master_repl_offset+1, with an explicit comment walking through the 50-bytes/offset-51 example; masterTryPartialResynchronization checks both IDs. Searchable as 'replid2', 'secondary replication ID', 'psync after failover'.",
+      "affects": ["replication-core", "psync2-partial-resync"],
+      "evidence": "src/replication.c shiftReplicationId() and clearReplicationId2() comments (~lines 2128-2155); masterTryPartialResynchronization ID1/ID2 comment (~line 1013)."
+    },
+    {
+      "slug": "incremental-backlog-trim",
+      "title": "Trim the replication backlog incrementally, never in one pass",
+      "statement": "Backlog blocks beyond repl-backlog-size are released a bounded number at a time (incrementalTrimReplicationBacklog) rather than all at once.",
+      "rationale": "After a config shrink or big write burst, freeing a huge chain of buffer blocks synchronously would freeze the server; bounded trimming amortizes the cost across cron/feed calls, and blocks still referenced by replicas are never trimmed.",
+      "description": "incrementalTrimReplicationBacklog(max_blocks) walks repl_buffer_blocks respecting refcounts and the rax blocks_index; the preceding comment explicitly says unlimited trimming 'will freeze server'. Searchable as 'backlog trim stall', 'repl buffer blocks'.",
+      "affects": ["replication-core"],
+      "evidence": "src/replication.c comment above incrementalTrimReplicationBacklog (~lines 398-405) and the never-trim-below-one-block asserts inside it."
+    },
+    {
+      "slug": "zstd-end-frame-flush",
+      "title": "Flush replication compression with ZSTD_e_end, not ZSTD_e_flush",
+      "statement": "When the compressed replication stream must be flushed, the frame is fully ended (ZSTD_e_end) instead of merely flushing zstd's internal buffers.",
+      "rationale": "Ending the frame slightly lowers compression ratio but massively speeds up the replica-side decompressor, which no longer waits for more data to complete a frame; measured ratio remained very good at the default level per the in-code comment.",
+      "description": "zstdCompress selects ZSTD_e_end whenever flush or write_flush_pending is set; the comment documents the ratio-vs-latency tradeoff. Searchable as 'zstd frame flush', 'replication compression latency'.",
+      "affects": ["repl-compression", "replication-zstd-compression"],
+      "evidence": "src/client_comp.c zstdCompress() comment (~lines 125-131) explaining ZSTD_e_end choice."
+    },
+    {
+      "slug": "replicas-keep-backlog",
+      "title": "Replicas never free their backlog on idle timeout",
+      "statement": "repl-backlog-ttl applies only to masters; replicas retain the backlog indefinitely.",
+      "rationale": "A replica may be promoted at any time and must be able to serve partial resynchronizations to its former siblings; dropping the backlog would force fleet-wide full syncs after failover.",
+      "description": "Documented in redis.conf under repl-backlog-ttl ('replicas never free the backlog for timeout, since they may be promoted to masters later') and mirrored in replication.c comments about accumulating backlog regardless of sub-slaves.",
+      "affects": ["replication-core"],
+      "evidence": "redis.conf repl-backlog-ttl comment block (~lines 737-748); src/replication.c comment ~line 2765."
+    }
+  ]
+}

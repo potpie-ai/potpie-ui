@@ -1,17 +1,36 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Send } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, Link as LinkIcon, Send } from "lucide-react";
 import PotService from "@/services/PotService";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/sonner";
 import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
+import { cn } from "@/lib/utils";
+import {
+  MonoChip,
+  PotPage,
+  SectionHeader,
+  StatusDot,
+  type StatusTone,
+} from "./kit";
 
 type Props = { potId: string };
 
 const URL_ONLY_REGEX = /^https?:\/\/\S+$/i;
+
+const STATUS_TONES: Record<string, StatusTone> = {
+  queued: "warn",
+  processing: "busy",
+  done: "ok",
+  error: "error",
+};
+
+type SubmitResult =
+  | { kind: "success"; eventId: string; status: string }
+  | { kind: "error"; message: string };
 
 function deriveTitle(content: string): string {
   for (const raw of content.split(/\r?\n/)) {
@@ -25,7 +44,9 @@ function deriveTitle(content: string): string {
 
 export default function PotAddContextPanel({ potId }: Props) {
   const [body, setBody] = useState("");
+  const [mode, setMode] = useState<"write" | "preview">("write");
   const [submitting, setSubmitting] = useState(false);
+  const [lastResult, setLastResult] = useState<SubmitResult | null>(null);
 
   const trimmed = body.trim();
   const isUrlOnly = useMemo(() => URL_ONLY_REGEX.test(trimmed), [trimmed]);
@@ -43,62 +64,129 @@ export default function PotAddContextPanel({ potId }: Props) {
         url: isUrlOnly ? trimmed : undefined,
       });
       toast.success(`Submitted — event ${out.event_id.slice(0, 8)} is ${out.status}`);
+      setLastResult({ kind: "success", eventId: out.event_id, status: out.status });
       setBody("");
+      setMode("write");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to submit");
+      const message = e instanceof Error ? e.message : "Failed to submit";
+      toast.error(message);
+      setLastResult({ kind: "error", message });
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="space-y-4 max-w-3xl">
-      <div>
-        <h2 className="text-base font-semibold">Add context manually</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Paste notes, markdown, or a URL. Anything you drop here gets ingested into this pot —
-          track progress on the Events tab.
-        </p>
-      </div>
+    <PotPage width="reading">
+      <div className="space-y-5">
+        <SectionHeader
+          title="Add context"
+          description="Notes, markdown, or a URL — anything you paste here is ingested into this pot's memory."
+          actions={
+            <div
+              role="tablist"
+              aria-label="Editor mode"
+              className="inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5"
+            >
+              {(["write", "preview"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === m}
+                  disabled={m === "preview" && !trimmed}
+                  onClick={() => setMode(m)}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-xs capitalize transition-colors",
+                    mode === m
+                      ? "bg-background font-medium text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                    m === "preview" && !trimmed && "cursor-not-allowed opacity-50"
+                  )}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          }
+        />
 
-      <Tabs defaultValue="write" className="w-full">
-        <TabsList>
-          <TabsTrigger value="write">Write</TabsTrigger>
-          <TabsTrigger value="preview" disabled={!trimmed}>
-            Preview
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="write" className="mt-3">
+        {mode === "write" ? (
           <Textarea
-            rows={18}
+            rows={8}
             placeholder={"# Auth design decisions\n\nNotes, markdown, or a URL — paste anything…"}
             value={body}
-            onChange={(e) => setBody(e.target.value)}
-            className="resize-y font-mono text-sm min-h-[360px]"
+            onChange={(e) => {
+              setBody(e.target.value);
+              if (lastResult) setLastResult(null);
+            }}
+            className="min-h-[10rem] resize-y text-sm leading-relaxed placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
           />
-        </TabsContent>
-        <TabsContent value="preview" className="mt-3">
-          <div className="rounded-md border bg-background p-4 min-h-[360px] text-sm">
+        ) : (
+          <div className="min-h-[10rem] overflow-x-auto rounded-md border border-input bg-card px-3 py-2 text-sm">
             {trimmed ? (
               <SharedMarkdown content={trimmed} />
             ) : (
-              <p className="text-muted-foreground">Nothing to preview yet.</p>
+              <p className="text-[13px] text-muted-foreground">
+                Nothing to preview yet.
+              </p>
             )}
           </div>
-        </TabsContent>
-      </Tabs>
+        )}
 
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          {isUrlOnly
-            ? "Detected URL — will be submitted for agent-assisted ingestion."
-            : "Markdown supported. The first heading or line becomes the title."}
-        </p>
-        <Button onClick={handleSubmit} disabled={submitting || !trimmed} className="gap-2">
-          <Send className="h-3.5 w-3.5" />
-          {submitting ? "Submitting…" : "Submit"}
-        </Button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {isUrlOnly ? (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <LinkIcon className="h-3.5 w-3.5 shrink-0" />
+              URL detected — an agent will fetch and ingest the page.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Markdown supported. The first heading or line becomes the title.
+            </p>
+          )}
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting || !trimmed}
+            className="gap-2"
+          >
+            <Send className="h-4 w-4" />
+            {submitting ? "Submitting…" : "Add to pot"}
+          </Button>
+        </div>
+
+        {lastResult ? (
+          <div className="border-t border-border/60 pt-4">
+            {lastResult.kind === "success" ? (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted-foreground">
+                <StatusDot
+                  tone={STATUS_TONES[lastResult.status] ?? "idle"}
+                  pulse={
+                    lastResult.status === "queued" ||
+                    lastResult.status === "processing"
+                  }
+                />
+                <span title={lastResult.eventId}>
+                  Submitted — event{" "}
+                  <MonoChip>{lastResult.eventId.slice(0, 8)}</MonoChip> is{" "}
+                  {lastResult.status}.
+                </span>
+                <Link
+                  href={`/pots/${potId}/events`}
+                  className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-4 hover:underline"
+                >
+                  Track it on events
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            ) : (
+              <p className="text-[13px] text-rose-600 dark:text-rose-400">
+                {lastResult.message}
+              </p>
+            )}
+          </div>
+        ) : null}
       </div>
-    </div>
+    </PotPage>
   );
 }

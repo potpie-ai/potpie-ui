@@ -5,6 +5,12 @@
 // extract complete lines" loop. Each line becomes one parsed JSON object.
 
 import getHeaders from "@/app/utils/headers.util";
+import {
+  isDemoEventId,
+  isDemoPotId,
+  streamDemoEventActivity,
+  streamDemoPotStatus,
+} from "@/lib/mock/demoPots";
 
 const baseUrl = () => process.env.NEXT_PUBLIC_BASE_URL ?? "";
 
@@ -64,6 +70,9 @@ export class EventStreamService {
     onEvent: StreamHandler,
     options: StreamOptions = {},
   ): Promise<void> {
+    if (isDemoEventId(eventId)) {
+      return streamDemoEventActivity(options);
+    }
     const url = new URL(
       `${baseUrl()}/api/v1/context/events/${encodeURIComponent(eventId)}/stream`,
     );
@@ -84,6 +93,9 @@ export class EventStreamService {
     onEvent: StreamHandler,
     options: StreamOptions = {},
   ): Promise<void> {
+    if (isDemoPotId(potId)) {
+      return streamDemoPotStatus(options);
+    }
     const url = new URL(
       `${baseUrl()}/api/v1/context/pots/${encodeURIComponent(potId)}/events/stream`,
     );

@@ -1,0 +1,1115 @@
+{
+  "dependencies": [
+    {
+      "slug": "pypi:urllib3",
+      "name": "urllib3",
+      "package_name": "urllib3",
+      "version": ">=2.7.0,<3.0.0",
+      "ecosystem": "pypi",
+      "summary": "HTTP connection-pool library under requests; the most-bumped floor pin in the potpie-workflows CVE sweeps.",
+      "description": "Declared in potpie-workflows/pyproject.toml as a direct floor pin purely for vulnerability remediation — it arrives transitively through requests and the LLM SDKs rather than being imported directly. The floor was raised twice in quick succession for CVE-2026-44432 and CVE-2026-44431: workflows#66 moved >=2.5.0 to >=2.6.0,<2.7.0 and workflows#67 finished the job at >=2.7.0,<3.0.0 once the first pin proved insufficient. Search terms: urllib3 CVE, Vanta high vulnerability, dependency floor pin, requests transitive, uv lock bump."
+    },
+    {
+      "slug": "pypi:cryptography",
+      "name": "cryptography",
+      "package_name": "cryptography",
+      "version": ">=46.0.7",
+      "ecosystem": "pypi",
+      "summary": "X.509/TLS primitives pulled in through authlib and PyJWT in potpie-workflows; a recurring Vanta remediation target.",
+      "description": "Floor-pinned in potpie-workflows/pyproject.toml (`cryptography>=46.0.7`). It is a transitive dependency of authlib, PyJWT and the HTTP stack rather than a direct import, which is why it keeps resurfacing in agent-authored severity sweeps: workflows#64 raised it as part of a twelve-package bump alongside litellm, fastmcp, authlib, mako and aiohttp, and workflows#72 moved it 48 to 49 alongside starlette 1.3.1 and PyJWT 2.13.0. Search terms: cryptography CVE, authlib transitive, PyJWT, Vanta sweep, high severity dependency, pyproject floor raise."
+    },
+    {
+      "slug": "npm:@grpc/grpc-js",
+      "name": "@grpc/grpc-js",
+      "package_name": "@grpc/grpc-js",
+      "version": "1.9.15",
+      "ecosystem": "npm",
+      "summary": "Pure-JavaScript gRPC client pulled into potpie-ui by the Firebase SDK; overridden to clear high-severity Dependabot findings.",
+      "description": "Resolved at 1.9.15 in potpie-ui/pnpm-lock.yaml, where it arrives transitively through the firebase client SDK rather than being declared as a direct dependency. Because nothing in potpie-ui imports it, remediation is done the same way as protobufjs and form-data — a pnpm `overrides` entry that forces the patched version across the tree. PR #429 ([Vanta] Fix High vulnerabilities in potpie-ui) bumped it 1.9.15 to 1.9.16 to clear two high-severity Dependabot advisories. Search terms: grpc-js CVE, firebase transitive dependency, pnpm override, Dependabot high, potpie-ui vulnerability."
+    },
+    {
+      "slug": "npm:tmp",
+      "name": "tmp",
+      "package_name": "tmp",
+      "version": "^0.2.3",
+      "ecosystem": "npm",
+      "summary": "Temp-file helper that arrives transitively in the VS Code extension's toolchain; subject of an unmerged CVE remediation.",
+      "description": "Appears at ^0.2.3 in potpie-vscode-extension/package-lock.json as a transitive dependency of the build/test tooling, not as anything the extension imports. PR #26 on potpie-vscode-extension, authored by the Cursor GitHub App, remediates CVE-2026-44705 in it and is still unmerged — so the advisory remains open on the extension. Fixing it follows the same pattern as the extension's existing `overrides` block for brace-expansion, js-yaml and mdast-util-to-hast. Search terms: tmp package CVE, CVE-2026-44705, vscode extension vulnerability, npm overrides, unmerged security PR."
+    },
+    {
+      "slug": "pypi:neo4j",
+      "name": "neo4j (Python driver)",
+      "package_name": "neo4j",
+      "version": "6.2.0",
+      "ecosystem": "pypi",
+      "summary": "Official Neo4j Bolt driver, the production graph backend for the context engine.",
+      "description": "Pinned at 6.2.0 in potpie's uv.lock and declared as the optional `neo4j` extra in potpie/context-engine/pyproject.toml (`neo4j>=5.28.0`). It backs the Neo4jGraphBackend profile in adapters/outbound/graph/backends/neo4j_backend.py plus neo4j_reader.py / neo4j_writer.py, and is what `/api/v1/ready` probes via GraphDatabase.driver(...).verify_connectivity(). Symptoms when it is missing or misconfigured: 'ServiceUnavailable: Could not perform discovery', 'Unable to retrieve routing information', or the readiness check returning `context graph disabled`. Search terms: bolt driver, neo4j python, GRAPH_DB_BACKEND=neo4j, cypher client."
+    },
+    {
+      "slug": "pypi:falkordb",
+      "name": "falkordb",
+      "package_name": "falkordb",
+      "version": "1.6.1",
+      "ecosystem": "pypi",
+      "summary": "Redis-module graph client used by the lightweight FalkorDB backend profile.",
+      "description": "Declared in the `local` extra of potpie/context-engine/pyproject.toml as `falkordb>=1.6.1` and resolved to 1.6.1 in uv.lock. Powers the `falkordb` profile in adapters/outbound/graph/backends/falkordb_backend.py and the falkordb_reader/falkordb_writer pair, selected with GRAPH_DB_BACKEND=falkordb and CONTEXT_ENGINE_FALKORDB_URL. Failure modes look like 'ConnectionError: Error 61 connecting to localhost:6379' or an empty graph because CONTEXT_ENGINE_FALKORDB_GRAPH_NAME did not match. Synonyms: FalkorDB, RedisGraph successor, cypher-over-redis."
+    },
+    {
+      "slug": "pypi:falkordblite",
+      "name": "falkordblite",
+      "package_name": "falkordblite",
+      "version": "0.10.0",
+      "ecosystem": "pypi",
+      "summary": "Embedded, hostless FalkorDB — the default local CLI graph store on Python 3.12+.",
+      "description": "Declared as `falkordblite>=0.10.0; python_version >= '3.12'` in the context-engine `local` extra; the same extra pins `redis>=7.1,<8` because redis 8 turns on maintenance notifications that break FalkorDBLite's hostless embedded connection. This is what a plain `potpie login && potpie pot create` uses with no server running, writing to CONTEXT_ENGINE_FALKORDB_LITE_PATH (~/.potpie/context_graph/falkordb.db). Search: embedded graph, no-server graph db, falkordb lite, CONTEXT_ENGINE_FALKORDB_MODE=lite, local-first knowledge graph."
+    },
+    {
+      "slug": "pypi:sentence-transformers",
+      "name": "sentence-transformers",
+      "package_name": "sentence-transformers",
+      "version": "5.5.1",
+      "ecosystem": "pypi",
+      "summary": "Optional local embedding model stack behind CONTEXT_ENGINE_EMBEDDER=legacy.",
+      "description": "Shipped as the `embeddings` extra (`sentence-transformers>=5.1.2`) and resolved to 5.5.1. adapters/outbound/intelligence/local_embedder.py only imports it when CONTEXT_ENGINE_EMBEDDER is `legacy`/`sentence-transformers`, or `auto` and the package is importable; otherwise the bundled HashingEmbedder is used so retrieval needs no API key. Selecting legacy without the extra installed logs 'sentence-transformers is not installed; using local hashing embedder'. It drags in torch, which is why it dominates install size and CVE churn. Search: all-MiniLM-L6-v2, semantic search embeddings, sbert."
+    },
+    {
+      "slug": "pypi:torch",
+      "name": "torch (PyTorch)",
+      "package_name": "torch",
+      "version": "2.12.1",
+      "ecosystem": "pypi",
+      "summary": "Transitive tensor runtime pulled in by sentence-transformers; repeatedly force-pinned for CVEs.",
+      "description": "Not a direct import anywhere in potpie — it arrives through sentence-transformers — but it is the single most-patched dependency in the repo. potpie/pyproject.toml carries `torch>=2.12.1` under [tool.uv] override-dependencies with the comment 'CVE-2025-3000: torch <= 2.12.0; 2.12.1 is the first patched release on PyPI', and context-engine/pyproject.toml repeats it as a uv constraint. PRs #793 (2.12.0 for Python 3.13.8), #1000 and #1020 all exist to move this floor. Search: CVE-2025-3000, torch vulnerability, vanta high severity, pytorch pin."
+    },
+    {
+      "slug": "pypi:pygithub",
+      "name": "PyGithub",
+      "package_name": "pygithub",
+      "version": "2.9.1",
+      "ecosystem": "pypi",
+      "summary": "GitHub REST client for the github connector and PR/issue backfill.",
+      "description": "The `github` extra (`pygithub>=2.8.0`) resolved to 2.9.1. Used by adapters/outbound/connectors/github/api_client.py and connector.py to page PRs, issues, commits and reviews when a repository source is registered on a pot, honouring CONTEXT_GRAPH_BACKFILL_MAX_PRS_PER_RUN. Authenticates with CONTEXT_ENGINE_GITHUB_TOKEN. Typical failures: 'RateLimitExceededException 403', 'Bad credentials', or a backfill that stops silently at 100 PRs because of the per-run cap. Search: github api client, PR ingestion, backfill, octokit equivalent for python."
+    },
+    {
+      "slug": "pypi:fastapi",
+      "name": "FastAPI",
+      "package_name": "fastapi",
+      "version": "0.136.3",
+      "ecosystem": "pypi",
+      "summary": "HTTP framework for the context-engine API and the workflows REST server.",
+      "description": "Declared as `fastapi>=0.115.0` in potpie/pyproject.toml and the context-engine `http` extra, and `fastapi>=0.115.12,<1.0.0` in potpie-workflows; uv resolves 0.136.3. create_app() in adapters/inbound/http/app.py builds the app, installs hardening, and mounts api_router under /api/v1 and webhooks_router under /webhooks, with custom handlers that shape every error into {'error': {'code', 'message'}}. potpie-workflows' RestServer does the same for /api/v1/workflows, /api/v1/recipes and friends. Search: uvicorn app, openapi, ASGI, routers."
+    },
+    {
+      "slug": "pypi:starlette",
+      "name": "starlette",
+      "package_name": "starlette",
+      "version": "1.3.1",
+      "ecosystem": "pypi",
+      "summary": "FastAPI's ASGI core, floor-pinned to 1.3.1 as a CVE remediation.",
+      "description": "Appears three times as an explicit floor: potpie/pyproject.toml dependency `starlette>=1.3.1`, the same value in [tool.uv] override-dependencies, and in context-engine's http extra with the inline comment 'CVE floor for FastAPI's transitive core (see #1015)'. PR #1015 ('expose patched floors to GitHub dependency graph') exists precisely because the patched version was only in the lock and not visible to the dependency graph scanner. Search: starlette CVE, transitive pin, dependency graph not picking up lockfile, Vanta alert."
+    },
+    {
+      "slug": "pypi:aiohttp",
+      "name": "aiohttp",
+      "package_name": "aiohttp",
+      "version": "3.14.1",
+      "ecosystem": "pypi",
+      "summary": "Async HTTP client; floor-pinned at 3.14.1 across potpie and the Hatchet SDK extra.",
+      "description": "Direct dependency in potpie/pyproject.toml (`aiohttp>=3.14.1`), repeated as a uv override and as the 'CVE floor for the Hatchet SDK's transitive dependency (see #1015)' inside the context-engine `hatchet` extra. potpie-workflows carries its own `aiohttp>=3.13.4,<4.0.0`. This split is a known footgun: bumping only one manifest leaves the other repo's lock stale, which is what PR #1017 ('refresh stale dependency graph locks') cleaned up. Search: aiohttp CVE, request smuggling, async http client pin."
+    },
+    {
+      "slug": "pypi:typer",
+      "name": "typer",
+      "package_name": "typer",
+      "version": "0.26.7",
+      "ecosystem": "pypi",
+      "summary": "Command framework for the `potpie` CLI entrypoint.",
+      "description": "`typer>=0.15.0` in both potpie and potpie-workflows, resolved to 0.26.7. It defines the whole inbound CLI surface registered as the `potpie = potpie.cli.main:main` console script — doctor, login, pot, source, search, graph, backend. Together with rich it renders the setup UX in potpie/cli/ui/. Search: click-based cli, potpie command not found, subcommand registration, argument parsing."
+    },
+    {
+      "slug": "pypi:mcp",
+      "name": "mcp (Model Context Protocol SDK)",
+      "package_name": "mcp",
+      "version": "1.28.1",
+      "ecosystem": "pypi",
+      "summary": "Python MCP SDK powering the `potpie-mcp` server that exposes the graph to agents.",
+      "description": "Pinned `mcp>=1.28.1` in potpie/pyproject.toml (1.23.0 floor in potpie-workflows) and wired to the `potpie-mcp = potpie.mcp.server:main` console script. It is how Claude Code, Cursor and the VS Code extension read pots, search entities and propose graph mutations without shelling out to the CLI. Bug reports from AdityaPainuli and Nih1tGupta typically land here as 'MCP server exited', 'tools not listed', or stdio transport hangs. Search: model context protocol, stdio server, agent tools, mcp handshake."
+    },
+    {
+      "slug": "pypi:pydantic-ai-slim",
+      "name": "pydantic-ai-slim",
+      "package_name": "pydantic-ai-slim",
+      "version": "1.105.0",
+      "ecosystem": "pypi",
+      "summary": "Agent runtime for the reconciliation agent; floor-pinned for a transitive CVE.",
+      "description": "`pydantic-ai-slim>=1.102.0` in potpie/pyproject.toml, in the uv overrides, and in the context-engine `reconciliation-agent` extra where the comment reads 'CVE floor for pydantic-deep's transitive dependency (see #1015)'. It drives the entity-reconciliation and summary-repair passes in adapters/outbound/reconciliation/. The uv override block also notes the conflict this creates: litellm>=1.83.10 clears CVE-2026-40217 but pins openai==2.24.0, which fights pydantic-ai and the context engine, so openai>=2.7.1 is overridden to the root stack. Search: pydantic ai, agent framework, dependency resolution conflict."
+    },
+    {
+      "slug": "pypi:sentry-sdk",
+      "name": "sentry-sdk",
+      "package_name": "sentry-sdk",
+      "version": "2.61.1",
+      "ecosystem": "pypi",
+      "summary": "Error reporting for the CLI, daemon and context-engine API.",
+      "description": "`sentry-sdk>=2.61.1,<3.0.0` in potpie/pyproject.toml and in the context-engine `observability` extra. Initialised from bootstrap/sentry_settings.py, gated by POTPIE_SENTRY_ENABLED (default on) and POTPIE_SENTRY_DSN; the older bare SENTRY_DSN / SENTRY_ENVIRONMENT / SENTRY_RELEASE names are listed in _DEPRECATED_CHILD_ENV_KEYS in runtime_settings.py and are actively stripped before spawning child processes. Search: crash reporting, sentry dsn not set, telemetry, POTPIE_SENTRY_ENABLED=0."
+    },
+    {
+      "slug": "pypi:keyring",
+      "name": "keyring",
+      "package_name": "keyring",
+      "version": "25.7.0",
+      "ecosystem": "pypi",
+      "summary": "OS credential store used by CLI integration auth to persist OAuth tokens.",
+      "description": "The `cli-auth` extra (`keyring>=25.0.0`) resolved to 25.7.0, used by adapters/outbound/cli_auth/credentials_store.py and e2e_keyring.py to keep Linear/GitHub/Atlassian tokens out of plaintext config. On headless Linux CI it is the usual source of 'No recommended backend was available' / 'Failed to unlock the collection', which is why the cli_auth_e2e pytest marker is opt-in behind RUN_CLI_AUTH_E2E=1. Search: macos keychain, secret service, token storage, potpie login persistence."
+    },
+    {
+      "slug": "pypi:hatchet-sdk",
+      "name": "hatchet-sdk",
+      "package_name": "hatchet-sdk",
+      "version": "1.33.2",
+      "ecosystem": "pypi",
+      "summary": "Durable job queue client for background ingestion work in the hosted context engine.",
+      "description": "The `hatchet` extra (`hatchet-sdk>=1.29.0`) resolved to 1.33.2, adapted in adapters/outbound/hatchet/hatchet_job_queue.py with env plumbing in env_bootstrap.py. Reads HATCHET_CLIENT_SERVER_URL and HATCHET_CLIENT_TLS_STRATEGY; the local/OSS path never touches it because ingestion runs in-process. Common symptom: workers idle while events pile up in the pipeline view because the TLS strategy is wrong and gRPC dials fail. Search: durable execution, workflow queue, background ingestion worker."
+    },
+    {
+      "slug": "pypi:redis",
+      "name": "redis (Python client)",
+      "package_name": "redis",
+      "version": "7.4.1",
+      "ecosystem": "pypi",
+      "summary": "Client for the event-stream publisher and the Celery broker; version-bounded for FalkorDBLite.",
+      "description": "Bounded to `redis>=7.1,<8; python_version >= '3.12'` in the context-engine `local` extra with the explicit note that redis 8 enables maintenance notifications which break FalkorDBLite's hostless embedded connection; potpie-workflows separately declares `redis>=7.0.1,<8.0.0`. Used by adapters/outbound/event_stream/redis_publisher.py for live pot event fan-out and as the Celery broker+backend via REDIS_URL. Search: redis 8 upgrade blocked, push notifications, pubsub, SSE event stream backing store."
+    },
+    {
+      "slug": "pypi:celery",
+      "name": "celery",
+      "package_name": "celery",
+      "version": "5.6.3",
+      "ecosystem": "pypi",
+      "summary": "Task queue running spec/plan generation and codegen in potpie-workflows.",
+      "description": "`celery>=5.5.3,<6.0.0` in potpie-workflows, resolved to 5.6.3 and configured in src/celery_config.py, where broker and result_backend both read REDIS_URL with a redis://localhost:6379/0 default. That module also contains a macOS-specific workaround: it forces OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES, switches multiprocessing to 'spawn', and selects the 'solo' worker pool on Darwin to avoid fork-related SIGSEGV crashes from CoreFoundation. Search: celery worker crash on mac, prefork sigsegv, task queue, flower."
+    },
+    {
+      "slug": "pypi:prefect",
+      "name": "prefect",
+      "package_name": "prefect",
+      "version": "3.6.25",
+      "ecosystem": "pypi",
+      "summary": "Flow orchestration layer for long-running workflow runs.",
+      "description": "`prefect>=3.6.13` plus `pydantic-ai-slim[prefect]>=1.56.0` in potpie-workflows, resolved to 3.6.25. It wraps the multi-step spec/plan/codegen pipelines so individual agent steps get retries, timeouts and a run graph, complementing Celery which owns the queueing. Search: flow run, task orchestration, retries, durable workflow, prefect 3."
+    },
+    {
+      "slug": "pypi:dspy",
+      "name": "dspy",
+      "package_name": "dspy",
+      "version": "3.1.3",
+      "ecosystem": "pypi",
+      "summary": "Prompt-program framework used for the spec-generation research and author stages.",
+      "description": "`dspy>=3.1.2` in potpie-workflows, resolved to 3.1.3. Backs the SPECGEN_* pipeline whose research and author roles are model-selectable via SPECGEN_V3_RESEARCH_MODEL / SPECGEN_V3_AUTHOR_MODEL and bounded by SPECGEN_V3_*_REQUEST_LIMIT, *_TOOL_CALLS_LIMIT and *_TOTAL_TOKENS_LIMIT. Search: dspy signature, prompt optimization, specgen, structured generation, coverage retries."
+    },
+    {
+      "slug": "pypi:litellm",
+      "name": "litellm",
+      "package_name": "litellm",
+      "version": "1.83.0",
+      "ecosystem": "pypi",
+      "summary": "Multi-provider LLM gateway in potpie-workflows; source of a documented CVE/pin conflict.",
+      "description": "`litellm>=1.83.0,<2.0.0` in potpie-workflows, resolved to 1.83.0. It fronts OpenRouter, OpenAI and Anthropic behind one call surface via OPENROUTER_API_KEY / OPENAI_API_KEY. potpie's own pyproject records why it cannot simply be bumped: 'litellm>=1.83.10 clears CVE-2026-40217 (<1.83.10) but pins openai==2.24.0, which conflicts with pydantic-ai + context-engine'. Search: CVE-2026-40217, litellm pin, model router, openrouter proxy."
+    },
+    {
+      "slug": "pypi:joserfc",
+      "name": "joserfc",
+      "package_name": "joserfc",
+      "version": "1.7.0",
+      "ecosystem": "pypi",
+      "summary": "JOSE/JWT primitives pulled in transitively through authlib; recurring security-scan hit.",
+      "description": "Never imported directly — it arrives as a dependency of authlib 1.7.2 in the legacy stack's uv.lock (joserfc 1.7.0) and again under the MCP auth path; potpie-workflows resolves it to 1.7.3 after PR #75 bumped it from 1.6.5 to remediate CVE-2026-48990. It is a repeat offender in the Vanta / dependency-alert sweeps that shmbhvi101 drives across every repo, because JWS/JWT signature-verification advisories land here. Symptom in the tracker: a high-severity alert on a package no one recognises, resolved by bumping authlib rather than joserfc itself. Search: jose, jwt verification, authlib transitive, vanta alert unknown package."
+    },
+    {
+      "slug": "npm:next",
+      "name": "next",
+      "package_name": "next",
+      "version": "15.5.18",
+      "ecosystem": "npm",
+      "summary": "Next.js App Router framework for potpie-ui.",
+      "description": "`^15.5.18` in potpie-ui/package.json with matching eslint-config-next 15.5.18. Every route under app/(main)/ — pots, newchat, idea, and the pot detail tabs overview/sources/events/graph/users — is an App Router segment with 'use client' leaf components. next.config.mjs is where NEXT_PUBLIC_* values are threaded into the client bundle. Search: app router, server components, next 15, build error, npm run build."
+    },
+    {
+      "slug": "npm:firebase",
+      "name": "firebase (JS SDK)",
+      "package_name": "firebase",
+      "version": "11.1.0",
+      "ecosystem": "npm",
+      "summary": "Client auth SDK for potpie-ui, paired with react-firebase-hooks.",
+      "description": "`firebase@^11.1.0` plus `react-firebase-hooks@^5.1.1` in potpie-ui. Configured entirely from NEXT_PUBLIC_FIREBASE_API_KEY, _AUTH_DOMAIN, _PROJECT_ID, _STORAGE_BUCKET, _MESSAGING_SENDER_ID, _APP_ID and _MEASUREMENT_ID, all left blank in .env.template because local development mode does not require them. The ID token it mints is what backend calls exchange at /api/v1/auth/custom-token. Search: firebase auth, auth/invalid-api-key, google sign in, id token, local dev mode without firebase."
+    },
+    {
+      "slug": "npm:axios",
+      "name": "axios",
+      "package_name": "axios",
+      "version": "1.17.0",
+      "ecosystem": "npm",
+      "summary": "HTTP client for every service module in potpie-ui; hard-pinned via pnpm overrides.",
+      "description": "Declared `^1.17.0` and additionally forced to exactly 1.17.0 in the pnpm.overrides block so no transitive copy survives. It is the transport for all of services/*.ts — PotService, EventStreamService, RecipeService, AgentService — hitting `${NEXT_PUBLIC_BASE_URL}/api/v1/...`. The paired `follow-redirects: 1.16.0` and `form-data: ^4.0.4` overrides exist for the same CVE sweep. Search: axios CVE, SSRF via redirect, request interceptor, bearer token header."
+    },
+    {
+      "slug": "npm:posthog-js",
+      "name": "posthog-js",
+      "package_name": "posthog-js",
+      "version": "1.231.0",
+      "ecosystem": "npm",
+      "summary": "Product analytics in the browser, keyed off NEXT_PUBLIC_POSTHOG_KEY.",
+      "description": "`posthog-js@^1.231.0`. Initialised only when NEXT_PUBLIC_POSTHOG_KEY is present, with NEXT_PUBLIC_POSTHOG_HOST defaulting to the US cloud; both are blank in .env.template so a fresh clone emits nothing. The CLI mirrors this with POTPIE_POSTHOG_API_KEY / POTPIE_POSTHOG_HOST and a POTPIE_PRODUCT_ANALYTICS_ENABLED kill switch. Search: posthog not capturing, analytics opt out, feature flags, us.i.posthog.com."
+    },
+    {
+      "slug": "npm:reactflow",
+      "name": "reactflow",
+      "package_name": "reactflow",
+      "version": "11.11.4",
+      "ecosystem": "npm",
+      "summary": "Canvas library rendering the pot graph explorer.",
+      "description": "`reactflow@^11.11.4` with `elkjs@^0.9.3` and `d3-force@^3.0.0` for layout. It draws PotGraphCanvas inside app/(main)/pots/components/graph/, the node/edge view of a pot's context graph that users pan, zoom and click through to entity detail. Perf complaints show up here first — dropped frames above a few thousand nodes, or edges rendering behind nodes after a layout swap. Search: graph visualization, node canvas, elk layout, force directed, pot graph explorer."
+    },
+    {
+      "slug": "npm:dompurify",
+      "name": "dompurify",
+      "package_name": "dompurify",
+      "version": "3.4.2",
+      "ecosystem": "npm",
+      "summary": "HTML sanitiser for rendered markdown/agent output; pinned in pnpm overrides after an XSS advisory.",
+      "description": "Both a direct dependency `^3.4.2` and a pnpm override to `^3.4.2` so transitive copies from the markdown stack are hoisted forward; @types/dompurify ^3.2.0 sits alongside. It sanitises agent-authored markdown and mermaid output before it reaches dangerouslySetInnerHTML. This is one of the packages that recurs in shmbhvi101's dependency-remediation PRs across potpie-ui. Search: XSS, sanitize html, mXSS bypass, prototype pollution, markdown rendering security."
+    },
+    {
+      "slug": "npm:js-yaml",
+      "name": "js-yaml",
+      "package_name": "js-yaml",
+      "version": "4.1.1",
+      "ecosystem": "npm",
+      "summary": "Transitive YAML parser pinned to 4.1.1 via pnpm overrides for a prototype-pollution advisory.",
+      "description": "Nothing in potpie-ui imports js-yaml directly; it enters through tooling and markdown plugins and is forced to `^4.1.1` in the pnpm.overrides block. The pre-4 `load()` API is the unsafe one, so the override doubles as a floor that guarantees the safe loader. It is a standing entry in the security-remediation PR series alongside form-data, protobufjs and websocket-driver. Search: js-yaml CVE, yaml prototype pollution, safeLoad removed, pnpm override transitive."
+    },
+    {
+      "slug": "npm:protobufjs",
+      "name": "protobufjs",
+      "package_name": "protobufjs",
+      "version": "7.5.8",
+      "ecosystem": "npm",
+      "summary": "Transitive protobuf runtime from the Firebase SDK; pinned to an exact version in pnpm overrides.",
+      "description": "Forced to exactly `7.5.8` in pnpm.overrides, with `@protobufjs/utf8` separately pinned to 1.1.1. It reaches the tree through firebase's gRPC-web internals, not through application code. protobufjs has a history of prototype-pollution advisories in its reflection/parse path, so remediation is always an override rather than a direct bump. Search: protobufjs CVE, prototype pollution, firebase transitive dependency, exact pin."
+    },
+    {
+      "slug": "npm:form-data",
+      "name": "form-data",
+      "package_name": "form-data",
+      "version": "4.0.5",
+      "ecosystem": "npm",
+      "summary": "Multipart body builder under axios; overridden to ^4.0.4 after a weak-boundary advisory.",
+      "description": "Resolved to 4.0.5 under a pnpm override of `^4.0.4`. It is what axios uses for multipart uploads such as the /api/v1/media/upload path in MediaService.ts. The advisory that forced the pin concerned predictable boundary generation using Math.random, allowing request-body tampering. Search: form-data CVE, multipart boundary, unsafe random, axios file upload, dependency alert."
+    },
+    {
+      "slug": "npm:websocket-driver",
+      "name": "websocket-driver",
+      "package_name": "websocket-driver",
+      "version": "0.7.4",
+      "ecosystem": "npm",
+      "summary": "Deep transitive WebSocket protocol implementation flagged by dependency scanners.",
+      "description": "Present at 0.7.4 in pnpm-lock.yaml purely as a transitive of the dev/tooling tree — no potpie-ui module imports it. It shows up repeatedly in Vanta/GitHub dependency alerts for DoS via malformed frame handling, and because it has no direct dependent it cannot be fixed by a direct bump, only by moving the parent or accepting the finding. Search: websocket-driver advisory, faye-websocket, unreachable transitive, dependency alert with no fix path."
+    }
+  ],
+
+  "config_vars": [
+    {
+      "slug": "context-engine:CONTEXT_ENGINE_AGENT_PLANNER_ENABLED",
+      "name": "CONTEXT_ENGINE_AGENT_PLANNER_ENABLED",
+      "config_key": "context_engine_agent_planner_enabled",
+      "env_var": "CONTEXT_ENGINE_AGENT_PLANNER_ENABLED",
+      "default": "0",
+      "summary": "Opt-in switch for the LLM reconciliation planner; off by default so ingestion stays deterministic and token-free.",
+      "description": "Read in potpie/context-core/src/potpie_context_core/reconciliation_flags.py via a `_truthy(os.getenv(...), False)` check, so it is false unless explicitly set. When off, windowed reconciliation uses the deterministic event playbooks and the policy port returns REASON_AGENT_PLANNER_DISABLED; when set to 1 the pydantic-ai deep agent in adapters/outbound/reconciliation/pydantic_deep_agent.py is allowed to plan mutations, which costs model calls and needs a provider key. Documented as an experiments/backfill opt-in and covered by tests/unit/test_policy_port.py. Search terms: enable reconciliation agent, agent planner disabled, why is the deep agent not running, LLM reconciliation opt-in."
+    },
+    {
+      "slug": "context-engine:GRAPH_DB_BACKEND",
+      "name": "GRAPH_DB_BACKEND",
+      "config_key": "graph_db_backend",
+      "env_var": "GRAPH_DB_BACKEND",
+      "default": "neo4j",
+      "summary": "The single selector that decides which graph storage profile the context engine builds.",
+      "description": "Read in adapters/outbound/settings_env.py via context_engine_graph_db_backend(), lowercased, defaulting to 'neo4j'. Valid values are the KNOWN_PROFILES registry in adapters/outbound/graph/backends/__init__.py: in_memory, embedded, neo4j, falkordb, falkordb_lite, postgres, chroma, hosted; 'falkordblite' is normalised to 'falkordb_lite'. postgres/chroma/hosted resolve to a fail-closed StubGraphBackend that raises CapabilityNotImplemented rather than crashing. An unknown value raises ValueError which the CLI surfaces as a validation error. Search: which graph backend am I on, potpie backend list, switch to falkordb, backend selector."
+    },
+    {
+      "slug": "context-engine:CONTEXT_ENGINE_FALKORDB_MODE",
+      "name": "CONTEXT_ENGINE_FALKORDB_MODE",
+      "config_key": "falkordb_mode",
+      "env_var": "CONTEXT_ENGINE_FALKORDB_MODE",
+      "default": "lite",
+      "summary": "Chooses embedded FalkorDBLite versus a networked FalkorDB server.",
+      "description": "context_engine_falkordb_mode() in settings_env.py reads CONTEXT_ENGINE_FALKORDB_MODE, falls back to the legacy bare FALKORDB_MODE, lowercases it and defaults to 'lite'. In lite mode the engine opens the on-disk file at CONTEXT_ENGINE_FALKORDB_LITE_PATH with no server; otherwise it dials CONTEXT_ENGINE_FALKORDB_URL. Getting this wrong is the classic 'my graph is empty' report — the CLI wrote to the lite file while a query hit the server. Search: falkordb lite vs server, embedded mode, hostless connection."
+    },
+    {
+      "slug": "context-engine:CONTEXT_ENGINE_FALKORDB_LITE_PATH",
+      "name": "CONTEXT_ENGINE_FALKORDB_LITE_PATH",
+      "config_key": "falkordb_lite_path",
+      "env_var": "CONTEXT_ENGINE_FALKORDB_LITE_PATH",
+      "default": "~/.potpie/context_graph/falkordb.db",
+      "summary": "On-disk location of the embedded FalkorDBLite database file.",
+      "description": "Resolved by context_engine_falkordb_lite_path(): explicit env, else legacy FALKORDB_LITE_PATH, else CONTEXT_ENGINE_HOME (or ~/.potpie) joined with context_graph/falkordb.db. The code comment spells out why the default is home-rooted and absolute: 'a relative default lands wherever the daemon's cwd happens to be — e.g. inside site-packages for an installed CLI, wiped on reinstall.' That regression — graph silently emptied after `uv tool upgrade potpie` — is the reason this resolution exists. Search: where is my graph stored, potpie data directory, graph lost after upgrade, sqlite-like local db."
+    },
+    {
+      "slug": "context-engine:CONTEXT_ENGINE_FALKORDB_URL",
+      "name": "CONTEXT_ENGINE_FALKORDB_URL",
+      "config_key": "falkordb_url",
+      "env_var": "CONTEXT_ENGINE_FALKORDB_URL",
+      "default": "",
+      "summary": "Connection URL for a networked FalkorDB instance when mode is not lite.",
+      "description": "context_engine_falkordb_url() prefers CONTEXT_ENGINE_FALKORDB_URL and falls back to the bare FALKORDB_URL, returning None when both are blank. Format is a redis:// URL such as redis://localhost:6379. Unset while CONTEXT_ENGINE_FALKORDB_MODE is server-mode produces connection errors at the first Cypher call rather than at startup. Search: falkordb connection string, redis url for graph, ConnectionError 6379."
+    },
+    {
+      "slug": "context-engine:CONTEXT_ENGINE_FALKORDB_GRAPH_NAME",
+      "name": "CONTEXT_ENGINE_FALKORDB_GRAPH_NAME",
+      "config_key": "falkordb_graph_name",
+      "env_var": "CONTEXT_ENGINE_FALKORDB_GRAPH_NAME",
+      "default": "context_graph",
+      "summary": "Named graph key inside a FalkorDB instance; defaults to context_graph.",
+      "description": "Read by context_engine_falkordb_graph_name() with a fallback to the legacy FALKORDB_GRAPH_NAME and a default of 'context_graph'. Because FalkorDB namespaces multiple graphs in one server, pointing two environments at the same URL with the same name silently merges them — a real risk when staging and a local dev box share an instance. Search: graph namespace, multi-tenant falkordb, wrong graph selected, empty result but data exists."
+    },
+    {
+      "slug": "context-engine:CONTEXT_ENGINE_NEO4J_URI",
+      "name": "CONTEXT_ENGINE_NEO4J_URI",
+      "config_key": "neo4j_uri",
+      "env_var": "CONTEXT_ENGINE_NEO4J_URI",
+      "default": "",
+      "summary": "Bolt URI for the dedicated context-graph Neo4j cluster.",
+      "description": "EnvContextEngineSettings.neo4j_uri() checks CONTEXT_ENGINE_NEO4J_URI, then CONTEXT_ENGINE_NEO4J_URL, then falls back to the shared NEO4J_URI / NEO4J_URL. The docstring in settings_env.py calls it 'Neo4j for the context graph (optional dedicated cluster/DB)' — the prefixed names exist so the graph can be split off the legacy app database. Values look like neo4j+s://xxxx.databases.neo4j.io or bolt://localhost:7687. Search: bolt uri, neo4j aura connection, ServiceUnavailable, readiness probe failing."
+    },
+    {
+      "slug": "context-engine:CONTEXT_ENGINE_NEO4J_USERNAME",
+      "name": "CONTEXT_ENGINE_NEO4J_USERNAME",
+      "config_key": "neo4j_user",
+      "env_var": "CONTEXT_ENGINE_NEO4J_USERNAME",
+      "default": "neo4j",
+      "summary": "Neo4j auth user for the context graph, with legacy fallbacks.",
+      "description": "context_engine_neo4j_user() reads CONTEXT_ENGINE_NEO4J_USERNAME then CONTEXT_ENGINE_NEO4J_USER; EnvContextEngineSettings then falls back to NEO4J_USERNAME / NEO4J_USER. Four accepted spellings for one value is deliberate backwards compatibility with the pre-split deployment, and also a frequent source of 'The client is unauthorized due to authentication failure' when only one of them is set in a Kubernetes secret. Search: neo4j username env, auth failure, unauthorized, k8s secret key mismatch."
+    },
+    {
+      "slug": "context-engine:CONTEXT_ENGINE_NEO4J_PASSWORD",
+      "name": "CONTEXT_ENGINE_NEO4J_PASSWORD",
+      "config_key": "neo4j_password",
+      "env_var": "CONTEXT_ENGINE_NEO4J_PASSWORD",
+      "default": "",
+      "summary": "Neo4j password for the context graph; falls back to NEO4J_PASSWORD.",
+      "description": "context_engine_neo4j_password() returns the trimmed CONTEXT_ENGINE_NEO4J_PASSWORD or None, and EnvContextEngineSettings.neo4j_password() then falls back to NEO4J_PASSWORD. Sourced from a sealed secret in the k8s deployments repo, never from .env in any non-dev environment. When absent the driver is constructed with auth=(user, None) and /api/v1/ready reports the neo4j check as false with the repr of the driver exception. Search: neo4j password secret, auth tuple, ready endpoint false, credentials not mounted."
+    },
+    {
+      "slug": "context-engine:CONTEXT_ENGINE_EMBEDDER",
+      "name": "CONTEXT_ENGINE_EMBEDDER",
+      "config_key": "embedder",
+      "env_var": "CONTEXT_ENGINE_EMBEDDER",
+      "default": "local",
+      "summary": "Selects the embedding strategy for semantic retrieval, or disables it entirely.",
+      "description": "build_embedder() in adapters/outbound/intelligence/local_embedder.py normalises this value: unset/local/hashing gives the bundled HashingEmbedder, legacy or sentence-transformers gives all-MiniLM-L6-v2, auto uses sentence-transformers when importable and otherwise falls back to hashing, and none/off/lexical returns None so the store degrades to a labelled lexical fallback. An unknown value defaults to hashing rather than crashing. This is why potpie search works offline with no API key. Search: embeddings disabled, semantic search quality, no api key required, lexical fallback."
+    },
+    {
+      "slug": "context-engine:CONTEXT_ENGINE_EMBEDDING_MODEL",
+      "name": "CONTEXT_ENGINE_EMBEDDING_MODEL",
+      "config_key": "embedding_model",
+      "env_var": "CONTEXT_ENGINE_EMBEDDING_MODEL",
+      "default": "all-MiniLM-L6-v2",
+      "summary": "Overrides the SentenceTransformer model name when the legacy embedder is selected.",
+      "description": "configured_embedding_model() checks the env var first, then the local setup config keys embedding_model / sentence_transformer_model, then DEFAULT_SENTENCE_TRANSFORMER_MODEL. Only consulted when CONTEXT_ENGINE_EMBEDDER resolves to the sentence-transformers path — setting it while on the hashing embedder is a silent no-op, a recurring source of 'I changed the model and nothing happened'. Changing it also invalidates existing vectors, since dimensionality and geometry differ. Search: change embedding model, MiniLM, re-embed graph, dimension mismatch."
+    },
+    {
+      "slug": "context-engine:CONTEXT_ENGINE_HOST_MODE",
+      "name": "CONTEXT_ENGINE_HOST_MODE",
+      "config_key": "host_mode",
+      "env_var": "CONTEXT_ENGINE_HOST_MODE",
+      "default": "daemon",
+      "summary": "Runs the context engine in-process inside the CLI, or against the background daemon.",
+      "description": "Read in potpie/cli/commands/_common.py and set explicitly by potpie/cli/commands/bootstrap.py ('daemon' if daemon else 'in_process') and by potpie/daemon/daemon_runtime/__main__.py which forces 'in_process' so the daemon never recurses into itself. bootstrap.py's error text points users at '$CONTEXT_ENGINE_HOST_MODE or daemon'. In_process is slower to start but easier to debug; daemon mode keeps the graph warm across CLI invocations. Search: potpie daemon not starting, in-process mode, slow cli startup, daemon socket."
+    },
+    {
+      "slug": "context-engine:CONTEXT_ENGINE_HOME",
+      "name": "CONTEXT_ENGINE_HOME",
+      "config_key": "context_engine_home",
+      "env_var": "CONTEXT_ENGINE_HOME",
+      "default": "~/.potpie",
+      "summary": "Root directory for all local potpie state: pots, graph files, credentials, cursors.",
+      "description": "Expanded in settings_env.py and the pot store; when unset everything is rooted at Path.home()/'.potpie'. It is the parent of context_graph/falkordb.db, the flat-file pot state store, and the sync cursors under adapters/outbound/ledger/cursor_store.py. Overriding it is the supported way to run isolated pots per project or to keep test runs out of a developer's real graph. Search: potpie home directory, XDG_CONFIG_HOME, isolate local state, wipe local graph."
+    },
+    {
+      "slug": "context-engine:CONTEXT_GRAPH_ENABLED",
+      "name": "CONTEXT_GRAPH_ENABLED",
+      "config_key": "context_graph_enabled",
+      "env_var": "CONTEXT_GRAPH_ENABLED",
+      "default": "1",
+      "summary": "Master kill switch for the context graph subsystem.",
+      "description": "EnvContextEngineSettings.is_enabled() treats an unset value as enabled, and parses 0/false/no/off/'' as disabled and 1/true/yes/on as enabled. When disabled the readiness probe short-circuits with the reason string 'context graph disabled' instead of dialling Neo4j — that exact string in /api/v1/ready output is the fastest way to diagnose a pot that ingests nothing. Search: context graph disabled, feature flag off, ready endpoint reason, disable graph writes."
+    },
+    {
+      "slug": "context-engine:DATABASE_URL",
+      "name": "DATABASE_URL",
+      "config_key": "database_url",
+      "env_var": "DATABASE_URL",
+      "default": "",
+      "summary": "Postgres DSN for the event store, ledger and ingestion config tables.",
+      "description": "Consumed by adapters/outbound/postgres/session.py and its repositories — ingestion_event_store.py, reconciliation_ledger.py, ingestion_config.py, agent_checkpoint_store.py. The /api/v1/ready handler's _check_postgres helper returns the literal reason 'no DATABASE_URL' when the session is None, then runs SELECT 1. Absent in the pure-local CLI flow, which keeps pot state in flat files instead. Search: postgres dsn, no DATABASE_URL, ready check postgres false, sqlalchemy engine, alembic migrations."
+    },
+    {
+      "slug": "context-engine:REDIS_URL",
+      "name": "REDIS_URL",
+      "config_key": "redis_url",
+      "env_var": "REDIS_URL",
+      "default": "redis://localhost:6379/0",
+      "summary": "Shared Redis URL: event-stream pub/sub in the engine, broker and result backend in workflows.",
+      "description": "In the context engine it configures adapters/outbound/event_stream/redis_publisher.py, which fans live ingestion events to the /events/stream SSE endpoints; when unset the container falls back to a NoOp publisher and _check_redis reports 'not configured (NoOp)' rather than failing readiness. In potpie-workflows src/celery_config.py the same variable is read twice, for broker_url and result_backend, with the redis://localhost:6379/0 default. Search: SSE events not arriving, celery broker url, redis connection refused, live activity timeline stuck."
+    },
+    {
+      "slug": "context-engine:GITHUB_WEBHOOK_SECRET",
+      "name": "GITHUB_WEBHOOK_SECRET",
+      "config_key": "github_webhook_secret",
+      "env_var": "GITHUB_WEBHOOK_SECRET",
+      "default": "",
+      "summary": "HMAC shared secret validating inbound GitHub webhook deliveries.",
+      "description": "Loaded into RuntimeSettings by load_runtime_settings() and used by adapters/inbound/http/webhooks/integrations/github.py, which reads the raw body and lowercases all headers before verifying the X-Hub-Signature-256 digest. A mismatch is the standard cause of 401/403 on /webhooks/integrations/github with GitHub's delivery log showing repeated redeliveries. It is one of the values project_child_environment() forwards to spawned child processes. Search: X-Hub-Signature-256, webhook 401, signature verification failed, github app secret."
+    },
+    {
+      "slug": "context-engine:CONTEXT_ENGINE_GITHUB_TOKEN",
+      "name": "CONTEXT_ENGINE_GITHUB_TOKEN",
+      "config_key": "context_engine_github_token",
+      "env_var": "CONTEXT_ENGINE_GITHUB_TOKEN",
+      "default": "",
+      "summary": "Token the GitHub connector uses for PR/issue backfill; deliberately replaces bare GITHUB_TOKEN.",
+      "description": "Read directly by load_runtime_settings() and passed to PyGithub in adapters/outbound/connectors/github/api_client.py. Critically, plain GITHUB_TOKEN is listed in _DEPRECATED_CHILD_ENV_KEYS in bootstrap/runtime_settings.py and is stripped from any child process environment — so exporting GITHUB_TOKEN alone will not authenticate the connector, which surfaces as 'Bad credentials' or a 60-req/hour anonymous rate limit. Search: github token not picked up, 403 rate limit, backfill unauthenticated, deprecated env key."
+    },
+    {
+      "slug": "cli:POTPIE_API_URL",
+      "name": "POTPIE_API_URL",
+      "config_key": "potpie_api_url",
+      "env_var": "POTPIE_API_URL",
+      "default": "http://localhost:8001",
+      "summary": "Base URL the CLI and daemon use to reach the hosted potpie API.",
+      "description": "Resolved in load_runtime_settings() as env-then-distribution-default-then-code-default (_CODE_DEFAULT_API_URL = 'http://localhost:8001') and always right-stripped of trailing slashes. project_child_environment() re-exports it to subprocesses while deleting the older POTPIE_BASE_URL, POTPIE_CLI_API_BASE_URL and POTPIE_CLI_BASE_URL spellings, which are in _DEPRECATED_CHILD_ENV_KEYS. Search: potpie login wrong host, api base url, connection refused 8001, self-hosted endpoint."
+    },
+    {
+      "slug": "cli:POTPIE_API_KEY",
+      "name": "POTPIE_API_KEY",
+      "config_key": "potpie_api_key",
+      "env_var": "POTPIE_API_KEY",
+      "default": "",
+      "summary": "Bearer credential for non-interactive CLI and CI access to the hosted API.",
+      "description": "Read by load_runtime_settings() and forwarded to child processes only when present via _set_if_present(). It is the headless alternative to `potpie login`, which otherwise runs a browser OAuth flow through the local callback server. In CI, a missing value shows up as 401 on every graph read and the CLI advising the user to authenticate. Search: potpie api key, headless auth, CI login, 401 unauthorized, PAT."
+    },
+    {
+      "slug": "cli:POTPIE_ENVIRONMENT",
+      "name": "POTPIE_ENVIRONMENT",
+      "config_key": "environment",
+      "env_var": "POTPIE_ENVIRONMENT",
+      "default": "dev",
+      "summary": "Names the runtime environment and gates local .env loading.",
+      "description": "resolve_bootstrap_environment() reads it before anything else; ensure_runtime_environment_loaded() only calls env_bootstrap.load_cli_env() when the resolved value is exactly 'dev', so a packaged install never silently absorbs a stray .env from the working directory. It also feeds Sentry's environment tag. Values in use: dev, staging, prod. Search: env not loading, dotenv ignored in production, environment tag, dev bootstrap."
+    },
+    {
+      "slug": "cli:LINEAR_CLIENT_ID",
+      "name": "LINEAR_CLIENT_ID",
+      "config_key": "linear_client_id",
+      "env_var": "LINEAR_CLIENT_ID",
+      "default": "",
+      "summary": "OAuth client id for the CLI's Linear integration login.",
+      "description": "Resolved from env or the baked distribution defaults in load_runtime_settings(), then used by adapters/outbound/cli_auth against LINEAR_AUTH_URL https://linear.app/oauth/authorize and LINEAR_TOKEN_URL https://api.linear.app/oauth/token with LINEAR_DEFAULT_SCOPE 'read'. adapters/outbound/cli_auth/oauth_client_id_messages.py exists specifically to explain the missing-client-id case to users. Search: linear oauth, connect linear, client_id missing, POT ticket ingestion, invalid_client."
+    },
+    {
+      "slug": "cli:POTPIE_GITHUB_CLIENT_ID",
+      "name": "POTPIE_GITHUB_CLIENT_ID",
+      "config_key": "github_client_id",
+      "env_var": "POTPIE_GITHUB_CLIENT_ID",
+      "default": "",
+      "summary": "OAuth client id for CLI GitHub login, distinct from the webhook and backfill credentials.",
+      "description": "Read by load_runtime_settings() with a distribution-default fallback and consumed by adapters/outbound/cli_auth/github.py. Deliberately namespaced with the POTPIE_ prefix so it cannot collide with the ambient GITHUB_* variables that CI runners inject. Paired with the PKCE helper in cli_auth/pkce.py and the local callback server. Search: github oauth app, pkce flow, potpie source add github, device flow, client id."
+    },
+    {
+      "slug": "cli:POTPIE_CLI_OAUTH_REDIRECT_URI",
+      "name": "POTPIE_CLI_OAUTH_REDIRECT_URI",
+      "config_key": "cli_oauth_redirect_uri",
+      "env_var": "POTPIE_CLI_OAUTH_REDIRECT_URI",
+      "default": "http://localhost:28757/callback",
+      "summary": "Loopback redirect URI for CLI OAuth, validated to be http on localhost with an explicit port.",
+      "description": "provider_config.py builds the default from DEFAULT_CALLBACK_PORT 28757 and DEFAULT_CALLBACK_PATH '/callback', and _parsed_redirect_uri() rejects anything that is not http, has no hostname or no port with the message 'POTPIE_CLI_OAUTH_REDIRECT_URI must be an http localhost URL with a port, for example http://localhost:8001/api/v1/integrations/linear/callback', and separately rejects hosts other than localhost/127.0.0.1. When the port is not overridden the callback server also tries the fallback port 28763. Search: redirect_uri_mismatch, port 28757 in use, oauth callback, address already in use."
+    },
+    {
+      "slug": "cli:POTPIE_TELEMETRY_DISABLED",
+      "name": "POTPIE_TELEMETRY_DISABLED",
+      "config_key": "telemetry_disabled",
+      "env_var": "POTPIE_TELEMETRY_DISABLED",
+      "default": "0",
+      "summary": "Opt-out switch for CLI telemetry; accepts the full 0/false/no/off vocabulary.",
+      "description": "Parsed by the _flag() helper in runtime_settings.py, which treats 0/false/no/off as false and 1/true/yes/on as true, defaulting to '0' when neither env nor distribution defaults supply a value. Always re-exported to child processes as a normalised '0' or '1' by project_child_environment(). Sits alongside POTPIE_PRODUCT_ANALYTICS_ENABLED and POTPIE_SENTRY_ENABLED as the three privacy switches. Search: disable telemetry, opt out analytics, do not track, offline mode, privacy."
+    },
+    {
+      "slug": "cli:POTPIE_DAEMON_PORT",
+      "name": "POTPIE_DAEMON_PORT",
+      "config_key": "daemon_port",
+      "env_var": "POTPIE_DAEMON_PORT",
+      "default": "",
+      "summary": "Port the local potpie daemon binds for its HTTP/RPC transport.",
+      "description": "Read in the potpie/daemon package alongside POTPIE_DAEMON_TOKEN, which authenticates CLI-to-daemon calls over potpie/daemon/http/transport.py. When unset the daemon picks a free port and records it in the runtime state file under CONTEXT_ENGINE_HOME so daemon_client.py can find it. Stale state after an unclean shutdown produces 'connection refused' on a port nothing is listening on. Search: potpie daemon port, daemon not reachable, stale pid file, restart daemon."
+    },
+    {
+      "slug": "ui:NEXT_PUBLIC_BASE_URL",
+      "name": "NEXT_PUBLIC_BASE_URL",
+      "config_key": "next_public_base_url",
+      "env_var": "NEXT_PUBLIC_BASE_URL",
+      "default": "http://localhost:8001",
+      "summary": "The API origin every potpie-ui service module prefixes onto /api/v1 paths.",
+      "description": "By far the most-referenced env var in potpie-ui — around a hundred call sites across services/*.ts, lib/ and app/. Set to http://localhost:8001 in .env.template. PotService.ts, EventStreamService.ts, RecipeService.ts and the rest build every request as `${NEXT_PUBLIC_BASE_URL}/api/v1/...`. Because it is inlined at build time by Next.js, changing it requires a rebuild, not just a restart — the classic 'I updated .env and it still calls localhost' report. Search: api base url, CORS error, 404 on /api/v1, NEXT_PUBLIC baked at build time."
+    },
+    {
+      "slug": "ui:NEXT_PUBLIC_WORKFLOWS_URL",
+      "name": "NEXT_PUBLIC_WORKFLOWS_URL",
+      "config_key": "next_public_workflows_url",
+      "env_var": "NEXT_PUBLIC_WORKFLOWS_URL",
+      "default": "http://localhost:8002",
+      "summary": "Origin of the potpie-workflows REST server used by recipe, spec and plan screens.",
+      "description": "Declared in .env.template as http://localhost:8002 and read by WorkflowService.ts, RecipeService.ts, SpecService.ts, PlanService.ts and TaskSplittingService.ts. It is a separate origin from NEXT_PUBLIC_BASE_URL because workflows is its own FastAPI app with its own /api/v1/recipes, /api/v1/workflows and /api/v1/triggers routers. The companion NEXT_PUBLIC_WORKFLOWS_WEBHOOK_URL is an ngrok tunnel in the template so local webhooks can be received. Search: workflows server not running, port 8002, recipe generation fails, spec stream 404."
+    },
+    {
+      "slug": "ui:NEXT_PUBLIC_FIREBASE_API_KEY",
+      "name": "NEXT_PUBLIC_FIREBASE_API_KEY",
+      "config_key": "next_public_firebase_api_key",
+      "env_var": "NEXT_PUBLIC_FIREBASE_API_KEY",
+      "default": "",
+      "summary": "Firebase web API key for browser auth; blank by default so local dev works without it.",
+      "description": "One of seven NEXT_PUBLIC_FIREBASE_* keys in .env.template (api key, auth domain, project id, storage bucket, measurement id, messaging sender id, app id), all intentionally empty with the note that these are optional and not required for local development mode. When blank the app runs in local development mode; when partially filled the SDK throws auth/invalid-api-key at initializeApp. Interestingly the same key name also appears server-side in potpie for token exchange. Search: firebase config, auth/invalid-api-key, local dev without firebase, initializeApp error."
+    },
+    {
+      "slug": "ui:NEXT_PUBLIC_POSTHOG_KEY",
+      "name": "NEXT_PUBLIC_POSTHOG_KEY",
+      "config_key": "next_public_posthog_key",
+      "env_var": "NEXT_PUBLIC_POSTHOG_KEY",
+      "default": "",
+      "summary": "PostHog project key for browser product analytics; empty disables capture.",
+      "description": "Read together with NEXT_PUBLIC_POSTHOG_HOST; both are blank in .env.template so a fresh clone never emits events. The server-side mirror in potpie's runtime settings is POTPIE_POSTHOG_API_KEY with POTPIE_POSTHOG_HOST defaulting to https://us.i.posthog.com, gated by POTPIE_PRODUCT_ANALYTICS_ENABLED. Search: posthog key, analytics not firing, us.i.posthog.com, disable product analytics, event capture."
+    },
+    {
+      "slug": "workflows:OPENROUTER_API_KEY",
+      "name": "OPENROUTER_API_KEY",
+      "config_key": "openrouter_api_key",
+      "env_var": "OPENROUTER_API_KEY",
+      "default": "",
+      "summary": "Model-gateway credential for spec, plan and codegen agents in potpie-workflows.",
+      "description": "The most-read secret in potpie-workflows after REDIS_URL, consumed through litellm. The codebase accumulated three spellings — OPENROUTER_API_KEY, OPEN_ROUTER_API_KEY and OPENROUTER_KEY — which is a live inconsistency: setting only one of them can leave a subset of agents unauthenticated and failing with 401 from openrouter.ai mid-run. Falls back to OPENAI_API_KEY on some paths. Search: openrouter 401, model gateway key, litellm auth, specgen fails halfway."
+    },
+    {
+      "slug": "workflows:SPECGEN_V3_AUTHOR_MODEL",
+      "name": "SPECGEN_V3_AUTHOR_MODEL",
+      "config_key": "specgen_v3_author_model",
+      "env_var": "SPECGEN_V3_AUTHOR_MODEL",
+      "default": "",
+      "summary": "Model id for the authoring stage of the v3 spec-generation pipeline.",
+      "description": "One half of the research/author model split — its sibling is SPECGEN_V3_RESEARCH_MODEL — with a v2-era pair SPECGEN_AUTHOR_MODEL / SPECGEN_RESEARCH_MODEL still read for compatibility. Surrounded by a full budget vocabulary: SPECGEN_V3_AUTHOR_CTX_TOKENS, _MEMORY_TOKENS, _REQUEST_LIMIT, _TOOL_CALLS_LIMIT, _TOTAL_TOKENS_LIMIT, plus SPECGEN_V3_MAX_VALIDATION_RETRIES and SPECGEN_MAX_GROUNDING_RETRIES. Blowing a limit truncates the spec rather than erroring loudly. Search: specgen model, author stage, token budget exceeded, spec truncated, validation retries."
+    },
+    {
+      "slug": "workflows:LOGFIRE_TOKEN",
+      "name": "LOGFIRE_TOKEN",
+      "config_key": "logfire_token",
+      "env_var": "LOGFIRE_TOKEN",
+      "default": "",
+      "summary": "Write token for Logfire tracing of workflow and agent runs.",
+      "description": "Backs the `logfire>=4.19.0` dependency in potpie-workflows (resolved 4.31.1), which instruments Prefect flows, Celery tasks and pydantic-ai agent calls so a spec or plan run can be replayed span by span. Without it the SDK stays local and emits nothing, which is the intended default for OSS/self-hosted runs. Complements the context engine's OpenTelemetry path via OTEL_EXPORTER_OTLP_ENDPOINT and OTEL_SERVICE_NAME. Search: logfire tracing, agent run spans, observability token, no traces appearing."
+    }
+  ],
+
+  "adapters": [
+    {
+      "slug": "telemetry:posthog",
+      "name": "PostHog product analytics",
+      "adapter_kind": "telemetry",
+      "provider": "posthog",
+      "summary": "Anonymous CLI usage and onboarding analytics, off unless a PostHog key is configured and never sent when telemetry is disabled.",
+      "description": "Wired in potpie/cli/telemetry: settings.py builds the client from posthog_api_key and posthog_host and returns nothing when the key is absent, product_analytics.py and usage_events.py emit command and onboarding events, and identity_store.py supplies a stable anonymous install id. The whole path is short-circuited by POTPIE_TELEMETRY_DISABLED and inspectable via `potpie telemetry status`; the browser side of the same product uses posthog-js keyed off NEXT_PUBLIC_POSTHOG_KEY. Added in potpie#955. Search terms: posthog, product analytics, usage events, anonymous telemetry, does the CLI track me."
+    },
+    {
+      "slug": "telemetry:sentry",
+      "name": "Sentry error reporting",
+      "adapter_kind": "telemetry",
+      "provider": "sentry",
+      "summary": "Lazily loaded crash reporting scoped to unexpected CLI failures only — expected domain errors never reach it.",
+      "description": "Implemented in potpie/cli/telemetry/sentry_runtime.py, which imports sentry_sdk through importlib only when reporting is actually enabled so the dependency stays optional, then captures the exception inside a fresh new_scope(). It is deliberately narrow: handled domain errors and `ok:false` CLI results are not exceptions and are not reported, only genuinely unexpected crashes are. Env-var precedence and the enable/disable rules are documented in docs telemetry-sentry, and it shares the POTPIE_TELEMETRY_DISABLED kill switch with the PostHog adapter. Search terms: sentry, crash reporting, error tracking, sentry_sdk optional import, disable error reporting."
+    },
+    {
+      "slug": "graph:neo4j",
+      "name": "Neo4j graph backend",
+      "adapter_kind": "graph_backend",
+      "provider": "neo4j",
+      "summary": "The shape-first production graph profile, driven by the Bolt driver.",
+      "description": "Lives at adapters/outbound/graph/backends/neo4j_backend.py with neo4j_reader.py and neo4j_writer.py behind the six capability ports of GraphBackend. Selected by GRAPH_DB_BACKEND=neo4j (the default) and configured with CONTEXT_ENGINE_NEO4J_URI/_USERNAME/_PASSWORD, each with legacy NEO4J_* fallbacks. The neo4j driver import is lazy so other profiles never need it installed. /api/v1/ready verifies connectivity through this adapter. Search: cypher writer, bolt backend, production graph store, hexagonal outbound adapter."
+    },
+    {
+      "slug": "graph:falkordb",
+      "name": "FalkorDB graph backend",
+      "adapter_kind": "graph_backend",
+      "provider": "falkordb",
+      "summary": "Lightweight networked graph profile speaking Cypher over a Redis-module server.",
+      "description": "adapters/outbound/graph/backends/falkordb_backend.py plus falkordb_reader.py, falkordb_writer.py and falkordb_inspection.py. Chosen with GRAPH_DB_BACKEND=falkordb, connecting to CONTEXT_ENGINE_FALKORDB_URL and operating on the named graph CONTEXT_ENGINE_FALKORDB_GRAPH_NAME (default context_graph). Cheaper to run than Neo4j for small pots while keeping real Cypher semantics. Search: falkordb server profile, redis graph module, cypher over redis, lightweight graph backend."
+    },
+    {
+      "slug": "graph:falkordb-lite",
+      "name": "FalkorDBLite embedded graph backend",
+      "adapter_kind": "graph_backend",
+      "provider": "falkordblite",
+      "summary": "The zero-infrastructure default for the local CLI — an embedded, file-backed graph.",
+      "description": "Registered as the falkordb_lite profile (the alias 'falkordblite' is normalised to it in build_backend). Requires no server: it opens the file at CONTEXT_ENGINE_FALKORDB_LITE_PATH, default ~/.potpie/context_graph/falkordb.db. Its embedded hostless connection is the reason the context-engine `local` extra pins redis<8, since redis 8's maintenance notifications break it. This is what a developer gets from `pip install potpie && potpie pot create` with nothing else running. Search: no server needed, embedded graph db, local-first, offline knowledge graph, default backend."
+    },
+    {
+      "slug": "graph:embedded-json",
+      "name": "Embedded JSON graph backend",
+      "adapter_kind": "graph_backend",
+      "provider": "potpie-embedded",
+      "summary": "Real JSON-persisted backend used as the OSS local default and conformance baseline.",
+      "description": "EmbeddedGraphBackend in adapters/outbound/graph/backends/embedded_backend.py, described in the registry docstring as 'OSS local default (real, JSON-persisted)'. It needs no settings and no drivers, which makes it the reference implementation the conformance suite runs every other profile against. Its sibling InMemoryGraphBackend covers tests and POCs. Contrast with the postgres/chroma/hosted profiles, which resolve to a fail-closed StubGraphBackend raising CapabilityNotImplemented so `backend list` can still show them. Search: json graph store, conformance tests, in-memory backend, unimplemented profile stub."
+    },
+    {
+      "slug": "embedder:hashing-local",
+      "name": "Bundled hashing embedder",
+      "adapter_kind": "embedder",
+      "provider": "potpie-builtin",
+      "summary": "Dependency-free default embedder so semantic retrieval works with no model download and no API key.",
+      "description": "HashingEmbedder in adapters/outbound/intelligence/local_embedder.py, selected whenever CONTEXT_ENGINE_EMBEDDER is unset, 'local', 'hashing', or an unrecognised value, and used as the fallback when 'auto'/'legacy' is requested but sentence-transformers is not installed. It is deliberately the default because it makes `potpie search` work offline on first run — the registry docstring notes retrieval 'needs no API key'. Lower recall than a real model but zero setup cost. Search: default embedder, offline embeddings, no model download, hashing vectors, first-run search."
+    },
+    {
+      "slug": "embedder:sentence-transformers",
+      "name": "SentenceTransformer embedder",
+      "adapter_kind": "embedder",
+      "provider": "sentence-transformers",
+      "summary": "Optional high-quality local embedder, defaulting to all-MiniLM-L6-v2.",
+      "description": "Activated by CONTEXT_ENGINE_EMBEDDER=legacy or sentence-transformers (or 'auto' when the package is importable), with the model name overridable by CONTEXT_ENGINE_EMBEDDING_MODEL and a cache directory resolved by default_sentence_transformer_cache(). Requires the `embeddings` extra, which transitively installs torch — the reason CLI install size and CVE churn spike when it is enabled. Requesting it without the extra logs 'CONTEXT_ENGINE_EMBEDDER=legacy requires sentence-transformers'. Search: better search quality, MiniLM, local model, torch install, embedding cache, HF_HUB_DISABLE_PROGRESS_BARS."
+    },
+    {
+      "slug": "connector:github",
+      "name": "GitHub connector",
+      "adapter_kind": "connector",
+      "provider": "github",
+      "summary": "Ingests repositories, PRs, issues, reviews and commits into a pot's context graph.",
+      "description": "adapters/outbound/connectors/github/ holds connector.py, api_client.py (PyGithub), resolver.py and agent_tools.py. Registered per pot through POST /api/v1/context/pots/{pot_id}/sources/github/repository, authenticated with CONTEXT_ENGINE_GITHUB_TOKEN, and rate-limited per run by CONTEXT_GRAPH_BACKFILL_MAX_PRS_PER_RUN (clamped to 1..500, default 100). Live updates arrive separately over the /webhooks/integrations/github endpoint. Search: connect a repo, PR backfill, issue ingestion, source registration, github source not syncing."
+    },
+    {
+      "slug": "connector:notion",
+      "name": "Notion connector",
+      "adapter_kind": "connector",
+      "provider": "notion",
+      "summary": "Pulls Notion pages and databases in as Document entities on a pot.",
+      "description": "adapters/outbound/connectors/notion/connector.py, the document-side counterpart to the GitHub code connector. It lets design docs, RFCs and runbooks written in Notion be retrieved alongside code, so a search for an error string can surface the runbook that explains it. Search: notion integration, ingest docs, internal wiki, document source, page sync."
+    },
+    {
+      "slug": "connector:linear",
+      "name": "Linear connector",
+      "adapter_kind": "connector",
+      "provider": "linear",
+      "summary": "Ingests Linear teams and issues so POT-#### tickets resolve to graph entities.",
+      "description": "Backed by adapters/outbound/cli_auth/linear_read_client.py and the connectors/linear package, wired into the UI through GET /api/v1/context/pots/{pot_id}/sources/linear/teams and POST .../sources/linear/team. Auth is OAuth against https://linear.app/oauth/authorize with LINEAR_CLIENT_ID and the 'read' scope; a LINEAR_WEBHOOK_SECRET path exists for live updates. This is what makes commit messages carrying POT-1397..POT-1990 join up with the tickets that drove them. Search: linear tickets, POT ticket, issue tracker sync, connect linear team, oauth read scope."
+    },
+    {
+      "slug": "connector:atlassian",
+      "name": "Atlassian (Jira + Confluence) connector",
+      "adapter_kind": "connector",
+      "provider": "atlassian",
+      "summary": "Shared Jira and Confluence ingestion behind one Atlassian auth seam.",
+      "description": "adapters/outbound/cli_auth/atlassian_client.py and atlassian_read_client.py front both products, with provider_config.py declaring AtlassianProduct = Literal['jira', 'confluence'] and routing through ATLASSIAN_API_GATEWAY https://api.atlassian.com, discovering sites via /oauth/token/accessible-resources. Unlike Linear it uses API tokens minted at id.atlassian.com/manage-profile/security/api-tokens rather than a full OAuth dance. The UI exposes /api/v1/integrations/jira/initiate and /api/v1/integrations/confluence/initiate. Search: jira integration, confluence pages, atlassian api token, accessible resources, cloud id."
+    },
+    {
+      "slug": "cli-auth:linear-oauth",
+      "name": "CLI OAuth loopback client",
+      "adapter_kind": "oauth_client",
+      "provider": "linear",
+      "summary": "PKCE loopback OAuth flow that authenticates the CLI against Linear from a terminal.",
+      "description": "adapters/outbound/cli_auth/ combines callback_server.py, pkce.py, token_exchange.py and provider_config.py into a browser-redirect flow that lands on http://localhost:28757/callback (DEFAULT_CALLBACK_PORT 28757, fallback 28763). The redirect URI is validated to be http on localhost or 127.0.0.1 with an explicit port, otherwise the flow refuses to start. integration_verify.py then proves the token works before it is persisted. Search: potpie auth linear, browser did not open, redirect_uri_mismatch, port already in use, pkce code verifier."
+    },
+    {
+      "slug": "cli-auth:keyring-credentials-store",
+      "name": "Keyring credentials store",
+      "adapter_kind": "credential_store",
+      "provider": "keyring",
+      "summary": "OS-keychain-backed persistence for CLI integration tokens and sessions.",
+      "description": "adapters/outbound/cli_auth/credentials_store.py and credentials.py write provider tokens through the `keyring` package into the macOS Keychain, Windows Credential Manager or Secret Service, with integration_session.py and firebase_session.py layered on top. e2e_keyring.py exists for the opt-in cli_auth_e2e test marker gated behind RUN_CLI_AUTH_E2E=1. Headless Linux without a Secret Service provider is the standard failure: 'No recommended backend was available'. Search: token storage, keychain access prompt, credentials not persisted, headless keyring, secret service."
+    },
+    {
+      "slug": "inbound:cli",
+      "name": "CLI inbound adapter",
+      "adapter_kind": "inbound",
+      "provider": "typer",
+      "summary": "The `potpie` command — primary human entrypoint into the context engine.",
+      "description": "Registered as the console script `potpie = potpie.cli.main:main` and built with typer + rich. Owns doctor, login, pot, source, search, graph and backend commands under potpie/cli/commands/, with the setup UX in potpie/cli/ui/. _common.py resolves CONTEXT_ENGINE_HOST_MODE to decide whether a command runs in-process or talks to the daemon. PR #1013 moved the whole CLI into the root distribution package. Search: potpie command, cli entrypoint, potpie doctor, terminal ux, console script."
+    },
+    {
+      "slug": "inbound:mcp",
+      "name": "MCP inbound adapter",
+      "adapter_kind": "inbound",
+      "provider": "modelcontextprotocol",
+      "summary": "Model Context Protocol server exposing the graph as tools to coding agents.",
+      "description": "potpie/mcp/server.py with project_access.py scoping, registered as the console script `potpie-mcp = potpie.mcp.server:main` on top of the `mcp>=1.28.1` SDK. It is how Claude Code, Cursor and the VS Code extension read pots, search entities, read named graph views and propose mutations without shelling out. Bug reports from AdityaPainuli and Nih1tGupta cluster here: server exits on startup, tools not advertised, stdio transport hanging. Search: mcp server, agent tools, context_* tools, stdio transport, cursor integration."
+    },
+    {
+      "slug": "inbound:http-api",
+      "name": "HTTP inbound adapter",
+      "adapter_kind": "inbound",
+      "provider": "fastapi",
+      "summary": "FastAPI app mounting the REST API at /api/v1 and webhooks at /webhooks.",
+      "description": "adapters/inbound/http/app.py's create_app() configures logging, installs _hardening.install_hardening(app), and mounts api_router under /api/v1 and webhooks_router under /webhooks. Two exception handlers normalise every failure into {'error': {'code': ..., 'message': ...}}, with unhandled exceptions logged and flattened to a generic 'Internal server error' so internals never leak. deps.py provides get_container_or_503 and get_db_optional. Search: fastapi app factory, error envelope, 503 container not ready, api hardening, uvicorn entrypoint."
+    },
+    {
+      "slug": "event-stream:redis-publisher",
+      "name": "Redis event-stream publisher",
+      "adapter_kind": "event_stream",
+      "provider": "redis",
+      "summary": "Fans ingestion events to SSE consumers, degrading to a NoOp publisher when Redis is absent.",
+      "description": "adapters/outbound/event_stream/redis_publisher.py with inmemory_publisher.py as the local sibling, configured from REDIS_URL. It feeds GET /api/v1/context/events/{event_id}/stream and GET /api/v1/context/pots/{pot_id}/events/stream, which drive the live activity timeline and ingestion pipeline views in potpie-ui. The readiness check treats an unconfigured publisher as healthy, reporting 'not configured (NoOp)' — so a silent live timeline usually means NoOp, not an outage. Search: SSE not updating, live events stuck, redis pubsub, event fan-out, noop publisher."
+    }
+  ],
+
+  "api_contracts": [
+    {
+      "slug": "potpie-mcp:tool:context_resolve",
+      "name": "MCP tool context_resolve",
+      "http_method": "tool",
+      "path": "context_resolve",
+      "summary": "The primary MCP tool an agent calls to wrap a task in project memory, dispatching to host.agent_context.resolve.",
+      "description": "Declared in potpie/mcp/server.py, whose module docstring maps the four-tool surface: context_resolve to host.agent_context.resolve, context_search to .search, context_record to .record and context_status to .status. context_resolve is the broad task-wrap entrypoint the other tools defer to — context_search is documented in-tree as the narrow follow-up for a known phrase or entity, with the instruction to prefer context_resolve for task wraps. It accepts an optional `as_of`, whose date-only form was the trigger for the naive-datetime TypeError reported in potpie issue #1008. The whole MCP surface is being removed as an executable integration per the remove-mcp-from-daemon-and-product decision. Search terms: context_resolve, MCP tool, agent context resolve, mcp server tools, as_of parameter, task wrap."
+    },
+    {
+      "slug": "context-engine:GET:/api/v1/health",
+      "name": "GET /api/v1/health",
+      "http_method": "GET",
+      "path": "/api/v1/health",
+      "summary": "Liveness probe returning {\"status\":\"ok\"} unconditionally.",
+      "description": "Defined in adapters/inbound/http/api/router.py with the docstring 'Liveness — process is up. Unchanged contract (kept for scrapers)'. It never touches Postgres, Neo4j or Redis, so a 200 here with a failing /api/v1/ready is the normal signature of a process that booted but cannot reach its backing stores. Used as the k8s liveness probe. Search: healthcheck, liveness probe, 200 ok, is the service up."
+    },
+    {
+      "slug": "context-engine:GET:/api/v1/ready",
+      "name": "GET /api/v1/ready",
+      "http_method": "GET",
+      "path": "/api/v1/ready",
+      "summary": "Readiness probe that individually checks Postgres, Neo4j and Redis and reports why each failed.",
+      "description": "Runs _check_postgres (returns 'no DATABASE_URL' when no session, otherwise SELECT 1), _check_neo4j (short-circuits with 'context graph disabled' when CONTEXT_GRAPH_ENABLED is off, else GraphDatabase.driver(...).verify_connectivity()), and _check_redis (treats an unconfigured publisher as healthy with 'not configured (NoOp)'). Each failure carries repr(exc), which makes this the first endpoint to curl when ingestion stalls. Search: readiness probe, dependency health, neo4j unreachable, ServiceUnavailable, why is ingestion stuck."
+    },
+    {
+      "slug": "context-engine:POST:/api/v1/context/ingest",
+      "name": "POST /api/v1/context/ingest",
+      "http_method": "POST",
+      "path": "/api/v1/context/ingest",
+      "summary": "Primary ingestion entrypoint — accepts raw source events for graph extraction.",
+      "description": "The main write path in adapters/inbound/http/api/v1/context/router.py. Events land in the Postgres ingestion event store, are queued for extraction, and become Activity/CodeAsset/Person entities plus claim edges. Its per-pot sibling POST /api/v1/context/pots/{pot_id}/ingest/raw is what PotService.ts calls from the Add Context panel. Failures here show up as events stuck in a non-terminal state on the events page, retryable via the retry endpoints. Search: ingest event, push context, raw event, extraction pipeline, event stuck pending."
+    },
+    {
+      "slug": "context-engine:POST:/api/v1/context/query/context-graph",
+      "name": "POST /api/v1/context/query/context-graph",
+      "http_method": "POST",
+      "path": "/api/v1/context/query/context-graph",
+      "summary": "The main read operation — semantic and structural retrieval over a pot's context graph.",
+      "description": "Called from potpie-ui's PotContextQueryCard and by agents through the MCP tools. Combines embedder-backed semantic search (see CONTEXT_ENGINE_EMBEDDER) with canonical claim queries in adapters/outbound/graph/canonical_claim_query.py and the analytics/semantic claim-query backends. When the embedder is disabled it degrades to a labelled lexical fallback rather than erroring, which users perceive as 'search got worse' rather than 'search broke'. Search: query the graph, context retrieval, semantic search endpoint, ask the pot, claim query."
+    },
+    {
+      "slug": "context-engine:POST:/api/v1/context/record",
+      "name": "POST /api/v1/context/record",
+      "http_method": "POST",
+      "path": "/api/v1/context/record",
+      "summary": "Records an agent- or human-authored observation directly into the graph.",
+      "description": "The lighter-weight write sibling of /ingest: instead of submitting a raw source event for extraction, the caller submits an already-shaped memory — a decision, preference, bug pattern or fix — for validation and commit. This is the endpoint behind `potpie graph propose` / `graph commit --verify` and the agent skill that records durable learnings after a debugging session. Search: record memory, write observation, propose mutation, commit plan, durable learning."
+    },
+    {
+      "slug": "context-engine:POST:/api/v1/context/status",
+      "name": "POST /api/v1/context/status",
+      "http_method": "POST",
+      "path": "/api/v1/context/status",
+      "summary": "Reports graph and ingestion status for a set of pots or sources.",
+      "description": "Backs `potpie --json graph status` and the pot overview header in potpie-ui — entity and edge counts, last ingestion time, source freshness, and whether any source has drifted. It is a POST rather than a GET because callers pass a batch of pot/source identifiers. Agents are told to check mapping/graph health once per session through this path. Search: graph status, is my graph up to date, entity count, stale source, ingestion lag."
+    },
+    {
+      "slug": "context-engine:GET:/api/v1/context/events/{event_id}",
+      "name": "GET /api/v1/context/events/{event_id}",
+      "http_method": "GET",
+      "path": "/api/v1/context/events/{event_id}",
+      "summary": "Fetch a single persisted context event with its payload and processing state.",
+      "description": "Declared with summary='Fetch a persisted context event'. Renders the EventDetailSheet in potpie-ui, showing the raw payload (EventPayloadView), status badge and error text for one ingestion event. This is the drill-down after spotting a failed row in the events list, and the input to deciding whether to retry. Search: event detail, why did this event fail, payload inspector, ingestion error message."
+    },
+    {
+      "slug": "context-engine:POST:/api/v1/context/events/{event_id}/retry",
+      "name": "POST /api/v1/context/events/{event_id}/retry",
+      "http_method": "POST",
+      "path": "/api/v1/context/events/{event_id}/retry",
+      "summary": "Re-enqueues a single failed ingestion event for reprocessing.",
+      "description": "The per-event recovery action, with POST /api/v1/context/pots/{pot_id}/events/batch-retry as the bulk equivalent driven by EventBulkActionBar in potpie-ui. Used after fixing the cause of a failure — a missing token, an extraction bug, a transient LLM error — to replay events without re-fetching from the source. Search: retry failed event, requeue, dead letter, replay ingestion, bulk retry."
+    },
+    {
+      "slug": "context-engine:GET:/api/v1/context/pots/{pot_id}/events",
+      "name": "GET /api/v1/context/pots/{pot_id}/events",
+      "http_method": "GET",
+      "path": "/api/v1/context/pots/{pot_id}/events",
+      "summary": "Paginated, filterable list of ingestion events for a pot.",
+      "description": "Powers the events page at app/(main)/pots/[potId]/events with EventList, EventRow, EventFilters and EventStatusBadge. Supports filtering by status and source so an operator can isolate every failed GitHub event in one view. Served by the delegating event query service in adapters/outbound/postgres/delegating_event_query_service.py. Search: pot events, ingestion history, filter failed events, event list pagination."
+    },
+    {
+      "slug": "context-engine:GET:/api/v1/context/pots/{pot_id}/events/stream",
+      "name": "GET /api/v1/context/pots/{pot_id}/events/stream",
+      "http_method": "GET",
+      "path": "/api/v1/context/pots/{pot_id}/events/stream",
+      "summary": "Server-sent event stream of live ingestion activity for a pot.",
+      "description": "Consumed by EventStreamService.ts to drive LiveActivityTimeline and AgentActivityTimeline in potpie-ui. Backed by the Redis event-stream publisher; when REDIS_URL is unset the container installs a NoOp publisher and this stream stays silent while the readiness check still reports healthy with 'not configured (NoOp)'. That combination is the usual explanation for a frozen live timeline. Search: SSE, EventSource, live updates not arriving, streaming events, text/event-stream."
+    },
+    {
+      "slug": "context-engine:GET:/api/v1/context/pots/{pot_id}/timeline",
+      "name": "GET /api/v1/context/pots/{pot_id}/timeline",
+      "http_method": "GET",
+      "path": "/api/v1/context/pots/{pot_id}/timeline",
+      "summary": "Windowed change timeline for a pot — merged PRs, commits, incidents, deployments.",
+      "description": "The read-time query that reconstructs history from Activity entities and their valid_at claims; the ontology stores no temporal edges, so ordering is computed here rather than persisted. This is what answers 'what changed recently' and 'what touched this file last month' for the change-timeline agent skill. Search: recent changes, what shipped, regression window, activity feed, period query."
+    },
+    {
+      "slug": "context-engine:PUT:/api/v1/context/pots/{pot_id}/ingestion-config",
+      "name": "PUT /api/v1/context/pots/{pot_id}/ingestion-config",
+      "http_method": "PUT",
+      "path": "/api/v1/context/pots/{pot_id}/ingestion-config",
+      "summary": "Updates a pot's ingestion settings; GET on the same path reads them.",
+      "description": "Persisted through adapters/outbound/postgres/ingestion_config.py and edited in potpie-ui by the EventIngestionSettings component. Controls which event types are ingested, batching and flush behaviour. Interacts with CONTEXT_GRAPH_BACKFILL_MAX_PRS_PER_RUN, which independently clamps GitHub backfill to 1..500 per run regardless of what is configured here. Search: ingestion settings, configure what gets ingested, batch size, flush interval, backfill limit."
+    },
+    {
+      "slug": "context-engine:GET:/api/v1/context/pots/{pot_id}/ingest/pipeline",
+      "name": "GET /api/v1/context/pots/{pot_id}/ingest/pipeline",
+      "http_method": "GET",
+      "path": "/api/v1/context/pots/{pot_id}/ingest/pipeline",
+      "summary": "Stage-by-stage view of the ingestion pipeline for a pot.",
+      "description": "Renders the IngestionPipeline component in potpie-ui: counts per stage (received, extracting, reconciling, committed, failed) so a stall can be located precisely. Its write-side companion POST /api/v1/context/pots/{pot_id}/ingest/flush forces buffered work through. If everything is parked in one stage the fault is usually the worker for that stage, not the API. Search: pipeline stuck, stage counts, ingestion backlog, flush pending, where are my events."
+    },
+    {
+      "slug": "context-engine:GET:/api/v1/context/pots",
+      "name": "GET /api/v1/context/pots",
+      "http_method": "GET",
+      "path": "/api/v1/context/pots",
+      "summary": "Lists pots visible to the caller; POST on the same path creates one.",
+      "description": "The entry point for the pots index at app/(main)/pots/page.tsx and the usePots hook, called from PotService.ts. Related operations on the same resource family include GET /api/v1/context/pots/slug-availability/{slug} for create-form validation and GET/PATCH /api/v1/context/pots/{pot_id} for a single pot. Search: list pots, create pot, pot slug taken, workspace list, my projects."
+    },
+    {
+      "slug": "context-engine:POST:/api/v1/context/pots/{pot_id}/repositories",
+      "name": "POST /api/v1/context/pots/{pot_id}/repositories",
+      "http_method": "POST",
+      "path": "/api/v1/context/pots/{pot_id}/repositories",
+      "summary": "Attaches a source repository to a pot so its history can be ingested.",
+      "description": "Called by PotService.ts from the sources panel, with DELETE on /repositories/{repositoryId} to detach. Registering a repository is what activates the GitHub connector's backfill and, once the webhook is wired, live PR and issue ingestion. The broader source family on the same pot includes /sources, /sources/{sourceId}, /sources/github/repository and /sources/linear/team. Search: add repo to pot, connect repository, source registration, start ingestion, detach source."
+    },
+    {
+      "slug": "context-engine:POST:/webhooks/integrations/github",
+      "name": "POST /webhooks/integrations/github",
+      "http_method": "POST",
+      "path": "/webhooks/integrations/github",
+      "summary": "Signed GitHub webhook receiver for live PR, issue and push events.",
+      "description": "Defined in adapters/inbound/http/webhooks/integrations/github.py as @github_router.post('/github'); webhooks_router mounts github_router under the /integrations prefix and create_app() mounts webhooks_router under /webhooks, so the full path is /webhooks/integrations/github. It reads the raw request body before parsing and lowercases every header, because HMAC verification against GITHUB_WEBHOOK_SECRET must run on exact bytes. A secret mismatch produces rejected deliveries visible in GitHub's webhook delivery log as repeated non-2xx responses. Search: github webhook 401, X-Hub-Signature-256, delivery failed, live PR ingestion, raw body signature."
+    },
+    {
+      "slug": "potpie-daemon:GET:/api/search",
+      "name": "GET /api/search (daemon workbench)",
+      "http_method": "GET",
+      "path": "/api/search",
+      "summary": "Local daemon search endpoint backing the graph workbench UI.",
+      "description": "One of the local HTTP routes the potpie daemon serves alongside /api/pots, /api/status, /api/catalog, /api/neighborhood and /api/read. It runs entity search against whichever backend GRAPH_DB_BACKEND selected, in-process, with no hosted API involved — the same path `potpie search` takes. Reached on POTPIE_DAEMON_PORT with POTPIE_DAEMON_TOKEN. Search: local search, workbench ui, potpie search command, daemon http, offline graph query."
+    },
+    {
+      "slug": "potpie-daemon:GET:/api/graph",
+      "name": "GET /api/graph (daemon workbench)",
+      "http_method": "GET",
+      "path": "/api/graph",
+      "summary": "Returns a graph slice for local visualisation in the daemon-served UI.",
+      "description": "Serves nodes and edges to the bundled graph explorer under adapters/inbound/http/ui/, with GET /api/neighborhood for expanding around a single entity and POST /api/pots/use for switching the active pot scope. This is the local mirror of the hosted pot graph page and the reason a developer can inspect their graph with no network access. Search: local graph explorer, visualize graph offline, neighborhood expansion, switch pot, daemon ui."
+    },
+    {
+      "slug": "workflows-api:GET:/health",
+      "name": "GET /health (workflows)",
+      "http_method": "GET",
+      "path": "/health",
+      "summary": "Liveness endpoint on the potpie-workflows FastAPI server.",
+      "description": "Registered directly on the app in src/rest_server.py with tags=['Health'], returning {'status': 'ok'}. Unlike the context engine it has no separate readiness probe, so Postgres, Redis and Celery health are not reflected here — a workflows process can report healthy while every task sits unacked because the Celery worker is down. Search: workflows health, port 8002 up, celery worker not consuming, no readiness endpoint."
+    },
+    {
+      "slug": "workflows-api:POST:/api/v1/recipes/{recipe_id}/spec/generate-stream",
+      "name": "POST /api/v1/recipes/{recipe_id}/spec/generate-stream",
+      "http_method": "POST",
+      "path": "/api/v1/recipes/{recipe_id}/spec/generate-stream",
+      "summary": "Kicks off streaming spec generation for a recipe.",
+      "description": "On recipes_router (prefix /api/v1/recipes) and consumed by SpecService.ts in potpie-ui, with GET .../spec/stream to attach to an in-flight run and GET .../spec to read the finished artifact. The run is the DSPy research+author pipeline governed by SPECGEN_V3_RESEARCH_MODEL / SPECGEN_V3_AUTHOR_MODEL and the SPECGEN_V3_* token, request and tool-call limits — exceeding one truncates the spec rather than raising. Search: generate spec, streaming spec, specgen v3, spec truncated, recipe spec."
+    },
+    {
+      "slug": "workflows-api:POST:/api/v1/recipes/{recipe_id}/answers",
+      "name": "POST /api/v1/recipes/{recipe_id}/answers",
+      "http_method": "POST",
+      "path": "/api/v1/recipes/{recipe_id}/answers",
+      "summary": "Submits user answers to clarifying questions before spec generation.",
+      "description": "Part of the recipe flow question stage: POST .../questions/generate-stream produces questions, GET .../questions/stream streams them, and this endpoint records the replies that condition the spec. QuestionService.ts in potpie-ui drives it. Skipping or partially answering degrades spec grounding, which is what SPECGEN_MAX_GROUNDING_RETRIES tries to compensate for. Search: clarifying questions, answer prompts, recipe questions, grounding, requirements gathering."
+    },
+    {
+      "slug": "workflows-api:POST:/api/v1/webhook/{hash}",
+      "name": "POST /api/v1/webhook/{hash}",
+      "http_method": "POST",
+      "path": "/api/v1/webhook/{hash}",
+      "summary": "Hash-addressed inbound webhook that fires a configured workflow trigger.",
+      "description": "webhooks_router is mounted at /api/v1/webhook and accepts POST /{hash}, with the sibling triggers_router exposing POST /api/v1/triggers/trigger/{hash} and PUT /api/v1/triggers/trigger-hash to rotate the secret path segment. potpie-ui builds these URLs from NEXT_PUBLIC_WORKFLOWS_WEBHOOK_URL, which in .env.template is an ngrok tunnel so local development can receive real callbacks. Search: workflow webhook url, trigger hash, ngrok tunnel, rotate webhook, external trigger."
+    },
+    {
+      "slug": "workflows-api:GET:/api/v1/workflows/{workflow_id}/executions",
+      "name": "GET /api/v1/workflows/{workflow_id}/executions",
+      "http_method": "GET",
+      "path": "/api/v1/workflows/{workflow_id}/executions",
+      "summary": "Lists past executions of a workflow, with logs and a per-execution tree view.",
+      "description": "Served by execution_logs_router under /api/v1/workflows together with GET /{workflow_id}/executions/{execution_id}, GET /{workflow_id}/logs and GET /{workflow_id}/logs/{execution_id}/tree, plus GET /{workflow_id}/validate and POST /{workflow_id}/pause|resume. The tree endpoint is the one used to debug a failed run step by step, complementing Logfire tracing when LOGFIRE_TOKEN is configured. Search: execution history, run logs, why did my workflow fail, log tree, pause workflow."
+    }
+  ],
+
+  "edges": [
+    { "from": "service:workflows-rest-server", "type": "USES", "to": "dependency:pypi:urllib3", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/pyproject.toml" },
+    { "from": "service:workflows-celery-worker", "type": "USES", "to": "dependency:pypi:urllib3", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/pyproject.toml" },
+    { "from": "service:workflows-rest-server", "type": "USES", "to": "dependency:pypi:cryptography", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/pyproject.toml" },
+    { "from": "service:workflows-celery-worker", "type": "USES", "to": "dependency:pypi:cryptography", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/pyproject.toml" },
+    { "from": "service:potpie-ui", "type": "USES", "to": "dependency:npm:@grpc/grpc-js", "truth": "authoritative_fact", "evidence": "code:potpie-ui/pnpm-lock.yaml", "note": "Transitive via the firebase SDK; remediated through the pnpm overrides block." },
+    { "from": "service:potpie-vscode-extension", "type": "USES", "to": "dependency:npm:tmp", "truth": "authoritative_fact", "evidence": "code:potpie-vscode-extension/package-lock.json" },
+    { "from": "service:potpie-cli", "type": "USES_ADAPTER", "to": "adapter:telemetry:posthog", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/telemetry/settings.py" },
+    { "from": "service:potpie-cli", "type": "USES_ADAPTER", "to": "adapter:telemetry:sentry", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/telemetry/sentry_runtime.py" },
+    { "from": "adapter:telemetry:posthog", "type": "CONFIGURES", "to": "config:cli:POTPIE_TELEMETRY_DISABLED", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/telemetry/settings.py" },
+    { "from": "adapter:telemetry:sentry", "type": "CONFIGURES", "to": "config:cli:POTPIE_TELEMETRY_DISABLED", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/telemetry/sentry_runtime.py" },
+    { "from": "service:context-engine", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_AGENT_PLANNER_ENABLED", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-core/src/potpie_context_core/reconciliation_flags.py" },
+    { "from": "service:potpie-mcp-server", "type": "EXPOSES", "to": "api_contract:potpie-mcp:tool:context_resolve", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/mcp/server.py" },
+    { "from": "service:context-engine", "type": "USES", "to": "dependency:pypi:neo4j", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml", "note": "neo4j extra: neo4j>=5.28.0, locked 6.2.0" },
+    { "from": "service:context-engine", "type": "USES", "to": "dependency:pypi:falkordb", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml", "note": "local extra: falkordb>=1.6.1" },
+    { "from": "service:context-engine", "type": "USES", "to": "dependency:pypi:falkordblite", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml", "note": "local extra, python_version >= 3.12" },
+    { "from": "service:context-engine", "type": "USES", "to": "dependency:pypi:sentence-transformers", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml", "note": "embeddings extra" },
+    { "from": "service:context-engine", "type": "USES", "to": "dependency:pypi:torch", "truth": "source_observation", "evidence": "code:potpie/pyproject.toml", "note": "transitive via sentence-transformers; uv override torch>=2.12.1 for CVE-2025-3000" },
+    { "from": "service:context-engine", "type": "USES", "to": "dependency:pypi:pygithub", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml", "note": "github extra: pygithub>=2.8.0" },
+    { "from": "service:context-engine", "type": "USES", "to": "dependency:pypi:fastapi", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/app.py" },
+    { "from": "service:context-engine", "type": "USES", "to": "dependency:pypi:starlette", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml", "note": "CVE floor for FastAPI's transitive core (see #1015)" },
+    { "from": "service:context-engine", "type": "USES", "to": "dependency:pypi:aiohttp", "truth": "authoritative_fact", "evidence": "code:potpie/pyproject.toml", "note": "aiohttp>=3.14.1 direct + hatchet extra CVE floor" },
+    { "from": "service:context-engine", "type": "USES", "to": "dependency:pypi:hatchet-sdk", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml", "note": "hatchet extra" },
+    { "from": "service:context-engine", "type": "USES", "to": "dependency:pypi:redis", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml", "note": "redis>=7.1,<8 pinned for FalkorDBLite embedded connection" },
+    { "from": "service:context-engine", "type": "USES", "to": "dependency:pypi:sentry-sdk", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml", "note": "observability extra" },
+    { "from": "service:context-engine", "type": "USES", "to": "dependency:pypi:pydantic-ai-slim", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml", "note": "reconciliation-agent extra CVE floor" },
+
+    { "from": "service:potpie-cli", "type": "USES", "to": "dependency:pypi:typer", "truth": "authoritative_fact", "evidence": "code:potpie/pyproject.toml", "note": "potpie = potpie.cli.main:main console script" },
+    { "from": "service:potpie-cli", "type": "USES", "to": "dependency:pypi:keyring", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml", "note": "cli-auth extra" },
+    { "from": "service:potpie-cli", "type": "USES", "to": "dependency:pypi:sentry-sdk", "truth": "authoritative_fact", "evidence": "code:potpie/pyproject.toml" },
+    { "from": "service:potpie-cli", "type": "USES", "to": "dependency:pypi:falkordblite", "truth": "agent_claim", "confidence": 0.9, "note": "default local backend for the CLI on Python 3.12+" },
+    { "from": "service:potpie-mcp-server", "type": "USES", "to": "dependency:pypi:mcp", "truth": "authoritative_fact", "evidence": "code:potpie/pyproject.toml", "note": "potpie-mcp = potpie.mcp.server:main" },
+    { "from": "service:potpie-daemon", "type": "USES", "to": "dependency:pypi:fastapi", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/daemon/http/transport.py" },
+
+    { "from": "service:workflows-rest-server", "type": "USES", "to": "dependency:pypi:fastapi", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/rest_server.py" },
+    { "from": "service:workflows-rest-server", "type": "USES", "to": "dependency:pypi:litellm", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/pyproject.toml", "note": "litellm>=1.83.0,<2.0.0" },
+    { "from": "service:workflows-rest-server", "type": "USES", "to": "dependency:pypi:redis", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/pyproject.toml" },
+    { "from": "service:workflows-celery-worker", "type": "USES", "to": "dependency:pypi:celery", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/celery_config.py" },
+    { "from": "service:workflows-celery-worker", "type": "USES", "to": "dependency:pypi:prefect", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/pyproject.toml", "note": "prefect>=3.6.13 + pydantic-ai-slim[prefect]" },
+    { "from": "service:workflows-celery-worker", "type": "USES", "to": "dependency:pypi:dspy", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/pyproject.toml", "note": "drives the SPECGEN research/author stages" },
+    { "from": "service:workflows-celery-worker", "type": "USES", "to": "dependency:pypi:litellm", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/pyproject.toml" },
+    { "from": "service:workflows-celery-worker", "type": "USES", "to": "dependency:pypi:redis", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/celery_config.py", "note": "broker and result backend both read REDIS_URL" },
+    { "from": "service:workflows-rest-server", "type": "USES", "to": "dependency:pypi:joserfc", "truth": "agent_claim", "confidence": 0.55, "note": "transitive via authlib on the MCP/auth path; recurring dependency-scan finding" },
+
+    { "from": "service:potpie-ui", "type": "USES", "to": "dependency:npm:next", "truth": "authoritative_fact", "evidence": "code:potpie-ui/package.json" },
+    { "from": "service:potpie-ui", "type": "USES", "to": "dependency:npm:firebase", "truth": "authoritative_fact", "evidence": "code:potpie-ui/package.json" },
+    { "from": "service:potpie-ui", "type": "USES", "to": "dependency:npm:axios", "truth": "authoritative_fact", "evidence": "code:potpie-ui/package.json", "note": "also hard-pinned to 1.17.0 in pnpm.overrides" },
+    { "from": "service:potpie-ui", "type": "USES", "to": "dependency:npm:posthog-js", "truth": "authoritative_fact", "evidence": "code:potpie-ui/package.json" },
+    { "from": "service:potpie-ui", "type": "USES", "to": "dependency:npm:reactflow", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/pots/components/graph/PotGraphCanvas.tsx" },
+    { "from": "service:potpie-ui", "type": "USES", "to": "dependency:npm:dompurify", "truth": "authoritative_fact", "evidence": "code:potpie-ui/package.json", "note": "direct dep and pnpm override ^3.4.2" },
+    { "from": "service:potpie-ui", "type": "USES", "to": "dependency:npm:js-yaml", "truth": "source_observation", "evidence": "code:potpie-ui/pnpm-lock.yaml", "note": "transitive only; forced to ^4.1.1 via pnpm.overrides" },
+    { "from": "service:potpie-ui", "type": "USES", "to": "dependency:npm:protobufjs", "truth": "source_observation", "evidence": "code:potpie-ui/package.json", "note": "pnpm override pins exactly 7.5.8" },
+    { "from": "service:potpie-ui", "type": "USES", "to": "dependency:npm:form-data", "truth": "source_observation", "evidence": "code:potpie-ui/package.json", "note": "pnpm override ^4.0.4, locked 4.0.5" },
+    { "from": "service:potpie-ui", "type": "USES", "to": "dependency:npm:websocket-driver", "truth": "source_observation", "evidence": "code:potpie-ui/pnpm-lock.yaml", "note": "deep transitive at 0.7.4 with no direct dependent" },
+
+    { "from": "service:context-engine", "type": "USES_ADAPTER", "to": "adapter:graph:neo4j", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/backends/__init__.py" },
+    { "from": "service:context-engine", "type": "USES_ADAPTER", "to": "adapter:graph:falkordb", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/backends/__init__.py" },
+    { "from": "service:context-engine", "type": "USES_ADAPTER", "to": "adapter:graph:falkordb-lite", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/backends/__init__.py" },
+    { "from": "service:context-engine", "type": "USES_ADAPTER", "to": "adapter:graph:embedded-json", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/backends/embedded_backend.py" },
+    { "from": "service:context-engine", "type": "USES_ADAPTER", "to": "adapter:embedder:hashing-local", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/intelligence/local_embedder.py" },
+    { "from": "service:context-engine", "type": "USES_ADAPTER", "to": "adapter:embedder:sentence-transformers", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/intelligence/local_embedder.py" },
+    { "from": "service:context-engine", "type": "USES_ADAPTER", "to": "adapter:connector:github", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/connectors/github/connector.py" },
+    { "from": "service:context-engine", "type": "USES_ADAPTER", "to": "adapter:connector:notion", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/connectors/notion/connector.py" },
+    { "from": "service:context-engine", "type": "USES_ADAPTER", "to": "adapter:connector:linear", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/cli_auth/linear_read_client.py" },
+    { "from": "service:context-engine", "type": "USES_ADAPTER", "to": "adapter:connector:atlassian", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/cli_auth/atlassian_client.py" },
+    { "from": "service:context-engine", "type": "USES_ADAPTER", "to": "adapter:inbound:http-api", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/app.py" },
+    { "from": "service:context-engine", "type": "USES_ADAPTER", "to": "adapter:event-stream:redis-publisher", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/event_stream/redis_publisher.py" },
+    { "from": "service:potpie-cli", "type": "USES_ADAPTER", "to": "adapter:inbound:cli", "truth": "authoritative_fact", "evidence": "code:potpie/pyproject.toml" },
+    { "from": "service:potpie-cli", "type": "USES_ADAPTER", "to": "adapter:cli-auth:linear-oauth", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/cli_auth/provider_config.py" },
+    { "from": "service:potpie-cli", "type": "USES_ADAPTER", "to": "adapter:cli-auth:keyring-credentials-store", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/cli_auth/credentials_store.py" },
+    { "from": "service:potpie-cli", "type": "USES_ADAPTER", "to": "adapter:graph:falkordb-lite", "truth": "agent_claim", "confidence": 0.9, "note": "default profile when no server is configured" },
+    { "from": "service:potpie-mcp-server", "type": "USES_ADAPTER", "to": "adapter:inbound:mcp", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/mcp/server.py" },
+    { "from": "service:potpie-daemon", "type": "USES_ADAPTER", "to": "adapter:graph:embedded-json", "truth": "agent_claim", "confidence": 0.7, "note": "daemon forces in_process host mode and serves the local workbench UI" },
+
+    { "from": "adapter:graph:neo4j", "type": "CONFIGURES", "to": "config:context-engine:GRAPH_DB_BACKEND", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/settings_env.py" },
+    { "from": "adapter:graph:neo4j", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_NEO4J_URI", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/settings_env.py" },
+    { "from": "adapter:graph:neo4j", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_NEO4J_USERNAME", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/settings_env.py" },
+    { "from": "adapter:graph:neo4j", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_NEO4J_PASSWORD", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/settings_env.py" },
+    { "from": "adapter:graph:falkordb", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_FALKORDB_URL", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/settings_env.py" },
+    { "from": "adapter:graph:falkordb", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_FALKORDB_GRAPH_NAME", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/settings_env.py" },
+    { "from": "adapter:graph:falkordb", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_FALKORDB_MODE", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/settings_env.py" },
+    { "from": "adapter:graph:falkordb-lite", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_FALKORDB_LITE_PATH", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/settings_env.py" },
+    { "from": "adapter:graph:falkordb-lite", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_FALKORDB_MODE", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/settings_env.py" },
+    { "from": "adapter:graph:falkordb-lite", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_HOME", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/settings_env.py", "note": "lite path default is rooted at CONTEXT_ENGINE_HOME" },
+    { "from": "adapter:embedder:hashing-local", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_EMBEDDER", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/intelligence/local_embedder.py" },
+    { "from": "adapter:embedder:sentence-transformers", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_EMBEDDER", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/intelligence/local_embedder.py" },
+    { "from": "adapter:embedder:sentence-transformers", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_EMBEDDING_MODEL", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/intelligence/local_embedder.py" },
+    { "from": "adapter:connector:github", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_GITHUB_TOKEN", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/bootstrap/runtime_settings.py" },
+    { "from": "adapter:connector:github", "type": "CONFIGURES", "to": "config:context-engine:GITHUB_WEBHOOK_SECRET", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/webhooks/integrations/github.py" },
+    { "from": "adapter:connector:linear", "type": "CONFIGURES", "to": "config:cli:LINEAR_CLIENT_ID", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/bootstrap/runtime_settings.py" },
+    { "from": "adapter:cli-auth:linear-oauth", "type": "CONFIGURES", "to": "config:cli:POTPIE_CLI_OAUTH_REDIRECT_URI", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/cli_auth/provider_config.py" },
+    { "from": "adapter:cli-auth:linear-oauth", "type": "CONFIGURES", "to": "config:cli:LINEAR_CLIENT_ID", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/cli_auth/provider_config.py" },
+    { "from": "adapter:cli-auth:keyring-credentials-store", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_HOME", "truth": "agent_claim", "confidence": 0.75, "note": "credential and session state is rooted under the potpie home dir" },
+    { "from": "adapter:inbound:cli", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_HOST_MODE", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/commands/bootstrap.py" },
+    { "from": "adapter:inbound:cli", "type": "CONFIGURES", "to": "config:cli:POTPIE_API_URL", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/bootstrap/runtime_settings.py" },
+    { "from": "adapter:inbound:cli", "type": "CONFIGURES", "to": "config:cli:POTPIE_TELEMETRY_DISABLED", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/bootstrap/runtime_settings.py" },
+    { "from": "adapter:event-stream:redis-publisher", "type": "CONFIGURES", "to": "config:context-engine:REDIS_URL", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/event_stream/redis_publisher.py" },
+    { "from": "adapter:connector:atlassian", "type": "CONFIGURES", "to": "config:cli:POTPIE_CLI_OAUTH_REDIRECT_URI", "truth": "agent_claim", "confidence": 0.7, "note": "atlassian flows share the CLI loopback callback config" },
+
+    { "from": "service:context-engine", "type": "CONFIGURES", "to": "config:context-engine:GRAPH_DB_BACKEND", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/settings_env.py" },
+    { "from": "service:context-engine", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_GRAPH_ENABLED", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/settings_env.py" },
+    { "from": "service:context-engine", "type": "CONFIGURES", "to": "config:context-engine:DATABASE_URL", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/router.py" },
+    { "from": "service:context-engine", "type": "CONFIGURES", "to": "config:context-engine:REDIS_URL", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/router.py" },
+    { "from": "service:context-engine", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_EMBEDDER", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/intelligence/local_embedder.py" },
+    { "from": "service:context-engine", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_EMBEDDING_MODEL", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/intelligence/local_embedder.py" },
+    { "from": "service:context-engine", "type": "CONFIGURES", "to": "config:context-engine:GITHUB_WEBHOOK_SECRET", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/bootstrap/runtime_settings.py" },
+    { "from": "service:context-engine", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_GITHUB_TOKEN", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/bootstrap/runtime_settings.py" },
+    { "from": "service:context-engine", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_NEO4J_URI", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/settings_env.py" },
+    { "from": "service:potpie-cli", "type": "CONFIGURES", "to": "config:cli:POTPIE_API_URL", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/bootstrap/runtime_settings.py" },
+    { "from": "service:potpie-cli", "type": "CONFIGURES", "to": "config:cli:POTPIE_API_KEY", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/bootstrap/runtime_settings.py" },
+    { "from": "service:potpie-cli", "type": "CONFIGURES", "to": "config:cli:POTPIE_ENVIRONMENT", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/bootstrap/runtime_settings.py" },
+    { "from": "service:potpie-cli", "type": "CONFIGURES", "to": "config:cli:POTPIE_TELEMETRY_DISABLED", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/bootstrap/runtime_settings.py" },
+    { "from": "service:potpie-cli", "type": "CONFIGURES", "to": "config:cli:POTPIE_GITHUB_CLIENT_ID", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/bootstrap/runtime_settings.py" },
+    { "from": "service:potpie-cli", "type": "CONFIGURES", "to": "config:cli:LINEAR_CLIENT_ID", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/bootstrap/runtime_settings.py" },
+    { "from": "service:potpie-cli", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_HOST_MODE", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/commands/_common.py" },
+    { "from": "service:potpie-cli", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_HOME", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/settings_env.py" },
+    { "from": "service:potpie-daemon", "type": "CONFIGURES", "to": "config:cli:POTPIE_DAEMON_PORT", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/daemon/daemon_runtime/config.py" },
+    { "from": "service:potpie-daemon", "type": "CONFIGURES", "to": "config:context-engine:CONTEXT_ENGINE_HOST_MODE", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/daemon/daemon_runtime/__main__.py", "note": "daemon runtime forces in_process" },
+    { "from": "service:potpie-ui", "type": "CONFIGURES", "to": "config:ui:NEXT_PUBLIC_BASE_URL", "truth": "authoritative_fact", "evidence": "code:potpie-ui/.env.template" },
+    { "from": "service:potpie-ui", "type": "CONFIGURES", "to": "config:ui:NEXT_PUBLIC_WORKFLOWS_URL", "truth": "authoritative_fact", "evidence": "code:potpie-ui/.env.template" },
+    { "from": "service:potpie-ui", "type": "CONFIGURES", "to": "config:ui:NEXT_PUBLIC_FIREBASE_API_KEY", "truth": "authoritative_fact", "evidence": "code:potpie-ui/.env.template" },
+    { "from": "service:potpie-ui", "type": "CONFIGURES", "to": "config:ui:NEXT_PUBLIC_POSTHOG_KEY", "truth": "authoritative_fact", "evidence": "code:potpie-ui/.env.template" },
+    { "from": "service:workflows-rest-server", "type": "CONFIGURES", "to": "config:workflows:OPENROUTER_API_KEY", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src" },
+    { "from": "service:workflows-rest-server", "type": "CONFIGURES", "to": "config:context-engine:REDIS_URL", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/celery_config.py" },
+    { "from": "service:workflows-celery-worker", "type": "CONFIGURES", "to": "config:context-engine:REDIS_URL", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/celery_config.py", "note": "broker_url and result_backend both read REDIS_URL" },
+    { "from": "service:workflows-celery-worker", "type": "CONFIGURES", "to": "config:workflows:OPENROUTER_API_KEY", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src" },
+    { "from": "service:workflows-celery-worker", "type": "CONFIGURES", "to": "config:workflows:SPECGEN_V3_AUTHOR_MODEL", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src" },
+    { "from": "service:workflows-celery-worker", "type": "CONFIGURES", "to": "config:workflows:LOGFIRE_TOKEN", "truth": "agent_claim", "confidence": 0.7, "note": "logfire>=4.19.0 is a declared dependency; token is the standard activation env var" },
+
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:GET:/api/v1/health", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/router.py" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:GET:/api/v1/ready", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/router.py" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:POST:/api/v1/context/ingest", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/v1/context/router.py" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:POST:/api/v1/context/query/context-graph", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/v1/context/router.py" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:POST:/api/v1/context/record", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/v1/context/router.py" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:POST:/api/v1/context/status", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/v1/context/router.py" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:GET:/api/v1/context/events/{event_id}", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/v1/context/router.py" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:POST:/api/v1/context/events/{event_id}/retry", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/v1/context/router.py" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:GET:/api/v1/context/pots/{pot_id}/events", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/v1/context/router.py" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:GET:/api/v1/context/pots/{pot_id}/events/stream", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/v1/context/router.py" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:GET:/api/v1/context/pots/{pot_id}/timeline", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/v1/context/router.py" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:PUT:/api/v1/context/pots/{pot_id}/ingestion-config", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/v1/context/router.py" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:GET:/api/v1/context/pots/{pot_id}/ingest/pipeline", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/api/v1/context/router.py" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:GET:/api/v1/context/pots", "truth": "source_observation", "evidence": "code:potpie-ui/services/PotService.ts" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:POST:/api/v1/context/pots/{pot_id}/repositories", "truth": "source_observation", "evidence": "code:potpie-ui/services/PotService.ts" },
+    { "from": "service:context-engine", "type": "EXPOSES", "to": "api_contract:context-engine:POST:/webhooks/integrations/github", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/webhooks/integrations/github.py" },
+    { "from": "service:potpie-daemon", "type": "EXPOSES", "to": "api_contract:potpie-daemon:GET:/api/search", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/ui/router.py" },
+    { "from": "service:potpie-daemon", "type": "EXPOSES", "to": "api_contract:potpie-daemon:GET:/api/graph", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/ui/router.py" },
+    { "from": "service:workflows-rest-server", "type": "EXPOSES", "to": "api_contract:workflows-api:GET:/health", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/rest_server.py" },
+    { "from": "service:workflows-rest-server", "type": "EXPOSES", "to": "api_contract:workflows-api:POST:/api/v1/recipes/{recipe_id}/spec/generate-stream", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/modules/recipes/recipes_router.py" },
+    { "from": "service:workflows-rest-server", "type": "EXPOSES", "to": "api_contract:workflows-api:POST:/api/v1/recipes/{recipe_id}/answers", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/modules/recipes/recipes_router.py" },
+    { "from": "service:workflows-rest-server", "type": "EXPOSES", "to": "api_contract:workflows-api:POST:/api/v1/webhook/{hash}", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/modules/webhooks/webhooks_router.py" },
+    { "from": "service:workflows-rest-server", "type": "EXPOSES", "to": "api_contract:workflows-api:GET:/api/v1/workflows/{workflow_id}/executions", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/modules/workflows/execution_logs/logs_router.py" }
+  ]
+}

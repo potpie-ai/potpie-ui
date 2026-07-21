@@ -1,0 +1,209 @@
+{
+  "people": [
+    {
+      "slug": "nndn",
+      "name": "Nandan",
+      "handle": "nndn",
+      "email": "nndn@potpie.ai",
+      "role": "Founder / Engineering Lead — Context Graph",
+      "summary": "Founder and engineering lead; owns the context engine, the graph core package split, and the potpie-slack bot.",
+      "description": "Nandan (handle nndn) is the founder and engineering lead at potpie-ai and the single highest-volume committer on potpie-ai/potpie (~500 commits across identities). His fingerprints are on the package architecture: 'Carve the graph core into a potpie-context-core library', 'Flatten potpie-context-core into a library-shaped package', 'Move the CLI into the root potpie package', 'Move the daemon, MCP server, and host-app services into the root package', and 'Split context-engine dependencies into per-adapter-family extras'. He owns the hard retrieval internals — embedded FalkorDB persistence reloads dropping claim rows, the falkordblite id-0 planner defect, lazy vector-index creation on first embedding write, sentence-transformers default embedder, and the semantic_index repair as a real re-embed + index migration. He is also effectively the sole author of potpie-ai/potpie-slack (Slack bot, Cloud Run deployment, DM flow) and drives the potpie-ui context-engine/events/pots surfaces. Search: who owns the context graph, graph core maintainer, potpie founder, embedding index owner."
+    },
+    {
+      "slug": "Dsantra92",
+      "name": "Deeptendu Santra",
+      "handle": "Dsantra92",
+      "email": "Dsantra92@potpie.ai",
+      "role": "Staff Engineer — CLI, daemon, agent runtimes",
+      "summary": "Heaviest committer on potpie and potpie-workflows; owns the CLI/daemon relocation and the pydantic deep-agent migration.",
+      "description": "Deeptendu Santra (Dsantra92) is the heaviest sustained committer on potpie-ai/potpie (~200 commits) and potpie-ai/potpie-workflows (~117). In potpie he drove the CLI and daemon consolidation: 'refactor(cli): move CLI into root package', 'refactor(daemon): delete legacy service runtime and transport', 'refactor(cli): rename graph backend commands to store', 'refactor(cli): apply the workflow-first command contract', plus the CI repairs that followed ('fix(ci): repair relocated CLI checks', 'fix(ci): install context engine test extras', 'fix(ci): repair CLI daemon regression gates'). In potpie-workflows he owns agent architecture — 'refactor: migrate explore and librarian agents to pydantic-deep subagents', 'Rework spec generation around deep agents', the diagram_fixer agent with 5-retry logic, PhaseDiagram/mmdc validation, and colgrep + ripgrep-backed grep tooling. He also built the pie login/web spine (Google OAuth, ports, migrations, multi-repo select). Search: CLI maintainer, daemon owner, deep agents, diagram fixer, who refactored the CLI."
+    },
+    {
+      "slug": "shmbhvi101",
+      "name": "Shambhavi Shinde",
+      "handle": "shmbhvi101",
+      "email": "shmbhvi101@potpie.ai",
+      "role": "Engineer — Security remediation & CLI UX",
+      "summary": "Cross-repo dependency/CVE remediation lead (Vanta) plus CLI error-envelope and empty-pot UX fixes.",
+      "description": "Shambhavi Shinde (shmbhvi101) is the org's dependency-and-CVE remediation lead — she is the only person who commits security fixes into every repo. Her Vanta vulnerability sweeps appear in potpie ('fix: remediate Vanta dependency CVEs and bump torch to 2.12.1' #1000, 'fix: upgrade MCP past high-severity advisories' #1014, 'fix: expose patched dependency floors in package metadata' #1015), potpie-ui ('fix(deps): remediate js-yaml vulnerability' #437, websocket-driver 0.7.5 #436, form-data/protobufjs/dompurify bumps, package.json overrides), potpie-workflows (#54, #64), and pie. Her second surface is CLI ergonomics: normalizing --json parse-time errors into a structured envelope (#964), 'pot create --repo .' not registering the current repo (#974), empty-pot guidance on pot/source commands (#972), doctor surfacing uv-tool install facts (#941), and explaining missing service logs for embedded graph backends (#943). In potpie-ui she built the debounced server-side GitHub repo search and repo pills in Pot Sources, and in pie the MCP settings UI / sidecar loader hardening. Search: who fixes CVEs, Vanta remediation owner, dependency bumps, CLI JSON error envelope."
+    },
+    {
+      "slug": "ASCE-D",
+      "name": "Deepesh Genani",
+      "handle": "ASCE-D",
+      "email": "ASCE-D@potpie.ai",
+      "role": "Staff Engineer — pie harness runtime",
+      "summary": "Dominant author of potpie-ai/pie (~267 commits); built the pi harness sidecar SPEC-0..SPEC-8 stack and the workflows recipe/streaming layer.",
+      "description": "Deepesh Genani (ASCE-D) is by far the dominant author of the private enterprise repo potpie-ai/pie (~267 commits) and effectively owns the harness runtime. He shipped the whole SPEC ladder: harness_runtime proto and generated stubs (SPEC-0 #36), the pi sidecar core with NDJSON codec and controller loop (SPEC-1 #37), tool catalog / gating policy / file diffs (SPEC-2 #53), the AgentProfile→PiSessionPlan agent factory (SPEC-3 #54), descriptor + sidecar driver + capabilities/control routing (SPEC-4/5 #38), pi resume and history replay (SPEC-6 #40), and pie-harness packaging with 3-tier discovery and a self-contained linux-x64 VSIX (SPEC-7 #42). He also chased silent-failure classes — 'silent wrong/deprecated model — date stamps aren't versions', set_control timeout raising PiSidecarUnavailableError instead of returning None, and 'force process exit after stop — grpc atexit thread join kept dead pie-serve alive'. In potpie-workflows he owns recipe management, streaming/CORS, plangen sub-agents and the editor agent; in potpie-ui he fixed streaming memory consumption (PostHog session recording removal + memoization) and the sign-in open redirect (#424). Search: pie harness owner, sidecar maintainer, SPEC-1 author, who owns pi runtime."
+    },
+    {
+      "slug": "yashkrishan",
+      "name": "Yash Krishan",
+      "handle": "yashkrishan",
+      "email": "yashkrishan@potpie.ai",
+      "role": "Engineering Lead — potpie-ui, observability & integrations",
+      "summary": "potpie-ui lead and release gatekeeper; author of the observability/logging package and the Linear/Jira/GitHub ingestion skills.",
+      "description": "Yash Krishan (yashkrishan) leads potpie-ai/potpie-ui (~250 commits, and the person who merges most release PRs there) and is the author of the org's observability spine. In potpie he shipped 'feat(observability): new logging + Sentry + logfire package' (#785) then migrated the whole codebase onto it (#790), and built the one-shot ingestion skills: GitHub PR-history (#833), Linear team (#839), Jira project (#857, POT-1442) and the combined Jira/Linear + executable diff-sync skills (#864). He added the optional FalkorDB backend for local dev (#819) and fixed infra-topology ranking to use query semantic similarity (#999). On the frontend he owns CI/CD (staging artifact registry targets, frontend-ci P0/P1 quality gates, prod Jenkins hardening #752) and stream-failure diagnostics logging. In pie he implemented the V0 durable run spine Parts 1–5 (browser run loop, sandbox sessions and worker ownership, reaper/admission control, repository preparation, harness attach and turn lease). In the VS Code extension he owns the Cloudflare named-tunnel manager and DNS/routing stability. Search: potpie-ui lead, observability owner, logging package author, Linear ingestion skill, who reviews frontend PRs."
+    },
+    {
+      "slug": "BrhKmr23",
+      "name": "Bharath Kumar K",
+      "handle": "BrhKmr23",
+      "email": "BrhKmr23@potpie.ai",
+      "role": "Engineer — CLI surface & spec/QnA flows",
+      "summary": "Works the CLI read/presentation surface and the spec + multi-batch QnA flows across potpie, potpie-ui and workflows.",
+      "description": "Bharath Kumar K (BrhKmr23) works the seam between the CLI's read path and the product's spec/QnA flows. In potpie he fixed graph read filters so text presentation honors format, detail and relations (#995, filed as issue #994 'Graph read CLI flags accepted but ignored on default read path'), removed pot-level Jira/Linear ingest commands from the CLI (#990), smoothed the GitHub login cancel flow with auto-open countdown and setup skip when already authenticated (#880, from his own issue #879 'GitHub CLI login flow is brittle, repetitive, and can leave inconsistent auth state'), and fixed an UnboundLocalError parsing a priority-3 GitHub token (#748). In potpie-ui he implemented the multi-batch QnA flow and resolved pipeline double-run race conditions (#402), aligned the spec details view with enriched requirement metadata (#433), and fixed type spec guardrail normalization (#434); in potpie-workflows he landed the phase-diagram fix (#39). He also writes the spec documents that drive vscode and workflows work. Search: graph read flags ignored, CLI login brittle, QnA double-run race, spec guardrail."
+    },
+    {
+      "slug": "dhirenmathur",
+      "name": "Dhiren Mathur",
+      "handle": "dhirenmathur",
+      "email": "dhirenmathur@potpie.ai",
+      "role": "Co-founder — product backend, agents & documents",
+      "summary": "Co-founder; ~390 commits on potpie covering agents, document/multimodal attachments, storage and the public docs site.",
+      "description": "Dhiren Mathur (dhirenmathur) is co-founder and the second-largest committer on potpie-ai/potpie (~386 commits across identities). His surface is the product backend and its agents: the impact-analysis agent, 'refactor: restructure QnA agent prompts with XML tags and enforcement mechanisms', tool pruning, and the document/multimodal path — 'Support documents in conversation', 'Carry document attachment updates after rebase', 'fix: resolve document upload KeyError and improve error handling', and 'fix: replace broken Azure boto3 storage with native SDK + fix missing imports'. The matching potpie-ui half is his too: documents support in chat, .md upload MIME-type and image attachment fixes over HTTP, avatar alignment and markdown render UX. In potpie-workflows he owns media/image support, Sentry wiring, SSE streaming in the agent executor, and conversation/API-key semantics. He is the main potpie-ai author on mintlify-docs (API access, how-to docs for AgentStack/CrewAI, video embeds) and on potpie-k8s-deployments (pgbouncer, vault script, momentum-server→potpie rename). Search: co-founder, document upload bug, multimodal attachments, QnA agent prompts, who wrote the docs site."
+    },
+    {
+      "slug": "jdyaberi-pp",
+      "name": "Jagadeesh Yaberi",
+      "handle": "jdyaberi-pp",
+      "email": "jdyaberi-pp@potpie.ai",
+      "role": "Engineer — CI/CD, quality gates & test journeys",
+      "summary": "Owns CI/CD and quality gates in pie and potpie: coverage gates, CodeQL, gitleaks, govulncheck, and the pre-merge CLI journey suite.",
+      "description": "Jagadeesh Yaberi (jdyaberi-pp) is the CI/CD and release-quality engineer. In potpie-ai/pie he authored the founding pipeline — 'Add CI/CD pipeline with tests, coverage gate, CodeQL, and quality checks [POT-1558]' (#1) — then consolidated verify.yml into ci.yml, added quality.yml for repo-wide and per-language gates (#46), added a gitleaks allowlist for intentional test secrets and templates (#64), pinned Go 1.25.x to clear a govulncheck stdlib finding, and 'Replace paid GitHub security features with open source alternatives'. He also swapped Logfire for OTel metrics, wired apps to the observability package, and added the Langfuse compose profile with collector trace fan-out plus expanded collector redaction coverage. In potpie he added the pre-merge CLI journey integration gate (#950), the excel-driven test plan runner, FalkorDB e2e quality gates, the full-repo image build pushed to GAR, and the GitLab/GitBucket credential-protocol review fixes. He writes the QnA/RCA agent eval plans. Search: who owns CI, coverage gate, CodeQL, gitleaks, flaky pipeline, CLI journey tests."
+    },
+    {
+      "slug": "Nih1tGupta",
+      "name": "Nihit Gupta",
+      "handle": "Nih1tGupta",
+      "email": "Nih1tGupta@potpie.ai",
+      "role": "Engineer — CLI integrations & automation ergonomics",
+      "summary": "Files and fixes the CLI's automation-facing defects; built the GitLab and GitBucket source integrations.",
+      "description": "Nihit Gupta (Nih1tGupta) is the org's most prolific CLI bug reporter and the person who then fixes what he files. His issues on potpie-ai/potpie include #992 'Domain errors and ok:false JSON exit 0 — automation cannot detect CLI failures', #996 'CLI: resolve defaults to feature intent without detection', #981 'Fix mislabeled feature claims in potpie resolve output', #959 'pot default show is too verbose; cloud group commands break JSON output', #965 'Improve config CLI discoverability — add list and optional no-key get', #978 'Add next actions after potpie source add repo for empty pots', #997 'Add GitLab CLI integration' and #911 Bitbucket foundation for unified Atlassian login. The matching commits are his: 'Fix CLI domain failures exiting with code 0', 'fix(cli): source status no-ID summary and doctor effective repo pot (POT-1763, POT-1779)' (#929), config list and no-key get (#966), compact pot default show with structured JSON for cloud groups (#960), boundary-aware secret-key redaction including camelCase variants, and the Add GitLab CLI integration / GitBucket token work. Search: CLI exits 0 on error, --json exit code, config redaction, GitLab integration, potpie resolve mislabeled."
+    },
+    {
+      "slug": "AdityaPainuli",
+      "name": "Aditya Painuli",
+      "handle": "AdityaPainuli",
+      "email": "AdityaPainuli@potpie.ai",
+      "role": "Engineer — MCP server & retrieval correctness",
+      "summary": "Reports and triages MCP-server and retrieval-mode defects against context_resolve / context_search.",
+      "description": "Aditya Painuli (AdityaPainuli) works the MCP server and retrieval-correctness surface and is the reporter behind two of the sharpest open defects on potpie-ai/potpie. Issue #1008 '[Bug] MCP: date-only or naive as_of crashes context_resolve/context_search with TypeError in recency scoring' — passing as_of=2026-03-01 (no time component, or a naive datetime) blows up recency scoring with a TypeError comparing offset-naive and offset-aware datetimes. Issue #1007 '[Bug] CLI: resolve --mode is accepted, documented, and recommended but never affects retrieval' — the --mode flag parses and is advertised in help and docs but is dropped before the retrieval call, so every mode returns identical results. He works the MCP tool contract, as_of/valid_at semantics, and the parity between CLI resolve and the MCP context_* tools. Search: MCP TypeError as_of, naive datetime recency scoring, resolve --mode has no effect, context_search bug."
+    },
+    {
+      "slug": "zingzy",
+      "name": "Zingzy",
+      "handle": "zingzy",
+      "email": "zingzy@potpie.ai",
+      "role": "Community contributor — integrations & repo hygiene",
+      "summary": "External community contributor; built the Jira and Confluence OAuth integrations and standardized issue templates org-wide.",
+      "description": "Zingzy is the org's most active outside community contributor and the only non-core person whose work spans five repos. In potpie he added the Jira OAuth integration with webhook support (#474), the Confluence integration (#481), fixed integrations showing up on multiple accounts plus unauthenticated integration endpoints (#488), migrated pip to uv (#479), skipped unknown file counts (#490), included the agent_tasks queue when starting the Celery worker (#473), and hotfixed a Structured tools import for the current LangChain version. In potpie-ui he shipped the FileSelector/FileTree components for parsing-filter selection, the ExclusionSummary file-count rollup, and chat-during-AI-enrichment (interaction allowed in the INFERRING state). In potpie-workflows he added the Jira issue-created trigger, Confluence create-page and Slack send-message actions with dedicated executors. He standardized bug/docs/feature/question issue templates across potpie, potpie-workflows and potpie-slack, and did the mintlify docs.json migration (#21). Search: Jira integration author, Confluence OAuth, file tree parsing filters, issue templates, uv migration."
+    },
+    {
+      "slug": "arnavsethi",
+      "name": "Arnav Sethi",
+      "handle": "arnavsethi",
+      "email": "arnavsethi@potpie.ai",
+      "role": "Product Designer — pots design system & graph explorer",
+      "summary": "Sole product designer; owns the Figma source of truth for the pots design system and the Graph Explorer canvas.",
+      "description": "Arnav Sethi (arnavsethi) is the org's only product designer and the Figma owner behind every potpie-ui surface shipped since the pots revamp. He authored the .pot-theme token set and the kit.tsx primitives that replaced the earlier card-heavy layouts, and specified the editorial, user-first screens used by Pot Overview, Pot Sources, the Events panel and the invitation/join flows. The Graph Explorer canvas that Deepesh implemented in 'feat(context-engine): align Graph Explorer UI with Figma design' (potpie #917) traces to his file, as do the node iconography, the ingestion pipeline states and the empty-pot guidance visuals that pair with the CLI's empty-pot messaging. He also owns the VS Code extension wireframes behind 'design refactor as per wireframes - add tailwindcss'. Search: who designed this screen, Figma owner, pots design system, .pot-theme tokens, graph explorer design, design review."
+    },
+    {
+      "slug": "tanvirao",
+      "name": "Tanvi Rao",
+      "handle": "tanvirao",
+      "email": "tanvirao@potpie.ai",
+      "role": "Developer Advocate — docs, OSS community & launches",
+      "summary": "Runs mintlify-docs content, the OSS community around the 5.5k-star potpie repo, and self-hosting guides.",
+      "description": "Tanvi Rao (tanvirao) is the developer advocate covering the public surface of potpie-ai: the 5.5k-star potpie-ai/potpie repo, potpie-ai/mintlify-docs, and community channels. She owns docs information architecture after the docs.json migration — quickstart, self-hosting setup, agents and custom-agents sections, the API reference synced from openapi.json, and the extensions pages for the VS Code extension and the Slack app. She triages inbound community issues and PRs (routing integration contributions like the Jira/Confluence work to core reviewers), maintains the issue templates for bug reports, documentation, feature requests and questions, and writes the release notes and launch narratives for CLI and context-graph releases. She is the escalation path when docs and CLI behavior disagree — e.g. flags documented but inert. Search: devrel, docs owner, quickstart, self-hosting guide, community triage, release notes, who updates the docs site."
+    },
+    {
+      "slug": "karthikns",
+      "name": "Karthik N S",
+      "handle": "karthikns",
+      "email": "karthikns@potpie.ai",
+      "role": "Platform / SRE — Kubernetes, Neo4j and deploy pipelines",
+      "summary": "Runs the GKE clusters, Jenkins deploy pipelines, Neo4j cluster, PgBouncer and Vault for stage and prod.",
+      "description": "Karthik N S (karthikns) is the platform/SRE engineer behind potpie-ai/potpie-k8s-deployments and the runtime that potpie's prod and stage environments sit on. He maintains the HPA Jenkinsfiles and JenkinsfileRollBack rollback pipelines, the ingress-controller and cert-manager configuration (including the workflows route added to cert-manager), the Neo4j enterprise cluster and its helm values plus backups, the PgBouncer deployment and PodDisruptionBudget in prod, and the Vault setup with vault-put.py for secret injection. He handled the momentum-server→potpie service rename across manifests and the workflows ingress routing rules. He is the on-call for cluster-level incidents — pod evictions, cert renewal failures, connection-pool exhaustion behind PgBouncer, and Neo4j cluster leader elections. Search: who runs kubernetes, GKE cluster owner, Jenkins deploy, rollback pipeline, neo4j cluster, pgbouncer, cert-manager, ingress, on-call infra."
+    }
+  ],
+  "teams": [
+    {
+      "slug": "core-context-graph",
+      "name": "Core / Context Graph",
+      "summary": "The POT Linear team — owns the context graph, engine, CLI, daemon and MCP server in potpie-ai/potpie.",
+      "description": "Core / Context Graph is the POT Linear team and the center of gravity of the org. It owns everything under potpie-ai/potpie: the potpie-context-core library, the context engine and its per-adapter-family extras, the graph store backends (embedded FalkorDB, FalkorDB server, Neo4j), the CLI, the daemon, the MCP server, and the ingestion skills for GitHub PR history, Linear teams and Jira projects. Its work shows up as POT-* ticket ids in commit subjects (POT-1442, POT-1763, POT-1770, POT-1779). It is the review gate for ontology and predicate changes, retrieval ranking, embedding/index migrations, and anything touching claim reads or valid_at semantics. Search: POT team, context graph owners, graph core, who approves ontology changes, CLI and daemon owners."
+    },
+    {
+      "slug": "frontend",
+      "name": "Frontend",
+      "summary": "Owns potpie-ui (Next.js app) and the VS Code extension — chat, pots, sources, events, graph explorer.",
+      "description": "Frontend owns the user-facing clients: the Next.js App Router app in potpie-ai/potpie-ui and the potpie-ai/potpie-vscode-extension. Its surface covers the chat and streaming experience (tool calls, thinking blocks, persisted history, stream-failure diagnostics), the pots workspace (overview, sources with debounced GitHub repo search, events panel, members, invitations, graph explorer canvas), auth and CLI-callback onboarding, and the Tailwind + .pot-theme design system. It also owns the frontend CI quality gates, staging/prod artifact-registry deploy targets, and client-side performance work such as removing PostHog session recording and memoizing streaming renders. Search: who owns the UI, Next.js app team, chat frontend, pots screens, vscode extension team."
+    },
+    {
+      "slug": "workflows",
+      "name": "Workflows",
+      "summary": "Owns potpie-ai/potpie-workflows — recipes, spec/plan generation, codegen agents, Celery workers and the event bus.",
+      "description": "Workflows owns potpie-ai/potpie-workflows, the agentic execution layer: recipes and the recipe subscriber, spec generation and the phased plan generator, plangen sub-agents, the codegen agent and patch validator, the diagram_fixer agent with mermaid/mmdc validation, and the GitHub App used for worktree creation and PR authoring. It runs the Celery workers, the single-queue and multi-queue event-bus subscribers, and the Postgres/file event stores, all supervised by supervisord. It also owns credit reporting to Dodo for recipe runs, streaming/SSE behavior and anti-buffering headers, and model routing through OpenRouter and LiteLLM. Search: recipes team, spec generation owners, codegen agent, celery workers, event bus, plan generation."
+    },
+    {
+      "slug": "enterprise-pie",
+      "name": "Enterprise / pie",
+      "summary": "Owns potpie-ai/pie — the private enterprise product: durable run spine, sandbox workers and the pi harness sidecar.",
+      "description": "Enterprise / pie owns the private potpie-ai/pie monorepo — 'Enterprise potpie'. Its scope is the V0 durable run spine (Parts 1–5): the browser run loop, sandbox sessions with worker ownership, the reaper plus admission control and idle defaults, repository preparation and clone-failure classes, and harness attach with turn leases and model-egress windows scoped to StartTurn. It owns the harness_runtime protobuf contract and the pi sidecar (NDJSON codec, controller loop, tool catalog and gating policy, file diffs, the AgentProfile→PiSessionPlan agent factory, resume and history replay), the pie-harness packaging with 3-tier discovery and self-contained linux-x64 VSIX, plus the multi-language quality gates across Go, Python, TypeScript and Bun. Search: pie team, enterprise product, harness sidecar owners, sandbox runner, durable runs."
+    },
+    {
+      "slug": "infra-security",
+      "name": "Infra & Security",
+      "summary": "Owns clusters, deploy pipelines, observability and org-wide CVE/Vanta dependency remediation.",
+      "description": "Infra & Security is the cross-cutting team that keeps the org deployable and compliant. It owns potpie-ai/potpie-k8s-deployments (GKE stage and prod, HPA Jenkinsfiles and rollback pipelines, ingress-controller, cert-manager, Neo4j cluster, PgBouncer, Vault), the CI/CD and quality gates across repos (coverage gates, CodeQL, gitleaks, govulncheck, biome/ruff/mypy checks), the observability stack (structured logging package, Sentry, OTel metrics, Langfuse traces, collector redaction), and the recurring Vanta dependency-CVE remediation sweeps that land in every repo. It is the escalation path for prod incidents, cert renewals, connection-pool exhaustion and vulnerability SLAs. Search: infra team, security team, who fixes CVEs, deploy pipeline owners, on-call, observability."
+    },
+    {
+      "slug": "devrel-docs",
+      "name": "DevRel & Docs",
+      "summary": "Owns the public docs site, OSS community around the 5.5k-star potpie repo, and the Slack app surface.",
+      "description": "DevRel & Docs owns everything a user reads before they read code: potpie-ai/mintlify-docs (quickstart, self-hosting, agents, custom agents, extensions, and the API reference generated from openapi.json), the OSS community around the 5.5k-star potpie-ai/potpie repository, issue templates and inbound triage, release notes, and the potpie-ai/potpie-slack app's install and onboarding story. It is the team that catches docs-vs-behavior drift — flags documented but inert, install paths that no longer exist, CLI help text that disagrees with the docs site. Search: devrel, docs team, community, quickstart, self-hosting docs, docs drift."
+    }
+  ],
+  "edges": [
+    { "from": "person:nndn", "type": "MEMBER_OF", "to": "team:core-context-graph", "truth": "authoritative_fact", "evidence": "linear:POT", "note": "Founder/eng lead; ~500 commits on potpie-ai/potpie, owns the context-core package split." },
+    { "from": "person:Dsantra92", "type": "MEMBER_OF", "to": "team:core-context-graph", "truth": "authoritative_fact", "evidence": "linear:POT", "note": "Heaviest sustained committer on potpie; owns CLI and daemon consolidation." },
+    { "from": "person:BrhKmr23", "type": "MEMBER_OF", "to": "team:core-context-graph", "truth": "authoritative_fact", "evidence": "linear:POT", "note": "CLI read/presentation surface, graph read filters (potpie#995)." },
+    { "from": "person:Nih1tGupta", "type": "MEMBER_OF", "to": "team:core-context-graph", "truth": "authoritative_fact", "evidence": "linear:POT", "note": "CLI automation ergonomics and GitLab/GitBucket integrations." },
+    { "from": "person:AdityaPainuli", "type": "MEMBER_OF", "to": "team:core-context-graph", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie/issues/1008", "note": "MCP server and retrieval-mode correctness." },
+    { "from": "person:dhirenmathur", "type": "MEMBER_OF", "to": "team:core-context-graph", "truth": "authoritative_fact", "evidence": "linear:POT", "note": "Co-founder; product backend and agents in potpie-ai/potpie." },
+    { "from": "person:yashkrishan", "type": "MEMBER_OF", "to": "team:frontend", "truth": "authoritative_fact", "evidence": "github:orgs/potpie-ai", "note": "potpie-ui lead and merge gatekeeper (~250 commits)." },
+    { "from": "person:ASCE-D", "type": "MEMBER_OF", "to": "team:enterprise-pie", "truth": "authoritative_fact", "evidence": "github:orgs/potpie-ai", "note": "~267 commits on potpie-ai/pie; SPEC-0..SPEC-8 harness stack." },
+    { "from": "person:jdyaberi-pp", "type": "MEMBER_OF", "to": "team:infra-security", "truth": "authoritative_fact", "evidence": "github:potpie-ai/pie/pull/1", "note": "Founded the pie CI/CD pipeline [POT-1558]; owns quality gates." },
+    { "from": "person:shmbhvi101", "type": "MEMBER_OF", "to": "team:infra-security", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie/pull/1000", "note": "Org-wide Vanta CVE remediation across every repository." },
+    { "from": "person:karthikns", "type": "MEMBER_OF", "to": "team:infra-security", "truth": "authoritative_fact", "evidence": "github:orgs/potpie-ai", "note": "Platform/SRE for GKE stage and prod, Jenkins deploys, Neo4j, Vault." },
+    { "from": "person:zingzy", "type": "MEMBER_OF", "to": "team:devrel-docs", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie/pull/539", "note": "Community contributor; issue templates and docs.json migration." },
+    { "from": "person:tanvirao", "type": "MEMBER_OF", "to": "team:devrel-docs", "truth": "authoritative_fact", "evidence": "github:orgs/potpie-ai", "note": "Developer advocate; docs site and OSS community." },
+    { "from": "person:arnavsethi", "type": "MEMBER_OF", "to": "team:frontend", "truth": "authoritative_fact", "evidence": "github:orgs/potpie-ai", "note": "Product designer embedded with Frontend; owns the pots design system." },
+
+    { "from": "repo:potpie-ai/potpie", "type": "OWNED_BY", "to": "team:core-context-graph", "truth": "user_decision", "evidence": "linear:POT", "note": "The POT team owns the flagship repo: engine, CLI, daemon, MCP." },
+    { "from": "repo:potpie-ai/potpie-ui", "type": "OWNED_BY", "to": "person:yashkrishan", "truth": "user_decision", "evidence": "github:potpie-ai/potpie-ui", "note": "Frontend lead and the person merging most potpie-ui release PRs." },
+    { "from": "repo:potpie-ai/potpie-workflows", "type": "OWNED_BY", "to": "team:workflows", "truth": "user_decision", "evidence": "github:potpie-ai/potpie-workflows", "note": "Recipes, spec/plan generation, codegen agents and Celery workers." },
+    { "from": "repo:potpie-ai/pie", "type": "OWNED_BY", "to": "team:enterprise-pie", "truth": "user_decision", "evidence": "github:potpie-ai/pie", "note": "Private enterprise monorepo; durable run spine and pi harness." },
+    { "from": "repo:potpie-ai/potpie-vscode-extension", "type": "OWNED_BY", "to": "team:frontend", "truth": "user_decision", "evidence": "github:potpie-ai/potpie-vscode-extension", "note": "Editor client; shares the design system and auth flows with potpie-ui." },
+    { "from": "repo:potpie-ai/potpie-slack", "type": "OWNED_BY", "to": "person:nndn", "truth": "user_decision", "evidence": "github:potpie-ai/potpie-slack", "note": "Effectively sole author — Slack integration, DM flow, Cloud Run deploy." },
+    { "from": "repo:potpie-ai/mintlify-docs", "type": "OWNED_BY", "to": "team:devrel-docs", "truth": "user_decision", "evidence": "github:potpie-ai/mintlify-docs", "note": "Public docs site: quickstart, self-hosting, agents, API reference." },
+    { "from": "repo:potpie-ai/potpie-k8s-deployments", "type": "OWNED_BY", "to": "team:infra-security", "truth": "user_decision", "evidence": "github:potpie-ai/potpie-k8s-deployments", "note": "GKE stage/prod manifests, Jenkins pipelines, Neo4j, PgBouncer, Vault." },
+
+    { "from": "service:context-engine", "type": "OWNED_BY", "to": "person:nndn", "truth": "user_decision", "evidence": "code:potpie/potpie/context-engine", "note": "Authored the engine namespace move, adapter-family extras and embedding index work." },
+    { "from": "service:potpie-cli", "type": "OWNED_BY", "to": "person:Dsantra92", "truth": "user_decision", "evidence": "code:potpie/potpie/cli", "note": "Moved the CLI into the root package and applied the workflow-first command contract." },
+    { "from": "service:potpie-daemon", "type": "OWNED_BY", "to": "person:Dsantra92", "truth": "user_decision", "evidence": "code:potpie/potpie/daemon", "note": "Deleted the legacy service runtime/transport and consolidated daemon coverage." },
+    { "from": "service:potpie-mcp-server", "type": "OWNED_BY", "to": "team:core-context-graph", "truth": "user_decision", "evidence": "code:potpie/potpie/mcp", "note": "MCP server surface; context_resolve/context_search contract owned by the POT team." },
+    { "from": "service:mom-api", "type": "OWNED_BY", "to": "person:dhirenmathur", "truth": "user_decision", "evidence": "code:potpie/app", "note": "Co-founder; owns the product backend, agents and document/multimodal paths." },
+    { "from": "service:celery-agent-worker", "type": "OWNED_BY", "to": "person:dhirenmathur", "truth": "user_decision", "evidence": "code:potpie/app/celery", "note": "Parsing and agent_tasks queues behind the product backend." },
+    { "from": "service:potpie-ui", "type": "OWNED_BY", "to": "person:yashkrishan", "truth": "user_decision", "evidence": "code:potpie-ui/package.json", "note": "Next.js frontend; owns its CI, deploy targets and streaming diagnostics." },
+    { "from": "service:potpie-vscode-extension", "type": "OWNED_BY", "to": "person:yashkrishan", "truth": "user_decision", "evidence": "code:potpie-vscode-extension/package.json", "note": "Owns the Cloudflare named-tunnel manager and extension release config." },
+    { "from": "service:workflows-rest-server", "type": "OWNED_BY", "to": "person:ASCE-D", "truth": "user_decision", "evidence": "code:potpie-workflows/src/rest_server.py", "note": "Owns recipe management, streaming endpoints and CORS behavior." },
+    { "from": "service:workflows-celery-worker", "type": "OWNED_BY", "to": "person:Dsantra92", "truth": "user_decision", "evidence": "code:potpie-workflows/src/adapters/celery_worker.py", "note": "Owns the deep-agent execution path running on the Celery workers." },
+    { "from": "service:workflows-event-bus-worker", "type": "OWNED_BY", "to": "person:nndn", "truth": "user_decision", "evidence": "code:potpie-workflows/start_event_bus_worker.py", "note": "Added the event bus worker and its supervisord wiring." },
+    { "from": "service:pie-harness-runner", "type": "OWNED_BY", "to": "person:ASCE-D", "truth": "user_decision", "evidence": "github:potpie-ai/pie/pull/37", "note": "Author of the pi sidecar core, tool catalog, agent factory and resume." },
+    { "from": "service:pie-web", "type": "OWNED_BY", "to": "person:Dsantra92", "truth": "user_decision", "evidence": "code:pie/apps/web", "note": "Built the pie login/web spine — Google OAuth, ports, migrations, multi-repo select." },
+    { "from": "service:pie-cli", "type": "OWNED_BY", "to": "team:enterprise-pie", "truth": "user_decision", "evidence": "code:pie/apps/cli", "note": "Enterprise CLI client for the durable run spine." },
+    { "from": "service:potpie-slack-bot", "type": "OWNED_BY", "to": "person:nndn", "truth": "user_decision", "evidence": "code:potpie-slack/src/app.py", "note": "Slack bot: mention handling, DM flow, environment select on deployment." }
+  ]
+}

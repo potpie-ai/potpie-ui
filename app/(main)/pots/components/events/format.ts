@@ -145,6 +145,25 @@ export function pickThinkingLabel(seed: string | null | undefined): string {
   return THINKING_VERBS[hashString(seed) % THINKING_VERBS.length];
 }
 
+// One-line mono preview of the payload for dense list rows. Prefers the
+// human text (episode_body) and falls back to compact JSON. Truncated hard
+// here so the row's `title` tooltip stays bounded; CSS truncates the rest.
+export function getPayloadPreview(ev: PotEvent): string | null {
+  const payload = ev.payload as Record<string, unknown> | null | undefined;
+  if (!payload || typeof payload !== "object") return null;
+  const body = payload.episode_body;
+  if (typeof body === "string" && body.trim()) {
+    return body.replace(/\s+/g, " ").trim().slice(0, 240);
+  }
+  try {
+    const text = JSON.stringify(payload);
+    if (!text || text === "{}") return null;
+    return text.slice(0, 240);
+  } catch {
+    return null;
+  }
+}
+
 export function getProgressPercent(event: PotEvent): number | null {
   if (event.step_total == null || event.step_total <= 0) return null;
   const done = event.step_done ?? 0;

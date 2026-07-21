@@ -1,0 +1,3662 @@
+{
+  "activities": [
+    {
+      "slug": "github:potpie-1012",
+      "name": "PR #1012 — fix: make _parse_as_of_iso return timezone-aware datetime",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-14T00:00:00Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1012",
+      "number": 1012,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "Community drive-by fix from fazalpsinfo-cmyk defaulting naive as_of values to UTC inside _parse_as_of_iso in the MCP inbound adapter; still open.",
+      "description": "A small patch against the same naive-datetime crash as issue #1008, touching only `_parse_as_of_iso` in the MCP server so a date-only `as_of` comes back timezone-aware. It reproduces green against the reported MCP path, which is exactly why it is the cautionary case: RankingService.rank() still keeps a caller-supplied `now` as given and `_recency_score` still normalizes only `valid_at`, so the HTTP read surface, `--as-of` on the CLI and replay all remain exposed. Recorded as the verification evidence behind the failed boundary-only fix, with PR #1009 carrying the fuller normalization. Search terms: PR 1012, _parse_as_of_iso, timezone-aware as_of, boundary-only patch, naive datetime TypeError, incomplete fix."
+    },
+    {
+      "slug": "github:potpie-1020",
+      "name": "PR #1020 — fix(deps): upgrade torch past CVE-2025-3000",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-20T11:56:23Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1020",
+      "number": 1020,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "cursor/pot-1975-vanta-vulnerability-fixes-66f5",
+      "base_branch": "main",
+      "summary": "Vanta remediation run POT-1975: bumps torch past CVE-2025-3000 across all four pyproject/uv.lock pairs.",
+      "description": "Merged 2026-07-20 by Shambhavi Shinde as part of the recurring Vanta vulnerability sweep tracked under POT-1975. Touches eight files — the root `pyproject.toml`/`uv.lock`, `legacy/`, `potpie/context-engine/` and `potpie/sandbox/` — raising the torch floor so the GitHub dependency graph and Vanta both stop reporting CVE-2025-3000. Searchable as: torch CVE, Vanta vulnerability fix, dependency floor bump, uv.lock refresh, POT-1975, high-severity advisory remediation on potpie-ai/potpie."
+    },
+    {
+      "slug": "github:potpie-1019",
+      "name": "PR #1019 — refactor(daemon): move daemon into root package and remove MCP",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-17T13:43:47Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1019",
+      "number": 1019,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "agent/move-daemon-delete-mcp",
+      "base_branch": "main",
+      "summary": "Relocates the whole daemon (lifecycle, HTTP transport, launcher, managed services) into potpie/daemon and deletes the MCP server, console script, adapter and dependency.",
+      "description": "Opened 2026-07-17 by Deeptendu Santra, 140 changed files, the next process-ownership slice after the merged #1013 CLI move. Daemon lifecycle, client, HTTP transport (`GET /health`, `POST /rpc`, `POST /attr`), UI assets, process launcher, managed services, ports and telemetry all move under `potpie/daemon`; the root distribution owns `potpie-daemon` via `potpie.daemon.main:main`. The `potpie-mcp` console script, the Context Engine MCP inbound adapter, MCP-specific tests and the `mcp` dependency are removed outright, while the historical `mcp` actor/source vocabulary stays accepted for stored-data compatibility. Verified with 963 root tests, 1,237 engine tests and an isolated wheel install confirming exactly the `potpie` and `potpie-daemon` entrypoints."
+    },
+    {
+      "slug": "github:potpie-1018",
+      "name": "PR #1018 — Split Potpie into product, engine, and core distributions",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-17T12:53:09Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1018",
+      "number": 1018,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "feat/ce-product-split",
+      "base_branch": "feat/ce-namespace-packaging",
+      "summary": "The three-layer architecture PR: potpie (product) imports potpie-context-engine imports potpie-context-core, with a characterization test locking the downward dependency arrow.",
+      "description": "Opened 2026-07-17 by Nandan, 457 changed files, stacked on #1016 and superseding #1013. Restructures the repo into product (`potpie.cli` + `potpie.daemon` + `potpie.mcp` + `potpie.services`), engine (adapters, connectors, ingestion, readers, graph_service impl) and core (`potpie_context_core`: ontology, workbench, records/mutations, graph ports, transforms — 51 modules). Commit 1 rebuilds the CLI move on the namespaced layout and turns the engine's `[cli]` extra into `[cli-auth]`; commit 2 moves the daemon, MCP and six host-app services plus `host_wiring` into the root package; commits 3–5 carve out the core library. Also fixes a packaging leak where bare directory excludes lose to `.gitignore` negation patterns hatchling merges into its spec. Search: product/engine/core split, three-layer stack, dependency arrow points downward, monorepo package boundary."
+    },
+    {
+      "slug": "github:potpie-1017",
+      "name": "PR #1017 — fix: refresh stale dependency graph locks",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-17T09:58:13Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1017",
+      "number": 1017,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "cursor/pot-1972-vanta-vulnerability-fixes-84e0",
+      "base_branch": "main",
+      "summary": "Two-file lockfile refresh (context-engine and sandbox uv.lock) so the GitHub dependency graph stops reporting already-patched advisories.",
+      "description": "Merged 2026-07-17 by Shambhavi Shinde under POT-1972. Only `potpie/context-engine/uv.lock` and `potpie/sandbox/uv.lock` change: the resolved versions were already patched in `pyproject.toml` floors but the stale locks kept GitHub's dependency graph and Vanta reporting phantom findings. Symptom phrasing: 'Vanta still flags a CVE we already fixed', 'dependency graph shows old version', 'uv lock out of date'. Part of the July 2026 Vanta remediation run alongside #1020, #1015, #1014 and #1000."
+    },
+    {
+      "slug": "github:potpie-1016",
+      "name": "PR #1016 — Move context-engine under the potpie_context_engine namespace and split dependency extras",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-17T09:24:41Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1016",
+      "number": 1016,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "feat/ce-namespace-packaging",
+      "base_branch": "main",
+      "summary": "PR 1 of 3 of the context-engine modularization plan: six generic top-level packages move under potpie_context_engine/ and the install-everything dependency set splits into per-adapter-family extras.",
+      "description": "Opened 2026-07-17 by Nandan, 728 changed files, deliberately semantics-free — no behavior, vocabulary or service-wiring changes. `domain`, `application`, `adapters`, `bootstrap`, `benchmarks` and `host` move to `potpie/context-engine/src/potpie_context_engine/` with no compatibility shims, because those collision-prone generic names were never public API. Every import, `mock.patch` target, `importlib` reference, `python -m` invocation, uvicorn app target and the daemon RPC class-module allowlist string is rewritten; the RPC/telemetry capability vocabulary (`host.pots.use_managed`, `host.daemon.stop`) is intentionally left alone because those only textually resemble module paths. New `potpie_context_engine/api.py` pins the supported consumer surface (GraphBackend, GraphPlanStorePort, GraphInboxStorePort, GraphService) and a subprocess gate asserts importing it loads none of the optional third-party delivery stacks."
+    },
+    {
+      "slug": "github:potpie-1015",
+      "name": "PR #1015 — fix: expose patched floors to GitHub dependency graph",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-17T08:46:02Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1015",
+      "number": 1015,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "cursor/pot-1933-vanta-vulnerability-fixes-69fc",
+      "base_branch": "main",
+      "summary": "Writes the patched dependency floors into package metadata across root, legacy, context-engine and sandbox so scanners can see them.",
+      "description": "Merged 2026-07-17 by Shambhavi Shinde under POT-1933, landing on main as commit c7a83e83 'fix: expose patched dependency floors in package metadata (#1015)'. Six files: `pyproject.toml` and `uv.lock` at the root plus `legacy/`, `potpie/context-engine/` and `potpie/sandbox/` manifests. The underlying problem was that transitive pins satisfied the advisory but the declared floors did not, so GitHub's dependency graph and Vanta kept the finding open. Search: patched floor not visible, advisory still open after upgrade, dependency graph metadata, Vanta HML vulnerability."
+    },
+    {
+      "slug": "github:potpie-1014",
+      "name": "PR #1014 — fix: remediate POT-1930 high-severity dependency alerts",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-17T08:37:06Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1014",
+      "number": 1014,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "cursor/pot-1930-vulnerability-fixes-a553",
+      "base_branch": "main",
+      "summary": "Upgrades the MCP SDK and adjacent packages past high-severity advisories; lands as commit 9785b3a1 'fix: upgrade MCP past high-severity advisories'.",
+      "description": "Merged 2026-07-17 by Shambhavi Shinde for Linear ticket POT-1930. Three files — `legacy/uv.lock`, `potpie/context-engine/pyproject.toml` and the root `uv.lock` — raise the `mcp` package floor and re-resolve. Notable in hindsight because #1019, opened hours later the same day, deletes the MCP integration entirely. Search phrasings: high-severity dependency alert, MCP SDK CVE, POT-1930, Dependabot/Vanta high finding on potpie-ai/potpie."
+    },
+    {
+      "slug": "github:potpie-1013",
+      "name": "PR #1013 — refactor(cli): move CLI into root package",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-17T13:03:28Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1013",
+      "number": 1013,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "agent/move-cli-daemon-mcp",
+      "base_branch": "main",
+      "summary": "Moves adapters/inbound/cli out of the context-engine and into potpie/cli, retargeting the potpie console script at potpie.cli.main:main.",
+      "description": "Opened and merged 2026-07-17 by Deeptendu Santra, 168 changed files, approved by nndn. `adapters/inbound/cli` becomes `potpie/cli` (`host_cli.py` → `main.py`) with commands, auth, ui, telemetry, templates and `read_presenter.py` moving wholesale; CLI tests move to the root `tests/` tree; `.github/workflows/test.yml`, the `Makefile`, `README.md` and the whole `docs/context-graph/` set are updated for the new paths. This is the first merged step of the process-ownership refactor that #1019 and #1018 continue. Search: CLI out of context-engine, root package CLI, console script entry point, potpie.cli.main."
+    },
+    {
+      "slug": "github:potpie-1009",
+      "name": "PR #1009 — Fix: treat naive as_of/now datetimes as UTC in recency scoring",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-13T09:48:32Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1009",
+      "number": 1009,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "fix/naive-as-of-tz-crash",
+      "base_branch": "main",
+      "summary": "Community fix for the TypeError: can't subtract offset-naive and offset-aware datetimes crash in RankingService when as_of is date-only.",
+      "description": "Opened 2026-07-13 by Aditya Painuli against his own bug report #1008. Normalizes naive datetimes to UTC at the boundary so `_parse_as_of_iso` in the MCP server, `TaskContext(now=...)` in `application/readers/_common.py` and `_recency` in `domain/ranking.py` agree on tz-awareness. Four files changed. Search: as_of date-only crash, offset-naive offset-aware TypeError, recency scoring timezone, context_resolve 500."
+    },
+    {
+      "slug": "github:potpie-1006",
+      "name": "PR #1006 — Fix(cli): detect resolve intent and report intent_source",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-13T07:06:59Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1006",
+      "number": 1006,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "fix/996-resolve-intent-detection",
+      "base_branch": "main",
+      "summary": "Adds real intent detection to potpie resolve instead of silently defaulting to intent=feature, and reports how the intent was chosen via intent_source.",
+      "description": "Opened 2026-07-13 by Aditya Painuli to close issue #996. Today `potpie resolve \"<task>\"` without `--intent` reports `intent=feature confidence=low` as if detection ran, which starves debugging and timeline questions of results. The PR classifies intent from the task text, falls back to a neutral `unknown` when it cannot, and adds an `intent_source` field so agents can tell detected from defaulted. Search: resolve intent detection, intent=feature default, zero timeline items, coverage-based confidence."
+    },
+    {
+      "slug": "github:potpie-1002",
+      "name": "PR #1002 — Fix embedded-FalkorDB claim read invisibility and default to sentence-transformers",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-09T12:43:56Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1002",
+      "number": 1002,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "nandan/pot-1918-p01-write-read-flow",
+      "base_branch": "main",
+      "summary": "POT-1918: claims written to the embedded FalkorDB backend were invisible to reads; also flips the default embedder to local sentence-transformers.",
+      "description": "Opened 2026-07-09 by Nandan, 26 changed files across the FalkorDB reader/writer/backend, canonical claim query, semantic index repair, graph_service, graph_workbench and the local embedder. The headline symptom is the worst possible one for a memory product — `potpie graph commit` reports success, then `potpie graph read` and `potpie resolve` return nothing, because the write path and the canonical claim query disagreed on how claims are indexed in embedded FalkorDBLite. Adds `falkordb_inspection.py` and `semantic_index_repair.py` plus roundtrip integration tests. Search: claims written but not readable, graph commit succeeds read empty, FalkorDBLite embedded invisible claims, sentence-transformers default embedder, POT-1918."
+    },
+    {
+      "slug": "github:potpie-1000",
+      "name": "PR #1000 — fix: remediate Vanta dependency CVEs and bump torch to 2.12.1",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-07T09:16:21Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1000",
+      "number": 1000,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "fix/Vanta-HML-Vul",
+      "base_branch": "main",
+      "summary": "The first of the July 2026 Vanta sweeps: torch to 2.12.1 plus assorted CVE floors across root, legacy, context-engine and sandbox manifests.",
+      "description": "Merged 2026-07-07 by Shambhavi Shinde as commit a6ae3da6. Six files: root `pyproject.toml`/`uv.lock` and the `legacy`, `potpie/context-engine`, `potpie/sandbox` manifests. Two weeks later #1020 has to bump torch again for CVE-2025-3000, which is the recurring shape of this workstream — heavy ML dependencies pulled in by the local embedding stack keep generating high/medium/low Vanta findings. Search: Vanta HML vulnerabilities, torch 2.12.1, dependency CVE remediation, security compliance bump."
+    },
+    {
+      "slug": "github:potpie-999",
+      "name": "PR #999 — Fix infra topology query-sensitive ranking",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-13T11:38:47Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/999",
+      "number": 999,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "fix/infra-topology-semantic-similarity",
+      "base_branch": "main",
+      "summary": "Makes the infra_topology reader rank by semantic similarity to the query instead of returning a fixed slab of topology claims.",
+      "description": "Opened 2026-07-07 by Yash Krishan, merged 2026-07-13 after review from coderabbitai and approval from nndn, landing as commit 5631cd0b. Twelve files: every reader under `potpie/context-engine/application/readers/` (`infra_topology.py`, `features.py`, `decisions.py`, `docs.py`, `owners.py`, `prior_bugs.py`, `coding_preferences.py`, `timeline_reader.py`, shared `_common.py`), `domain/graph_workbench_ontology.py`, and the lite conformance plus P9 reader unit tests. Symptom it fixes: asking about one service returned the same undifferentiated topology dump regardless of the question. Related to the mislabeling reported in issue #981."
+    },
+    {
+      "slug": "github:potpie-998",
+      "name": "PR #998 — Add Gitlab CLI integration",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-06T13:30:03Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/998",
+      "number": 998,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "feat/gitlab-integration",
+      "base_branch": "main",
+      "summary": "Adds a potpie gitlab command group with PAT auth, per-instance credential storage and self-hosted instance URL handling.",
+      "description": "Opened 2026-07-06 by Nihit Gupta alongside his feature request #997, 16 changed files. Implements `potpie gitlab login/logout/ls/repos/select` following the shape of the existing GitHub, Linear and Atlassian provider commands, but with Personal Access Token auth rather than OAuth so self-hosted GitLab installations work. Search: GitLab integration, self-hosted GitLab, PAT authentication, multi-provider CLI auth, potpie gitlab login --instance."
+    },
+    {
+      "slug": "github:potpie-995",
+      "name": "PR #995 — Fix graph read filters and make text presentation honor format, detail, and relations",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-14T10:19:30Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/995",
+      "number": 995,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "fix/read-filters-and-query-threshold",
+      "base_branch": "main",
+      "summary": "Makes previously cosmetic graph read flags (--repo, --query, --scope, --format, --detail, --relations) actually narrow the candidate set or report themselves as unsupported.",
+      "description": "Opened 2026-07-06 and merged 2026-07-14 by Bharath Kumar K as commit d9bd5644, closing his own issue #994 after several rounds of coderabbitai, copilot and self-review. Sixteen files across `adapters/inbound/cli/commands/graph.py`, `read_presenter.py`, the readers (`_common.py`, `coding_preferences.py`, `timeline_reader.py`), `application/services/graph_service.py`, `read_orchestrator.py`, the graph service port, the three agent skill templates and `docs/context-graph/`. The class of bug: flags accepted, echoed, and silently ignored, so agents cannot distinguish 'no data matched' from 'the filter never ran'."
+    },
+    {
+      "slug": "github:potpie-993",
+      "name": "PR #993 — Fix CLI domain failures exiting with code 0",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-06T08:27:55Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/993",
+      "number": 993,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "fix/cli-nonzero-exit-on-failure",
+      "base_branch": "main",
+      "summary": "Makes ok:false JSON envelopes and not_implemented domain errors exit non-zero so shell chains and CI can detect CLI failure.",
+      "description": "Opened 2026-07-06 by Nihit Gupta against his issue #992, two files. Today `potpie --json cloud status` prints `\"code\": \"not_implemented\"` and `potpie --json graph status` prints `\"ok\": false` while `$?` is still 0, so `potpie --json cloud status && echo ...` runs the second command. Parser/usage errors already exit 2 correctly; the gap is domain-level failures. Search: CLI exit code 0 on error, automation cannot detect failure, ok:false exit status, non-zero exit for domain errors."
+    },
+    {
+      "slug": "github:potpie-991",
+      "name": "PR #991 — Release potpie 2.0.0",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-03T11:47:57Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/991",
+      "number": 991,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "release/potpie",
+      "base_branch": "main",
+      "summary": "Cuts potpie 2.0.0 — the first stable release of the Context Graph CLI after the v2 beta series.",
+      "description": "Merged 2026-07-03 by Deeptendu Santra as commit a191a5ea, closing the long-running 'Potpie v2 beta release' issue #930. Three files: the root `pyproject.toml`, `potpie/context-engine/pyproject.toml` and `uv.lock`, moving off the `2.0.0b3` beta line that #948 had bumped. Every CLI bug report filed after this date reports `potpie v2.0.0` / `uv tool install potpie` as its install source, which makes 2026-07-03 the reference point for the CLI audit bug cluster. Search: potpie 2.0.0, v2 GA, release cut, version bump, uv tool install potpie."
+    },
+    {
+      "slug": "github:potpie-990",
+      "name": "PR #990 — Remove pot-level Jira/Linear ingest commands from CLI",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-03T07:59:26Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/990",
+      "number": 990,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "remove-pot-cli-ingest-cmds",
+      "base_branch": "main",
+      "summary": "Drops the pot-level Jira and Linear ingest subcommands, moving one-shot ticket ingestion entirely into the agent skills.",
+      "description": "Merged 2026-07-03 by Bharath Kumar K as commit 0fc9451c, 14 files. Removes the ingest verbs from `adapters/inbound/cli/commands/pots.py` and rewrites the affected skill templates (`potpie-source-ingestion`, `potpie-change-timeline`, `potpie-graph`, plus `AGENTS.md` and `CLAUDE.md`) and `docs/context-graph/cli-flow.md` / `ingestion-nudge.md`. Reflects the standing product line that the CLI registers sources and agents do ingestion. Search: remove ingest command, Jira ingest CLI, Linear ingest CLI, registration-only sources, skill-driven ingestion."
+    },
+    {
+      "slug": "github:potpie-989",
+      "name": "PR #989 — Add pre-commit PR gate",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-02T12:28:22Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/989",
+      "number": 989,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "feat/pre-commit",
+      "base_branch": "main",
+      "summary": "Adds .pre-commit-config.yaml and wires pre-commit run --all-files into the PR workflow, sweeping 159 files of accumulated lint debt.",
+      "description": "Merged 2026-07-02 by Deeptendu Santra as commit 43e545ae. Introduces `.pre-commit-config.yaml`, extends `.github/workflows/test.yml` with the gate, and fixes the fallout across `legacy/app/modules/`, the sandbox client, observability and the whole CLI command surface. From here on every substantial PR body in this repo cites `pre-commit run --all-files --show-diff-on-failure` as its first verification line. Search: pre-commit hook, lint gate, formatting CI, ruff, PR quality gate."
+    },
+    {
+      "slug": "github:potpie-985",
+      "name": "PR #985 — Fix include-family/graph-view vocabulary boundary (POT-1770)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-02T12:11:40Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/985",
+      "number": 985,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "nandan/pot-1770-cli-audit-17-fix-include-family-graph-view-vocabulary",
+      "base_branch": "main",
+      "summary": "Separates the resolve include-family vocabulary from graph read view names so the two surfaces stop leaking each other's terms.",
+      "description": "Merged 2026-07-02 by Nandan as commit a84863de under Linear ticket POT-1770, part of the CLI audit series. 29 files: `commands/graph.py`, `commands/query.py`, `commands/_common.py`, `docs/context-graph/cli-flow.md` and `querying.md`, and every agent skill template (`potpie-change-timeline`, `potpie-debug-memory`, `potpie-infra-architecture`, `potpie-project-preferences`) in the agent bundle, claude bundle and claude plugin trees. Users were passing `--include` values that only existed as graph views and vice versa. Search: include family, graph view names, resolve vs graph read vocabulary, POT-1770, CLI audit 17."
+    },
+    {
+      "slug": "github:potpie-976",
+      "name": "PR #976 — Improve local semantic search setup",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-02T11:41:50Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/976",
+      "number": 976,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "codex/setup-semantic-search-rich-live",
+      "base_branch": "main",
+      "summary": "Tightens the setup wizard's local embedding path so semantic search works out of the box instead of silently degrading to lexical matching.",
+      "description": "Opened 2026-06-29, merged 2026-07-02 by Nandan as commit cd207a29, closing issue #975. 21 files: `commands/bootstrap.py`, `ui/setup_ux.py`, `ui/setup_wizard_ui.py`, the in-memory/FalkorDB/Neo4j readers, `adapters/outbound/intelligence/local_embedder.py`, `application/services/config_service.py`, `setup_orchestrator.py`, `domain/embedding_modes.py` and `domain/lifecycle.py`, plus the lite and host-shell conformance suites. Symptom: users finished `potpie setup` believing semantic search was on when no embedder had actually been provisioned. Search: local embedder setup, semantic search not working, embedding mode, sentence-transformers download, setup wizard."
+    },
+    {
+      "slug": "github:potpie-974",
+      "name": "PR #974 — Fix `pot create --repo .` not registering the current repo",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-01T10:05:56Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/974",
+      "number": 974,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "fix/cli-audit7",
+      "base_branch": "main",
+      "summary": "Extracts a shared register_repo_source() so pot create --repo . resolves the repo location and sets the repo default, matching source add repo .",
+      "description": "Merged 2026-07-01 by Shambhavi Shinde as commit efb47640, closing issue #973. The bug: `LocalPotStore.create()` appended a raw `{kind: repo, name: \".\"}` source with `location: null` and never called `set_repo_default()`, while the `source add repo` path used `resolve_repo_location()` correctly. Five files touching `adapters/outbound/pots/local_pot_store.py`, `commands/pots.py`, `repo_location.py` and the CLI ergonomics tests. Search: pot create --repo dot, location null, repo default not set, source list shows '.', repo pot resolution broken."
+    },
+    {
+      "slug": "github:potpie-972",
+      "name": "PR #972 — fix(cli): suggest populated pot or ingestion when pot has 0 claims",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-01T10:25:52Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/972",
+      "number": 972,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "fic/cli-audit6",
+      "base_branch": "main",
+      "summary": "Adds empty-pot recovery guidance and recommended_next_action to pot/source command output.",
+      "description": "Merged 2026-07-01 by Shambhavi Shinde as commit 53c11d69, closing issues #971 and #978. When a pot has zero claims the CLI now confirms registration succeeded, states explicitly that no ingestion or scan was started, and lists concrete next actions (inspect linked pots, switch to a populated pot, start a graph mutation workflow); JSON output gains `recommended_next_action`. Search: empty pot, 0 claims, nothing happened after source add, next actions, recommended_next_action, registration-only."
+    },
+    {
+      "slug": "github:potpie-968",
+      "name": "PR #968 — Fix Linear CLI OAuth callback ports",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-02T11:40:19Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/968",
+      "number": 968,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "fix/linear_port",
+      "base_branch": "main",
+      "summary": "Stops Linear CLI auth from colliding with whatever already holds the fixed localhost callback port.",
+      "description": "Merged 2026-07-02 by Deeptendu Santra as commit a559508f, closing issue #967. `potpie linear login` bound a single hardcoded loopback port for the OAuth redirect; if a dev server or a previous daemon held it the browser round-trip failed with an opaque error. Five files under the CLI auth adapters. Search: Linear OAuth callback, port already in use, localhost redirect port conflict, integration login fails."
+    },
+    {
+      "slug": "github:potpie-964",
+      "name": "PR #964 — fix(cli): normalize --json parse-time errors to structured JSON envelope",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-01T09:41:47Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/964",
+      "number": 964,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "fix/cli-audit5",
+      "base_branch": "main",
+      "summary": "Makes --json mode emit a structured error envelope for parse-time failures instead of human-readable Typer text on stderr.",
+      "description": "Merged 2026-07-01 by Shambhavi Shinde as commit 0a7ad260, closing issue #963. In `--json` mode a usage or parse error escaped as plain Typer output, so an agent piping stdout into a JSON parser got a decode exception rather than an actionable error object. Three files. Sibling of #992/#993 which cover the exit-code half of the same automation contract. Search: --json error envelope, machine-readable CLI errors, JSON parse failure on error, structured error output."
+    },
+    {
+      "slug": "github:potpie-962",
+      "name": "PR #962 — Refresh Context Graph docs",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-02T11:46:46Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/962",
+      "number": 962,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "codex/context-graph-docs-refresh",
+      "base_branch": "main",
+      "summary": "Rewrites docs/context-graph/ (architecture, cli-flow, querying, ontology, skills, vision) against the shipped v2 surface.",
+      "description": "Merged 2026-07-02 by Nandan as commit b7ccc4c3, 16 files. The docs had drifted behind the CE rewrite: command names, include families, ontology vocabulary and the skill catalog all described the pre-2.0 shape. This is the document set that later slices — #1013, #1019 — keep having to update as packages move. Search: context graph docs, ontology documentation, cli-flow.md, querying.md, architecture.md, documentation drift."
+    },
+    {
+      "slug": "github:potpie-955",
+      "name": "PR #955 — Add CLI telemetry controls",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-06-30T04:47:36Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/955",
+      "number": 955,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "feat/tel_status",
+      "base_branch": "main",
+      "summary": "Adds potpie telemetry status/enable/disable so users can see and control PostHog and Sentry reporting.",
+      "description": "Merged 2026-06-30 by Deeptendu Santra as commit 5751c2ee, closing issue #954. Twelve files: `commands/telemetry.py`, `telemetry/preferences.py`, `telemetry/settings.py`, `telemetry/sentry_runtime.py`, `host_cli.py`, the daemon launcher and `bootstrap/sentry_settings.py`, with unit coverage for settings, runtime, product analytics and the launcher. Search: telemetry opt-out, disable analytics, PostHog CLI instrumentation, Sentry opt out, potpie telemetry status."
+    },
+    {
+      "slug": "github:potpie-953",
+      "name": "PR #953 — Move CLI, daemon, and telemetry to root Potpie runtime (closed)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-06-28T09:44:11Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/953",
+      "number": 953,
+      "state": "CLOSED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "feat/cli_daemon",
+      "base_branch": "main",
+      "summary": "The 781-file first attempt at the process-ownership refactor, closed unmerged and later rebuilt as #1013 and #1019.",
+      "description": "Opened 2026-06-28 by Deeptendu Santra and closed without merging. It tried to move the CLI, daemon and telemetry out of the context-engine in one 781-file change; the review consensus was that a single mega-move was unreviewable and it was split into #1013 (CLI), #1019 (daemon + MCP removal) and the namespace work in #1016/#1018. Useful as the historical marker for why the refactor is staged. Search: abandoned refactor, closed PR, mega-move, process ownership, why was the CLI move split up."
+    },
+    {
+      "slug": "github:potpie-952",
+      "name": "PR #952 — Implement shared runtime env resolution",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-06-29T08:27:57Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/952",
+      "number": 952,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "feat/env_res",
+      "base_branch": "main",
+      "summary": "Gives the CLI, daemon and spawned child processes one shared environment-resolution path instead of three divergent ones.",
+      "description": "Merged 2026-06-29 by Deeptendu Santra as commit f8ec425d, closing issue #946. Forty files across `cli/auth`, `host_cli.py`, `telemetry/_build_defaults.py` and `settings.py`, the `cli_auth` outbound adapters (`_oauth_client_ids.py`, `github.py`, `potpie.py`, `potpie_api_config.py`, `provider_config.py`), the daemon process launcher and `docs/telemetry/sentry.md`. Before it, baked wheel defaults, dotenv values and process env disagreed depending on who started what. Search: env resolution, wheel build defaults, dotenv precedence, daemon inherits environment, baked OAuth client IDs."
+    },
+    {
+      "slug": "github:potpie-950",
+      "name": "PR #950 — Add pre-merge CLI journey integration gate",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-06-26T17:51:28Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/950",
+      "number": 950,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "feat/premerge-journey-suite",
+      "base_branch": "main",
+      "summary": "Adds tests/integration/test_premerge_cli_journey.py and runs the end-to-end CLI journey as a required check.",
+      "description": "Merged 2026-06-26 by Jagadeesh (jdyaberi-pp) as commit e0b814e4. Three files: `.github/workflows/test.yml`, `potpie/context-engine/pyproject.toml` and the new `tests/integration/test_premerge_cli_journey.py`, which drives setup → pot create → source add → graph commit → read as one flow. Directly motivated by the CLI audit bug cluster, where individual commands passed unit tests but the end-to-end journey was broken. Search: pre-merge gate, CLI journey test, integration gate, end-to-end smoke, required check."
+    },
+    {
+      "slug": "github:potpie-943",
+      "name": "PR #943 — fix(cli): explain missing service logs for embedded graph backends",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-01T10:51:53Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/943",
+      "number": 943,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "fix/cli-audit-fix4",
+      "base_branch": "main",
+      "summary": "Replaces the bare 'no log file' response for falkordb_lite with a structured embedded_backend explanation pointing at potpie daemon logs.",
+      "description": "Merged 2026-07-01 by Shambhavi Shinde as commit 2f3c94b3, closing issue #977. `potpie service logs falkordb_lite` used to return `{\"lines\": []}` / 'no log file' because embedded backends run inside the daemon rather than as managed subprocesses with `service-<name>.log`. Now it returns `status: embedded_backend`, `profile`, `recommended_log_command: potpie daemon logs` and the FalkorDBLite `database_path`, and distinguishes 'managed service not started' from 'unknown service name'. Search: no log file, service logs empty, falkordb_lite logs, embedded backend, where are the logs."
+    },
+    {
+      "slug": "github:potpie-issue-1008",
+      "name": "Issue #1008 — MCP: date-only or naive as_of crashes context_resolve/context_search",
+      "activity_type": "issue",
+      "verb_class": "github_issue_opened",
+      "occurred_at": "2026-07-13T09:42:29Z",
+      "url": "https://github.com/potpie-ai/potpie/issues/1008",
+      "number": 1008,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "TypeError: can't subtract offset-naive and offset-aware datetimes — passing as_of='2024-06-01' to the MCP read tools crashes the whole read.",
+      "description": "Filed 2026-07-13 by Aditya Painuli against potpie v2.0.0 on macOS, labelled bug. Four-hop chain: `_parse_as_of_iso` (adapters/inbound/mcp/server.py:51) only special-cases the `Z` suffix so `datetime.fromisoformat('2024-06-01')` returns a naive datetime; readers pass it straight through as `TaskContext(now=req.as_of)` (application/readers/_common.py:51); `RankingService.rank` keeps a caller-supplied `now` as-is (domain/ranking.py:120); `_recency` then subtracts it from tz-aware `valid_at` and raises. Counter-test: the same instant as `2024-06-01T00:00:00Z` works. Fixed by PR #1009. Search: offset-naive offset-aware, as_of date only, context_resolve TypeError, recency scoring crash."
+    },
+    {
+      "slug": "github:potpie-issue-1007",
+      "name": "Issue #1007 — CLI: resolve --mode is accepted, documented, and recommended but never affects retrieval",
+      "activity_type": "issue",
+      "verb_class": "github_issue_opened",
+      "occurred_at": "2026-07-13T07:33:17Z",
+      "url": "https://github.com/potpie-ai/potpie/issues/1007",
+      "number": 1007,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "--mode fast|balanced|verify|deep is a documented, echoed, entirely inert knob; --mode garbage is accepted silently.",
+      "description": "Filed 2026-07-13 by Aditya Painuli against potpie v2.0.0. `ResolveRequest.mode` and `SearchRequest.mode` have exactly two consumers, both metadata echoes at graph_service.py:125 and :139; nothing in the orchestrator, readers or ranker branches on it, and the only retrieval-shaping preference on the read path is `freshness_preference`. `ResolveMode = str` (domain/ports/agent_context.py:33) keeps the valid values in a comment, so invalid values pass through. The dead knob is advertised on three surfaces: `docs/context-graph/cli-flow.md`, the MCP `context_resolve(mode: str = \"fast\")` signature, and CONTEXT_RESOLVE_RECIPES. Search: inert flag, --mode does nothing, fake parameter, retrieval depth, no validation on mode."
+    },
+    {
+      "slug": "github:potpie-issue-997",
+      "name": "Issue #997 — [Feature]: Add GitLab CLI integration",
+      "activity_type": "issue",
+      "verb_class": "github_issue_opened",
+      "occurred_at": "2026-07-06T13:05:35Z",
+      "url": "https://github.com/potpie-ai/potpie/issues/997",
+      "number": 997,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "Feature request for a potpie gitlab command group with PAT auth and self-hosted instance support, filling the gap next to GitHub/Linear/Jira/Confluence.",
+      "description": "Filed 2026-07-06 by Nihit Gupta, labelled enhancement / Context-graph / cli / auth. Teams on GitLab — especially self-hosted instances — cannot authenticate Potpie or pull project context at all today: no instance URL handling, no per-instance credential storage, no PAT flow. Proposed surface: `potpie gitlab login [--force] [--instance <url>] [--token <pat>]`, `logout`, `ls`, `repos`, `select`. Implemented by PR #998. Search: GitLab support, self-hosted GitLab, personal access token auth, multi-provider integrations, merge requests ingestion."
+    },
+    {
+      "slug": "github:potpie-issue-996",
+      "name": "Issue #996 — CLI: resolve defaults to feature intent without detection",
+      "activity_type": "issue",
+      "verb_class": "github_issue_opened",
+      "occurred_at": "2026-07-06T11:33:53Z",
+      "url": "https://github.com/potpie-ai/potpie/issues/996",
+      "number": 996,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "potpie resolve without --intent silently defaults to intent=feature and displays it as if detection ran, starving debugging and timeline questions.",
+      "description": "Filed 2026-07-06 by Nihit Gupta against potpie v2.0.0b3. Different task descriptions return the same claim set; the header prints `intent=feature confidence=low` with no classification performed; questions like 'what changed recently in the auth service?' return zero timeline items because the feature intent does not include timeline retrieval; and `confidence=low` is coverage-based, so it appears even when results are highly relevant. Asks for real detection, a neutral `unknown` fallback, and a visible signal of how the intent was selected. Addressed by PR #1006. Search: intent detection missing, default intent feature, zero timeline results, confidence low always."
+    },
+    {
+      "slug": "github:potpie-issue-994",
+      "name": "Issue #994 — Graph read CLI flags accepted but ignored on default read path",
+      "activity_type": "issue",
+      "verb_class": "github_issue_closed",
+      "occurred_at": "2026-07-14T10:19:31Z",
+      "url": "https://github.com/potpie-ai/potpie/issues/994",
+      "number": 994,
+      "state": "CLOSED",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "--repo, --query, --scope, --format table, --detail and --relations are accepted but never applied, so scoped reads are cosmetic on the default backend.",
+      "description": "Filed 2026-07-06 by Bharath Kumar K, closed 2026-07-14 by his own PR #995. Timeline `--repo`/`--query` do not change output; preferences `--scope repo:/path:/service:` does not narrow; unknown `--scope` keys pass silently; scoped runs still print a project-wide banner. The impact is stated precisely in the report: false negatives (users think there is no data when a filter would have matched) and false positives (users think scope narrowed results when it did not). Search: flags ignored, filter not applied, silent no-op flag, scoped read, graph read --scope, timeline recent --repo."
+    },
+    {
+      "slug": "github:potpie-issue-992",
+      "name": "Issue #992 — Domain errors and ok:false JSON exit 0 — automation cannot detect CLI failures",
+      "activity_type": "issue",
+      "verb_class": "github_issue_opened",
+      "occurred_at": "2026-07-06T08:21:16Z",
+      "url": "https://github.com/potpie-ai/potpie/issues/992",
+      "number": 992,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "potpie --json cloud status prints code:not_implemented and exits 0; potpie --json graph status prints ok:false and exits 0, so shell chains treat failures as success.",
+      "description": "Filed 2026-07-06 by Nihit Gupta against potpie v2.0.0b3. The report includes a table: `cloud status` → `not_implemented` → exit 0; `graph status` → `ok:false` (e.g. `ambiguous_pot`) → exit 0; `graph nudge --event bogus` → `ok:false` → exit 0; and `potpie --json cloud status && echo \"should not print\"` prints anyway. Parser and usage errors behave correctly (`potpie pot create` → exit 2), so the gap is strictly domain-level failures. Addressed by PR #993. Search: exit code 0 on failure, CI cannot detect error, shell && chain, ok:false success exit, automation contract."
+    },
+    {
+      "slug": "github:potpie-issue-981",
+      "name": "Issue #981 — Fix mislabeled feature claims in potpie resolve output",
+      "activity_type": "issue",
+      "verb_class": "github_issue_opened",
+      "occurred_at": "2026-06-30T11:31:56Z",
+      "url": "https://github.com/potpie-ai/potpie/issues/981",
+      "number": 981,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "PROVIDES and IMPLEMENTED_IN claims surface under the infra_topology include label instead of features, so output labels contradict claim semantics.",
+      "description": "Filed 2026-06-30 by Nihit Gupta, severity low/cosmetic, reproduced on a populated pot containing both infrastructure-topology and feature claims against the local graph backend. Expected: `infra_topology` returns only DEPENDS_ON, USES, DEPLOYED_TO, DEFINED_IN, HOSTED_ON and OWNED_BY, while PROVIDES and IMPLEMENTED_IN return under `features`; actual output prints lines like `[infra_topology] repo provides feature X`. Root cause is the top-level resolve path letting feature predicates flow through the infra_topology include. Related to the reader rework in #999. Search: wrong include label, feature claim under infra_topology, predicate categorization, resolve output labels."
+    },
+    {
+      "slug": "github:potpie-issue-978",
+      "name": "Issue #978 — Add next actions after potpie source add repo for empty pots",
+      "activity_type": "issue",
+      "verb_class": "github_issue_closed",
+      "occurred_at": "2026-06-30T07:08:29Z",
+      "url": "https://github.com/potpie-ai/potpie/issues/978",
+      "number": 978,
+      "state": "CLOSED",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "source add repo succeeds into an empty pot with no follow-up guidance, leaving users with an empty graph and no idea what to do next.",
+      "description": "Filed and closed 2026-06-30 by Nihit Gupta. The report is careful to affirm the design — source registration is intentionally registration-only and must not auto-trigger ingestion — and asks only for a next-actions block plus `recommended_next_action` in the JSON payload when the target pot has 0 claims. Suggested actions: inspect linked pots, switch to a populated pot, start a manual graph mutation workflow. Delivered by PR #972 together with #971. Search: empty graph after setup, nothing ingested, no next step, registration only, onboarding dead end."
+    },
+    {
+      "slug": "github:potpie-issue-977",
+      "name": "Issue #977 — service logs gives a generic 'no log file' for embedded graph backends",
+      "activity_type": "issue",
+      "verb_class": "github_issue_closed",
+      "occurred_at": "2026-07-01T10:51:54Z",
+      "url": "https://github.com/potpie-ai/potpie/issues/977",
+      "number": 977,
+      "state": "CLOSED",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "potpie service logs falkordb_lite returns {\"lines\": []} / 'no log file' because the backend runs embedded in the daemon, with no pointer to potpie daemon logs.",
+      "description": "Filed 2026-06-30 by Shambhavi Shinde, closed 2026-07-01 by PR #943. Root cause: `service logs` only checks `<home>/logs/service-<name>.log` and emitted a bare empty response when that path was missing, giving the same vague answer for `embedded`, `in_memory` and the `falkordblite` alias. The requested response shape — `status: embedded_backend`, `profile`, `recommended_log_command`, `database_path`, human `message` plus `detail` lines — is spelled out in the issue and is what shipped. Search: no log file, empty logs, falkordb_lite embedded, daemon logs, where is the database file."
+    },
+    {
+      "slug": "github:potpie-issue-973",
+      "name": "Issue #973 — `pot create --repo .` not registering the current repo",
+      "activity_type": "issue",
+      "verb_class": "github_issue_closed",
+      "occurred_at": "2026-07-01T10:05:57Z",
+      "url": "https://github.com/potpie-ai/potpie/issues/973",
+      "number": 973,
+      "state": "CLOSED",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "pot create <name> --use --repo . creates a source with name='.' and location=null and never sets the repo-local default, unlike source add repo .",
+      "description": "Filed 2026-06-29 by Shambhavi Shinde, closed 2026-07-01 by PR #974. Two divergent code paths: `source add repo` calls `resolve_repo_location()` + `add_source(location=...)` + `set_repo_default()`, while `pot create --repo` had `LocalPotStore.create()` append an inline `{kind: repo, name: repo}` with no location and no default (local_pot_store.py:85-92). Consequences listed in the issue: repo pot resolution breaks, `source list` shows unusable metadata, users must re-run source add manually, automation cannot treat the two as equivalent. Search: location null, repo default missing, pot create repo flag, source registration mismatch."
+    },
+    {
+      "slug": "git:potpie-a72b8ac",
+      "name": "commit a72b8ac2 — Move context-engine packages under the potpie_context_engine namespace",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2026-07-17T09:20:00Z",
+      "url": "https://github.com/potpie-ai/potpie/commit/a72b8ac2",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "feat/ce-namespace-packaging",
+      "summary": "The mechanical namespace move: six generic top-level packages relocate into potpie/context-engine/src/potpie_context_engine/.",
+      "description": "Authored 2026-07-17 by Nandan, commit 1 of PR #1016. Rewrites every import, mock.patch target, importlib reference, `python -m` invocation, uvicorn app target and the daemon RPC class-module allowlist prefix in one pass, with no behavior change. Deliberately leaves the RPC/telemetry capability vocabulary strings alone. This is the commit that anyone bisecting an ImportError after mid-July 2026 will land on. Search: namespace move, ModuleNotFoundError domain/application/adapters, import path rewrite, potpie_context_engine."
+    },
+    {
+      "slug": "git:potpie-efe87dc",
+      "name": "commit efe87dc9 — Split context-engine dependencies into per-adapter-family extras",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2026-07-17T09:22:00Z",
+      "url": "https://github.com/potpie-ai/potpie/commit/efe87dc9",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "feat/ce-namespace-packaging",
+      "summary": "Breaks the install-everything dependency set into optional extras so consumers stop pulling FastAPI, Typer, MCP, FalkorDBLite and Sentry for every use.",
+      "description": "Authored 2026-07-17 by Nandan, commit 2 of PR #1016. Before this, importing the engine at all dragged in every delivery surface; afterwards a subprocess gate in `tests/unit/test_public_api.py` asserts that importing the supported API surface loads none of the optional third-party stacks. Directly relevant to install size, cold-start time and the CVE surface the Vanta sweeps keep chasing. Search: optional extras, pip extras, heavy transitive dependencies, import cost, adapter family extras."
+    },
+    {
+      "slug": "git:potpie-7241e62",
+      "name": "commit 7241e62c — Move the CLI into the root potpie package",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2026-07-17T12:40:00Z",
+      "url": "https://github.com/potpie-ai/potpie/commit/7241e62c",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "feat/ce-product-split",
+      "summary": "Rebuilds #1013's CLI relocation on top of the namespaced layout: adapters/inbound/cli becomes potpie/cli.",
+      "description": "Authored 2026-07-17 by Nandan as commit 1 of PR #1018. `host_cli.py` becomes `potpie/cli/main.py`, the `potpie` console script targets `potpie.cli.main:main`, the engine's `[cli]` extra narrows to `[cli-auth]` (keyring + httpx only) and typer/rich/pillow/click/sentry-sdk become root dependencies. Also fixes a packaging leak #1013 shared, where bare directory excludes lose to `.gitignore` negation patterns hatchling merges into its spec, and repairs the Makefile `UI_FRONTEND_DIR` path the namespace move missed. Search: CLI relocation, console script, hatchling exclude, packaging leak, cli-auth extra."
+    },
+    {
+      "slug": "git:potpie-b85bbf5",
+      "name": "commit b85bbf5e — Move the daemon, MCP server, and host-app services into the root package",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2026-07-17T12:46:00Z",
+      "url": "https://github.com/potpie-ai/potpie/commit/b85bbf5e",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "feat/ce-product-split",
+      "summary": "host/ becomes potpie/daemon, adapters/inbound/mcp becomes potpie/mcp, and the six host-app services plus host_wiring become potpie/services.",
+      "description": "Authored 2026-07-17 by Nandan as commit 2 of PR #1018. Dissolves every temporary engine→`potpie.cli` import introduced by the previous commit, so the boundary characterization test flips from an exception list to the real invariant that the engine never imports the `potpie` namespace. `sentry_privacy` moves the other way, into engine bootstrap, because its only importer stays with the ingestion server. The engine drops its `[mcp]` extra and the SDK, FastAPI and uvicorn become root dependencies. Search: daemon relocation, host_wiring composition root, engine must not import product, boundary test."
+    },
+    {
+      "slug": "git:potpie-e61b9bb",
+      "name": "commit e61b9bbd — Carve the graph core into a potpie-context-core library",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2026-07-17T13:05:00Z",
+      "url": "https://github.com/potpie-ai/potpie/commit/e61b9bbd",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "feat/ce-product-split",
+      "summary": "Creates the potpie/context-core workspace member shipping potpie_context_core: 51 modules of ontology, workbench, records, mutations, transforms and graph ports.",
+      "description": "Authored 2026-07-17 by Nandan as part of PR #1018's core carve. This is where `potpie_context_core/ontology.py` — the canonical 24-label, 26-predicate contract, `ONTOLOGY_VERSION = 2026-06-graph`, `GRAPH_CONTRACT_VERSION = v1.5` — comes to live as an independently importable library with no delivery-surface dependencies. Followed by cde14cba (curated api surface) and 6f29b80a (flatten into a library-shaped package). Search: context-core, ontology module, graph contract version, library carve, dependency-free core."
+    },
+    {
+      "slug": "git:potpie-6f29b80",
+      "name": "commit 6f29b80a — Flatten potpie-context-core into a library-shaped package",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2026-07-17T13:30:00Z",
+      "url": "https://github.com/potpie-ai/potpie/commit/6f29b80a",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "feat/ce-product-split",
+      "summary": "Final shaping commit of the three-layer split — collapses the transplanted layer directories into a flat, importable core library.",
+      "description": "Authored 2026-07-17 by Nandan, the current HEAD of `feat/ce-product-split` and the last commit of the architecture arc. Together with 674839df (scope the root security lint for relocated product code) and cde14cba (curated api surface) it finishes the product/engine/core stack. Anyone asking 'what is the current package layout of potpie-ai/potpie and when did it change' should land here. Search: package flattening, library shape, final refactor commit, current layout."
+    },
+    {
+      "slug": "git:potpie-a191a5e",
+      "name": "commit a191a5ea — Release potpie 2.0.0 (#991)",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2026-07-03T11:47:57Z",
+      "url": "https://github.com/potpie-ai/potpie/commit/a191a5ea",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "main",
+      "summary": "The 2.0.0 release commit on main — the version every subsequent bug report cites.",
+      "description": "Landed 2026-07-03 by Deeptendu Santra via PR #991. Marks the end of the `2.0.0b1..b3` beta line and the start of the public v2 CLI. Issues #996 and #992 were filed against `v2.0.0b3` just before it; #1007 and #1008 cite `potpie v2.0.0` after it. Useful as a timeline anchor for 'was this before or after GA'. Search: 2.0.0 release, GA, version anchor, beta to stable."
+    },
+    {
+      "slug": "git:potpie-5af8ea5",
+      "name": "commit 5af8ea5f — drop ingest command + mega-removal of dead CE surface; pots reorg",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2026-06-23T00:00:00Z",
+      "url": "https://github.com/potpie-ai/potpie/commit/5af8ea5f",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "main",
+      "summary": "The June CE consolidation: removes the ingest command and a large dead surface, reorganizing pots.",
+      "description": "Landed 2026-06-23 by Deeptendu Santra via PR #919, part of the intense late-June week that also produced the CE graph explorer UI (#918), the detached daemon runtime (#916), the graph workbench command surface (#915) and the CE application services (#914). This is where the CLI stopped owning ingestion and pots became the primary scope object. Search: dead code removal, ingest command removed, pots reorganization, CE consolidation."
+    },
+    {
+      "slug": "git:potpie-dbc92c2",
+      "name": "commit dbc92c23 — Deprecate the server and related components",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2026-06-04T00:00:00Z",
+      "url": "https://github.com/potpie-ai/potpie/commit/dbc92c23",
+      "repo_name": "potpie-ai/potpie",
+      "head_branch": "main",
+      "summary": "Deprecates the original hosted FastAPI server, moving the whole product to a local-first CLI + daemon shape.",
+      "description": "Landed 2026-06-04 by Deeptendu Santra via PR #851, immediately after removing potpie-ui as a submodule (#850) and shipping the local context engine (#853). This is the strategic pivot the rest of the 2026 timeline follows from: the old server code drops to `legacy/` where it is now only touched by dependency remediation PRs. Search: server deprecation, local-first pivot, legacy directory, why is there a legacy folder, FastAPI server removed."
+    },
+    {
+      "slug": "github:potpie-review-1013-nndn",
+      "name": "Review — nndn approves PR #1013 (CLI into root package)",
+      "activity_type": "review",
+      "verb_class": "pr_review_approved",
+      "occurred_at": "2026-07-17T13:03:20Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1013#pullrequestreview",
+      "number": 1013,
+      "state": "APPROVED",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "Founder approval that unblocked the first merged step of the process-ownership refactor, eight seconds before merge.",
+      "description": "Nandan approved #1013 on 2026-07-17 at 13:03:20Z; the PR merged at 13:03:28Z. Notable because he had opened the competing #1018 forty minutes earlier, and #1018's body explicitly says it supersedes #1013 — approving the smaller merged slice first and rebuilding on top of it was the sequencing decision. Search: PR approval, review sign-off, refactor sequencing, who approved the CLI move."
+    },
+    {
+      "slug": "github:potpie-review-1013-codex",
+      "name": "Review — codex connector comments on PR #1013",
+      "activity_type": "review",
+      "verb_class": "pr_review_commented",
+      "occurred_at": "2026-07-17T09:19:42Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/1013#pullrequestreview",
+      "number": 1013,
+      "state": "COMMENTED",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "Automated ChatGPT Codex connector review pass on the 168-file CLI relocation.",
+      "description": "Posted 2026-07-17 by the chatgpt-codex-connector bot roughly ninety minutes after #1013 opened. Illustrative of this repo's review mix: large mechanical refactors get an automated first pass (codex, coderabbitai, copilot-pull-request-reviewer) before a human approval. Search: automated review, bot reviewer, codex connector, AI code review on potpie."
+    },
+    {
+      "slug": "github:potpie-review-999-nndn",
+      "name": "Review — nndn approves PR #999 (infra topology ranking)",
+      "activity_type": "review",
+      "verb_class": "pr_review_approved",
+      "occurred_at": "2026-07-13T11:38:39Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/999#pullrequestreview",
+      "number": 999,
+      "state": "APPROVED",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "Approval that closed out a six-day review cycle on the reader ranking rework, merging eight seconds later.",
+      "description": "Nandan approved Yash Krishan's #999 on 2026-07-13 at 11:38:39Z; it merged at 11:38:47Z. The PR had sat since 2026-07-07 with a coderabbitai pass on day one — a fair illustration of latency on retrieval-quality changes versus the same-day turnaround on dependency remediation PRs. Search: review latency, approval, retrieval quality review, ranking change sign-off."
+    },
+    {
+      "slug": "github:potpie-review-999-coderabbit",
+      "name": "Review — coderabbitai comments on PR #999",
+      "activity_type": "review",
+      "verb_class": "pr_review_commented",
+      "occurred_at": "2026-07-07T08:05:52Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/999#pullrequestreview",
+      "number": 999,
+      "state": "COMMENTED",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "Automated coderabbitai first pass on the twelve-file reader ranking change, fifteen minutes after the PR opened.",
+      "description": "Posted 2026-07-07 by coderabbitai on Yash Krishan's infra-topology ranking PR. coderabbitai is the most consistent reviewer on potpie-ai/potpie by volume, commenting on retrieval-path PRs like #999 and #995 within minutes of opening. Search: coderabbit review, automated review coverage, semantic similarity ranking review."
+    },
+    {
+      "slug": "github:potpie-review-995-brhkmr",
+      "name": "Review — BrhKmr23 self-review round on PR #995 before merge",
+      "activity_type": "review",
+      "verb_class": "pr_review_commented",
+      "occurred_at": "2026-07-14T09:08:12Z",
+      "url": "https://github.com/potpie-ai/potpie/pull/995#pullrequestreview",
+      "number": 995,
+      "state": "COMMENTED",
+      "repo_name": "potpie-ai/potpie",
+      "summary": "Final annotation round on the graph read filter fix, an hour before it merged and closed issue #994.",
+      "description": "Bharath Kumar K posted the closing review comments on his own #995 on 2026-07-14, after a week-long cycle involving copilot-pull-request-reviewer, coderabbitai and three earlier of his own passes. The PR merged at 10:19:30Z and auto-closed issue #994 one second later. Search: self review, review thread resolution, filter fix sign-off, issue auto-close."
+    }
+  ],
+  "edges": [
+    { "from": "activity:github:potpie-1012", "type": "TOUCHED", "to": "repo:potpie-ai/potpie", "truth": "source_observation", "evidence": "github:potpie-ai/potpie#1012" },
+    { "from": "activity:github:potpie-1012", "type": "TOUCHED", "to": "service:potpie-mcp-server", "truth": "source_observation", "evidence": "github:potpie-ai/potpie#1012" },
+    { "from": "activity:github:potpie-1012", "type": "IN_PERIOD", "to": "period:2026-07", "truth": "timeline_event" },
+    { "from": "activity:github:potpie-1012", "type": "MENTIONS", "to": "bug_pattern:naive-as-of-tz-typeerror", "truth": "source_observation", "evidence": "github:potpie-ai/potpie#1012" },
+    {
+      "from": "person:shmbhvi101",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-1020",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1020"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "PERFORMED",
+      "to": "activity:github:potpie-1020",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1020",
+      "note": "opened and merged the same day"
+    },
+    {
+      "from": "activity:github:potpie-1020",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1020"
+    },
+    {
+      "from": "activity:github:potpie-1020",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1020 changed potpie/context-engine/pyproject.toml"
+    },
+    {
+      "from": "activity:github:potpie-1020",
+      "type": "TOUCHED",
+      "to": "service:potpie-sandbox",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1020 changed potpie/sandbox/pyproject.toml"
+    },
+    {
+      "from": "activity:github:potpie-1020",
+      "type": "TOUCHED",
+      "to": "code:potpie:pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1020"
+    },
+    {
+      "from": "activity:github:potpie-1020",
+      "type": "TOUCHED",
+      "to": "code:potpie:uv.lock",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1020"
+    },
+    {
+      "from": "activity:github:potpie-1020",
+      "type": "TOUCHED",
+      "to": "code:potpie:legacy/pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1020"
+    },
+    {
+      "from": "activity:github:potpie-1020",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:torch",
+      "truth": "agent_claim",
+      "confidence": 0.95,
+      "note": "CVE-2025-3000 floor bump"
+    },
+    {
+      "from": "activity:github:potpie-1020",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-1019",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1019"
+    },
+    {
+      "from": "activity:github:potpie-1019",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1019"
+    },
+    {
+      "from": "activity:github:potpie-1019",
+      "type": "TOUCHED",
+      "to": "service:potpie-daemon",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1019 moved host/ to potpie/daemon"
+    },
+    {
+      "from": "activity:github:potpie-1019",
+      "type": "TOUCHED",
+      "to": "service:potpie-mcp-server",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1019 removed the MCP adapter and console script"
+    },
+    {
+      "from": "activity:github:potpie-1019",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1019 changed potpie/cli/templates and potpie/cli/commands"
+    },
+    {
+      "from": "activity:github:potpie-1019",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1019 changed potpie/context-engine adapters, application, bootstrap, host"
+    },
+    {
+      "from": "activity:github:potpie-1019",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/daemon/main.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1019"
+    },
+    {
+      "from": "activity:github:potpie-1019",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/mcp/server.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1019 deleted the MCP inbound adapter"
+    },
+    {
+      "from": "activity:github:potpie-1019",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1013",
+      "truth": "agent_claim",
+      "confidence": 0.95,
+      "note": "PR body: 'the next process-ownership slice after #1013'"
+    },
+    {
+      "from": "activity:github:potpie-1019",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:mcp",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "note": "drops the mcp dependency"
+    },
+    {
+      "from": "activity:github:potpie-1019",
+      "type": "MENTIONS",
+      "to": "decision:remove-mcp-from-daemon-and-product",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-1019",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:nndn",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-1018",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1018"
+    },
+    {
+      "from": "person:nndn",
+      "type": "PERFORMED",
+      "to": "activity:github:potpie-1018",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1018"
+    },
+    {
+      "from": "activity:github:potpie-1018",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1018"
+    },
+    {
+      "from": "activity:github:potpie-1018",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1018 moved adapters/inbound/cli to potpie/cli"
+    },
+    {
+      "from": "activity:github:potpie-1018",
+      "type": "TOUCHED",
+      "to": "service:potpie-daemon",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1018 moved host/ to potpie/daemon"
+    },
+    {
+      "from": "activity:github:potpie-1018",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1018"
+    },
+    {
+      "from": "activity:github:potpie-1018",
+      "type": "TOUCHED",
+      "to": "service:context-core",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1018 created potpie/context-core shipping potpie_context_core"
+    },
+    {
+      "from": "activity:github:potpie-1018",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/cli/main.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1018 host_cli.py renamed to main.py"
+    },
+    {
+      "from": "activity:github:potpie-1018",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/ontology.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1018"
+    },
+    {
+      "from": "activity:github:potpie-1018",
+      "type": "TOUCHED",
+      "to": "code:potpie:pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1018 root dependencies gain typer, rich, fastapi, uvicorn"
+    },
+    {
+      "from": "activity:github:potpie-1018",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1016",
+      "truth": "agent_claim",
+      "confidence": 0.95,
+      "note": "stacked on #1016"
+    },
+    {
+      "from": "activity:github:potpie-1018",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1013",
+      "truth": "agent_claim",
+      "confidence": 0.95,
+      "note": "PR body: supersedes #1013"
+    },
+    {
+      "from": "activity:github:potpie-1018",
+      "type": "MENTIONS",
+      "to": "decision:three-layer-product-engine-core-split",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-1018",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-1017",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1017"
+    },
+    {
+      "from": "activity:github:potpie-1017",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1017"
+    },
+    {
+      "from": "activity:github:potpie-1017",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1017 changed potpie/context-engine/uv.lock"
+    },
+    {
+      "from": "activity:github:potpie-1017",
+      "type": "TOUCHED",
+      "to": "service:potpie-sandbox",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1017 changed potpie/sandbox/uv.lock"
+    },
+    {
+      "from": "activity:github:potpie-1017",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1015",
+      "truth": "agent_claim",
+      "confidence": 0.8,
+      "note": "same Vanta remediation run"
+    },
+    {
+      "from": "activity:github:potpie-1017",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:nndn",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-1016",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1016"
+    },
+    {
+      "from": "activity:github:potpie-1016",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1016"
+    },
+    {
+      "from": "activity:github:potpie-1016",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1016 moved 88 files under potpie/context-engine/src"
+    },
+    {
+      "from": "activity:github:potpie-1016",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1016 split extras"
+    },
+    {
+      "from": "activity:github:potpie-1016",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/api.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1016 new curated public API surface"
+    },
+    {
+      "from": "activity:github:potpie-1016",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1018",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "note": "PR 1 of 3 of the modularization plan; #1018 is stacked on it"
+    },
+    {
+      "from": "activity:github:potpie-1016",
+      "type": "MENTIONS",
+      "to": "decision:three-layer-product-engine-core-split",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-1016",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-1015",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1015"
+    },
+    {
+      "from": "activity:github:potpie-1015",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1015"
+    },
+    {
+      "from": "activity:github:potpie-1015",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1015"
+    },
+    {
+      "from": "activity:github:potpie-1015",
+      "type": "TOUCHED",
+      "to": "service:mom-api",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1015 changed legacy/pyproject.toml"
+    },
+    {
+      "from": "activity:github:potpie-1015",
+      "type": "TOUCHED",
+      "to": "code:potpie:pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1015"
+    },
+    {
+      "from": "activity:github:potpie-1015",
+      "type": "MENTIONS",
+      "to": "policy:vanta-cve-remediation-cadence",
+      "truth": "agent_claim",
+      "confidence": 0.8,
+      "note": "branch cursor/pot-1933-vanta-vulnerability-fixes"
+    },
+    {
+      "from": "activity:github:potpie-1015",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-1014",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1014"
+    },
+    {
+      "from": "activity:github:potpie-1014",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1014"
+    },
+    {
+      "from": "activity:github:potpie-1014",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1014 changed potpie/context-engine/pyproject.toml"
+    },
+    {
+      "from": "activity:github:potpie-1014",
+      "type": "TOUCHED",
+      "to": "code:potpie:uv.lock",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1014"
+    },
+    {
+      "from": "activity:github:potpie-1014",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:mcp",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "note": "commit 9785b3a1 'upgrade MCP past high-severity advisories'"
+    },
+    {
+      "from": "activity:github:potpie-1014",
+      "type": "MENTIONS",
+      "to": "policy:vanta-cve-remediation-cadence",
+      "truth": "agent_claim",
+      "confidence": 0.8,
+      "note": "linear:POT-1930"
+    },
+    {
+      "from": "activity:github:potpie-1014",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-1013",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1013"
+    },
+    {
+      "from": "person:nndn",
+      "type": "PERFORMED",
+      "to": "activity:github:potpie-1013",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1013 approved by nndn before merge"
+    },
+    {
+      "from": "activity:github:potpie-1013",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1013"
+    },
+    {
+      "from": "activity:github:potpie-1013",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1013 created potpie/cli"
+    },
+    {
+      "from": "activity:github:potpie-1013",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1013 removed adapters/inbound/cli from the engine"
+    },
+    {
+      "from": "activity:github:potpie-1013",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/cli/main.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1013"
+    },
+    {
+      "from": "activity:github:potpie-1013",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/cli/commands/graph.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1013"
+    },
+    {
+      "from": "activity:github:potpie-1013",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/cli/commands/pots.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1013"
+    },
+    {
+      "from": "activity:github:potpie-1013",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/cli/read_presenter.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1013"
+    },
+    {
+      "from": "activity:github:potpie-1013",
+      "type": "TOUCHED",
+      "to": "code:potpie:.github/workflows/test.yml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1013"
+    },
+    {
+      "from": "activity:github:potpie-1013",
+      "type": "TOUCHED",
+      "to": "code:potpie:docs/context-graph/cli-flow.md",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1013"
+    },
+    {
+      "from": "activity:github:potpie-1013",
+      "type": "MENTIONS",
+      "to": "decision:three-layer-product-engine-core-split",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-1013",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:AdityaPainuli",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-1009",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1009"
+    },
+    {
+      "from": "activity:github:potpie-1009",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1009"
+    },
+    {
+      "from": "activity:github:potpie-1009",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1009"
+    },
+    {
+      "from": "activity:github:potpie-1009",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/domain/ranking.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1009"
+    },
+    {
+      "from": "activity:github:potpie-1009",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/readers/_common.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1009"
+    },
+    {
+      "from": "activity:github:potpie-1009",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/mcp/server.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1009 _parse_as_of_iso"
+    },
+    {
+      "from": "activity:github:potpie-1009",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-issue-1008",
+      "truth": "agent_claim",
+      "confidence": 0.95,
+      "note": "fixes the reporter's own issue"
+    },
+    {
+      "from": "activity:github:potpie-1009",
+      "type": "MENTIONS",
+      "to": "bug_pattern:naive-as-of-tz-typeerror",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-1009",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:AdityaPainuli",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-1006",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1006"
+    },
+    {
+      "from": "activity:github:potpie-1006",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1006"
+    },
+    {
+      "from": "activity:github:potpie-1006",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1006"
+    },
+    {
+      "from": "activity:github:potpie-1006",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1006"
+    },
+    {
+      "from": "activity:github:potpie-1006",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/services/graph_service.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1006"
+    },
+    {
+      "from": "activity:github:potpie-1006",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-issue-996",
+      "truth": "agent_claim",
+      "confidence": 0.95,
+      "note": "branch fix/996-resolve-intent-detection"
+    },
+    {
+      "from": "activity:github:potpie-1006",
+      "type": "MENTIONS",
+      "to": "feature:mcp-context-tools",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-1006",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:nndn",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-1002",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1002"
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1002"
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1002"
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "TOUCHED",
+      "to": "datastore:falkordb-lite",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1002 changed falkordb_backend.py, falkordb_reader.py, falkordb_writer.py"
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/falkordb_reader.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1002"
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/falkordb_writer.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1002"
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/backends/falkordb_backend.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1002"
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/adapters/outbound/intelligence/local_embedder.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1002 default flips to sentence-transformers"
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/workbench_service.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1002"
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/services/setup_orchestrator.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1002"
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "MENTIONS",
+      "to": "bug_pattern:falkordb-node-id-zero-claim-invisibility",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:sentence-transformers",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "MENTIONS",
+      "to": "decision:falkordb-lite-embedded-zero-setup-default",
+      "truth": "agent_claim",
+      "confidence": 0.8
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-1000",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1000"
+    },
+    {
+      "from": "activity:github:potpie-1000",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1000"
+    },
+    {
+      "from": "activity:github:potpie-1000",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1000"
+    },
+    {
+      "from": "activity:github:potpie-1000",
+      "type": "TOUCHED",
+      "to": "service:mom-api",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1000 changed legacy/pyproject.toml and legacy/uv.lock"
+    },
+    {
+      "from": "activity:github:potpie-1000",
+      "type": "TOUCHED",
+      "to": "service:potpie-sandbox",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1000"
+    },
+    {
+      "from": "activity:github:potpie-1000",
+      "type": "TOUCHED",
+      "to": "code:potpie:pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1000"
+    },
+    {
+      "from": "activity:github:potpie-1000",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:torch",
+      "truth": "agent_claim",
+      "confidence": 0.95,
+      "note": "bump to 2.12.1"
+    },
+    {
+      "from": "activity:github:potpie-1000",
+      "type": "MENTIONS",
+      "to": "policy:vanta-cve-remediation-cadence",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-1000",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:yashkrishan",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-999",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#999"
+    },
+    {
+      "from": "person:nndn",
+      "type": "PERFORMED",
+      "to": "activity:github:potpie-999",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#999 approved 2026-07-13"
+    },
+    {
+      "from": "activity:github:potpie-999",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#999"
+    },
+    {
+      "from": "activity:github:potpie-999",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#999"
+    },
+    {
+      "from": "activity:github:potpie-999",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/readers/infra_topology.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#999"
+    },
+    {
+      "from": "activity:github:potpie-999",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/readers/_common.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#999"
+    },
+    {
+      "from": "activity:github:potpie-999",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/readers/timeline_reader.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#999"
+    },
+    {
+      "from": "activity:github:potpie-999",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/graph_workbench_ontology.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#999"
+    },
+    {
+      "from": "activity:github:potpie-999",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-issue-981",
+      "truth": "agent_claim",
+      "confidence": 0.7,
+      "note": "same reader-labelling surface"
+    },
+    {
+      "from": "activity:github:potpie-999",
+      "type": "MENTIONS",
+      "to": "feature:infra-topology",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-999",
+      "type": "MENTIONS",
+      "to": "feature:semantic-search-local-embedder",
+      "truth": "agent_claim",
+      "confidence": 0.8
+    },
+    {
+      "from": "activity:github:potpie-999",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Nih1tGupta",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-998",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#998"
+    },
+    {
+      "from": "activity:github:potpie-998",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#998"
+    },
+    {
+      "from": "activity:github:potpie-998",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#998"
+    },
+    {
+      "from": "activity:github:potpie-998",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-issue-997",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:github:potpie-998",
+      "type": "MENTIONS",
+      "to": "feature:gitlab-cli-integration",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:github:potpie-998",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:BrhKmr23",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-995",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#995"
+    },
+    {
+      "from": "person:BrhKmr23",
+      "type": "PERFORMED",
+      "to": "activity:github:potpie-995",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#995 merged 2026-07-14"
+    },
+    {
+      "from": "activity:github:potpie-995",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#995"
+    },
+    {
+      "from": "activity:github:potpie-995",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#995"
+    },
+    {
+      "from": "activity:github:potpie-995",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#995"
+    },
+    {
+      "from": "activity:github:potpie-995",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/services/read_orchestrator.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#995"
+    },
+    {
+      "from": "activity:github:potpie-995",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/services/graph_service.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#995"
+    },
+    {
+      "from": "activity:github:potpie-995",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/readers/timeline_reader.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#995"
+    },
+    {
+      "from": "activity:github:potpie-995",
+      "type": "TOUCHED",
+      "to": "code:potpie:docs/context-graph/cli-flow.md",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#995"
+    },
+    {
+      "from": "activity:github:potpie-995",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-issue-994",
+      "truth": "agent_claim",
+      "confidence": 0.95,
+      "note": "issue closed one second after merge"
+    },
+    {
+      "from": "activity:github:potpie-995",
+      "type": "MENTIONS",
+      "to": "bug_pattern:graph-read-flags-accepted-but-ignored",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-995",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Nih1tGupta",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-993",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#993"
+    },
+    {
+      "from": "activity:github:potpie-993",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#993"
+    },
+    {
+      "from": "activity:github:potpie-993",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#993"
+    },
+    {
+      "from": "activity:github:potpie-993",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-issue-992",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:github:potpie-993",
+      "type": "MENTIONS",
+      "to": "bug_pattern:cli-domain-error-exit-zero",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-993",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-991",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#991"
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "PERFORMED",
+      "to": "activity:github:potpie-991",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#991 merged 2026-07-03"
+    },
+    {
+      "from": "activity:github:potpie-991",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#991"
+    },
+    {
+      "from": "activity:github:potpie-991",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#991"
+    },
+    {
+      "from": "activity:github:potpie-991",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#991"
+    },
+    {
+      "from": "activity:github:potpie-991",
+      "type": "TOUCHED",
+      "to": "code:potpie:pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#991"
+    },
+    {
+      "from": "activity:github:potpie-991",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#991"
+    },
+    {
+      "from": "activity:github:potpie-991",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:BrhKmr23",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-990",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#990"
+    },
+    {
+      "from": "activity:github:potpie-990",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#990"
+    },
+    {
+      "from": "activity:github:potpie-990",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#990"
+    },
+    {
+      "from": "activity:github:potpie-990",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/cli/commands/pots.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#990"
+    },
+    {
+      "from": "activity:github:potpie-990",
+      "type": "TOUCHED",
+      "to": "code:potpie:docs/context-graph/cli-flow.md",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#990"
+    },
+    {
+      "from": "activity:github:potpie-990",
+      "type": "MENTIONS",
+      "to": "feature:agent-skills-bundle",
+      "truth": "agent_claim",
+      "confidence": 0.85,
+      "note": "rewrote potpie-source-ingestion, potpie-change-timeline and potpie-graph skill templates"
+    },
+    {
+      "from": "activity:github:potpie-990",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-989",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#989"
+    },
+    {
+      "from": "activity:github:potpie-989",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#989"
+    },
+    {
+      "from": "activity:github:potpie-989",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#989"
+    },
+    {
+      "from": "activity:github:potpie-989",
+      "type": "TOUCHED",
+      "to": "service:mom-api",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#989 changed legacy/app/modules/code_provider and sandbox client"
+    },
+    {
+      "from": "activity:github:potpie-989",
+      "type": "TOUCHED",
+      "to": "code:potpie:.pre-commit-config.yaml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#989"
+    },
+    {
+      "from": "activity:github:potpie-989",
+      "type": "TOUCHED",
+      "to": "code:potpie:.github/workflows/test.yml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#989"
+    },
+    {
+      "from": "activity:github:potpie-989",
+      "type": "MENTIONS",
+      "to": "policy:pre-commit-gate-required",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-989",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:nndn",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-985",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#985"
+    },
+    {
+      "from": "activity:github:potpie-985",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#985"
+    },
+    {
+      "from": "activity:github:potpie-985",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#985"
+    },
+    {
+      "from": "activity:github:potpie-985",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/cli/commands/graph.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#985"
+    },
+    {
+      "from": "activity:github:potpie-985",
+      "type": "TOUCHED",
+      "to": "code:potpie:docs/context-graph/cli-flow.md",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#985"
+    },
+    {
+      "from": "activity:github:potpie-985",
+      "type": "MENTIONS",
+      "to": "feature:agent-skills-bundle",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-985",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:nndn",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-976",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#976"
+    },
+    {
+      "from": "activity:github:potpie-976",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#976"
+    },
+    {
+      "from": "activity:github:potpie-976",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#976"
+    },
+    {
+      "from": "activity:github:potpie-976",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/adapters/outbound/intelligence/local_embedder.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#976"
+    },
+    {
+      "from": "activity:github:potpie-976",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/services/setup_orchestrator.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#976"
+    },
+    {
+      "from": "activity:github:potpie-976",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/cli/commands/bootstrap.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#976"
+    },
+    {
+      "from": "activity:github:potpie-976",
+      "type": "MENTIONS",
+      "to": "feature:semantic-search-local-embedder",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-976",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:sentence-transformers",
+      "truth": "agent_claim",
+      "confidence": 0.8
+    },
+    {
+      "from": "activity:github:potpie-976",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-974",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#974"
+    },
+    {
+      "from": "activity:github:potpie-974",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#974"
+    },
+    {
+      "from": "activity:github:potpie-974",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#974"
+    },
+    {
+      "from": "activity:github:potpie-974",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/adapters/outbound/pots/local_pot_store.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#974 local_pot_store.py:85-92"
+    },
+    {
+      "from": "activity:github:potpie-974",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/cli/commands/pots.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#974"
+    },
+    {
+      "from": "activity:github:potpie-974",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-issue-973",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:github:potpie-974",
+      "type": "MENTIONS",
+      "to": "feature:pot-and-source-management-cli",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-974",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-972",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#972"
+    },
+    {
+      "from": "activity:github:potpie-972",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#972"
+    },
+    {
+      "from": "activity:github:potpie-972",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#972"
+    },
+    {
+      "from": "activity:github:potpie-972",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/cli/commands/pots.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#972"
+    },
+    {
+      "from": "activity:github:potpie-972",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-issue-978",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-972",
+      "type": "MENTIONS",
+      "to": "feature:potpie-setup-wizard",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-972",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-968",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#968"
+    },
+    {
+      "from": "activity:github:potpie-968",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#968"
+    },
+    {
+      "from": "activity:github:potpie-968",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#968"
+    },
+    {
+      "from": "activity:github:potpie-968",
+      "type": "MENTIONS",
+      "to": "adapter:cli-auth:linear-oauth",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-968",
+      "type": "MENTIONS",
+      "to": "feature:cli-integration-auth",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-968",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-964",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#964"
+    },
+    {
+      "from": "activity:github:potpie-964",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#964"
+    },
+    {
+      "from": "activity:github:potpie-964",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#964"
+    },
+    {
+      "from": "activity:github:potpie-964",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-issue-992",
+      "truth": "agent_claim",
+      "confidence": 0.7,
+      "note": "same machine-readable-output contract, exit-code half"
+    },
+    {
+      "from": "activity:github:potpie-964",
+      "type": "MENTIONS",
+      "to": "policy:agent-safe-cli-output",
+      "truth": "agent_claim",
+      "confidence": 0.8
+    },
+    {
+      "from": "activity:github:potpie-964",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:nndn",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-962",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#962"
+    },
+    {
+      "from": "activity:github:potpie-962",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#962"
+    },
+    {
+      "from": "activity:github:potpie-962",
+      "type": "TOUCHED",
+      "to": "code:potpie:docs/context-graph/cli-flow.md",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#962"
+    },
+    {
+      "from": "activity:github:potpie-962",
+      "type": "MENTIONS",
+      "to": "document:cg-ontology",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-962",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-955",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#955"
+    },
+    {
+      "from": "activity:github:potpie-955",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#955"
+    },
+    {
+      "from": "activity:github:potpie-955",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#955"
+    },
+    {
+      "from": "activity:github:potpie-955",
+      "type": "TOUCHED",
+      "to": "service:potpie-daemon",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#955 changed the daemon launcher"
+    },
+    {
+      "from": "activity:github:potpie-955",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/cli/telemetry/settings.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#955"
+    },
+    {
+      "from": "activity:github:potpie-955",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/daemon/process/launcher.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#955"
+    },
+    {
+      "from": "activity:github:potpie-955",
+      "type": "MENTIONS",
+      "to": "feature:telemetry",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-955",
+      "type": "MENTIONS",
+      "to": "adapter:telemetry:posthog",
+      "truth": "agent_claim",
+      "confidence": 0.8
+    },
+    {
+      "from": "activity:github:potpie-955",
+      "type": "MENTIONS",
+      "to": "adapter:telemetry:sentry",
+      "truth": "agent_claim",
+      "confidence": 0.8
+    },
+    {
+      "from": "activity:github:potpie-955",
+      "type": "IN_PERIOD",
+      "to": "period:2026-06",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-953",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#953"
+    },
+    {
+      "from": "activity:github:potpie-953",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#953"
+    },
+    {
+      "from": "activity:github:potpie-953",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#953"
+    },
+    {
+      "from": "activity:github:potpie-953",
+      "type": "TOUCHED",
+      "to": "service:potpie-daemon",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#953"
+    },
+    {
+      "from": "activity:github:potpie-953",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1013",
+      "truth": "agent_claim",
+      "confidence": 0.85,
+      "note": "closed unmerged; rebuilt as #1013"
+    },
+    {
+      "from": "activity:github:potpie-953",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1019",
+      "truth": "agent_claim",
+      "confidence": 0.85,
+      "note": "daemon half rebuilt as #1019"
+    },
+    {
+      "from": "activity:github:potpie-953",
+      "type": "MENTIONS",
+      "to": "decision:three-layer-product-engine-core-split",
+      "truth": "agent_claim",
+      "confidence": 0.75
+    },
+    {
+      "from": "activity:github:potpie-953",
+      "type": "IN_PERIOD",
+      "to": "period:2026-06",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-952",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#952"
+    },
+    {
+      "from": "activity:github:potpie-952",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#952"
+    },
+    {
+      "from": "activity:github:potpie-952",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#952"
+    },
+    {
+      "from": "activity:github:potpie-952",
+      "type": "TOUCHED",
+      "to": "service:potpie-daemon",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#952"
+    },
+    {
+      "from": "activity:github:potpie-952",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/cli/main.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#952"
+    },
+    {
+      "from": "activity:github:potpie-952",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/daemon/process/launcher.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#952"
+    },
+    {
+      "from": "activity:github:potpie-952",
+      "type": "MENTIONS",
+      "to": "config:cli:POTPIE_ENVIRONMENT",
+      "truth": "agent_claim",
+      "confidence": 0.75
+    },
+    {
+      "from": "activity:github:potpie-952",
+      "type": "IN_PERIOD",
+      "to": "period:2026-06",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:jdyaberi-pp",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-950",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#950"
+    },
+    {
+      "from": "activity:github:potpie-950",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#950"
+    },
+    {
+      "from": "activity:github:potpie-950",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#950"
+    },
+    {
+      "from": "activity:github:potpie-950",
+      "type": "TOUCHED",
+      "to": "code:potpie:.github/workflows/test.yml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#950"
+    },
+    {
+      "from": "activity:github:potpie-950",
+      "type": "TOUCHED",
+      "to": "code:potpie:tests/integration/test_premerge_cli_journey.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#950"
+    },
+    {
+      "from": "activity:github:potpie-950",
+      "type": "MENTIONS",
+      "to": "policy:premerge-cli-journey-gate",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-950",
+      "type": "IN_PERIOD",
+      "to": "period:2026-06",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-943",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#943"
+    },
+    {
+      "from": "activity:github:potpie-943",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#943"
+    },
+    {
+      "from": "activity:github:potpie-943",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#943"
+    },
+    {
+      "from": "activity:github:potpie-943",
+      "type": "TOUCHED",
+      "to": "service:potpie-daemon",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#943 points users at potpie daemon logs"
+    },
+    {
+      "from": "activity:github:potpie-943",
+      "type": "TOUCHED",
+      "to": "datastore:falkordb-lite",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#943 surfaces the FalkorDBLite database_path"
+    },
+    {
+      "from": "activity:github:potpie-943",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-issue-977",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:github:potpie-943",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:AdityaPainuli",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-issue-1008",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1008"
+    },
+    {
+      "from": "activity:github:potpie-issue-1008",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1008"
+    },
+    {
+      "from": "activity:github:potpie-issue-1008",
+      "type": "TOUCHED",
+      "to": "service:potpie-mcp-server",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1008 repro targets adapters/inbound/mcp/server.py"
+    },
+    {
+      "from": "activity:github:potpie-issue-1008",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/mcp/server.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1008 _parse_as_of_iso at line 51"
+    },
+    {
+      "from": "activity:github:potpie-issue-1008",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/domain/ranking.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1008 RankingService.rank line 120"
+    },
+    {
+      "from": "activity:github:potpie-issue-1008",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/readers/_common.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1008 TaskContext(now=req.as_of) line 51"
+    },
+    {
+      "from": "activity:github:potpie-issue-1008",
+      "type": "MENTIONS",
+      "to": "bug_pattern:naive-as-of-tz-typeerror",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:github:potpie-issue-1008",
+      "type": "MENTIONS",
+      "to": "api_contract:potpie-mcp:tool:context_resolve",
+      "truth": "agent_claim",
+      "confidence": 0.8
+    },
+    {
+      "from": "activity:github:potpie-issue-1008",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:AdityaPainuli",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-issue-1007",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1007"
+    },
+    {
+      "from": "activity:github:potpie-issue-1007",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1007"
+    },
+    {
+      "from": "activity:github:potpie-issue-1007",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1007"
+    },
+    {
+      "from": "activity:github:potpie-issue-1007",
+      "type": "TOUCHED",
+      "to": "service:potpie-mcp-server",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1007 context_resolve exposes the same inert mode parameter"
+    },
+    {
+      "from": "activity:github:potpie-issue-1007",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/services/graph_service.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1007 graph_service.py:125 and :139 metadata echoes"
+    },
+    {
+      "from": "activity:github:potpie-issue-1007",
+      "type": "TOUCHED",
+      "to": "code:potpie:docs/context-graph/cli-flow.md",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1007 documents --mode fast|balanced|verify|deep"
+    },
+    {
+      "from": "activity:github:potpie-issue-1007",
+      "type": "MENTIONS",
+      "to": "bug_pattern:graph-read-flags-accepted-but-ignored",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-issue-1007",
+      "type": "MENTIONS",
+      "to": "feature:mcp-context-tools",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-issue-1007",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Nih1tGupta",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-issue-997",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#997"
+    },
+    {
+      "from": "activity:github:potpie-issue-997",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#997"
+    },
+    {
+      "from": "activity:github:potpie-issue-997",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#997"
+    },
+    {
+      "from": "activity:github:potpie-issue-997",
+      "type": "MENTIONS",
+      "to": "feature:gitlab-cli-integration",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:github:potpie-issue-997",
+      "type": "MENTIONS",
+      "to": "feature:cli-integration-auth",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-issue-997",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-998",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-issue-997",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Nih1tGupta",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-issue-996",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#996"
+    },
+    {
+      "from": "activity:github:potpie-issue-996",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#996"
+    },
+    {
+      "from": "activity:github:potpie-issue-996",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#996"
+    },
+    {
+      "from": "activity:github:potpie-issue-996",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#996"
+    },
+    {
+      "from": "activity:github:potpie-issue-996",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/services/read_orchestrator.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#996 intent selects include families on the read path"
+    },
+    {
+      "from": "activity:github:potpie-issue-996",
+      "type": "MENTIONS",
+      "to": "feature:mcp-context-tools",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-issue-996",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1006",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:github:potpie-issue-996",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:BrhKmr23",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-issue-994",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#994"
+    },
+    {
+      "from": "activity:github:potpie-issue-994",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#994"
+    },
+    {
+      "from": "activity:github:potpie-issue-994",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#994"
+    },
+    {
+      "from": "activity:github:potpie-issue-994",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/readers/timeline_reader.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#994 timeline --repo/--query ignored"
+    },
+    {
+      "from": "activity:github:potpie-issue-994",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/readers/coding_preferences.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#994 preferences --scope ignored"
+    },
+    {
+      "from": "activity:github:potpie-issue-994",
+      "type": "MENTIONS",
+      "to": "bug_pattern:graph-read-flags-accepted-but-ignored",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:github:potpie-issue-994",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-995",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:github:potpie-issue-994",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Nih1tGupta",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-issue-992",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#992"
+    },
+    {
+      "from": "activity:github:potpie-issue-992",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#992"
+    },
+    {
+      "from": "activity:github:potpie-issue-992",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#992"
+    },
+    {
+      "from": "activity:github:potpie-issue-992",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/cli/main.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#992 exit-code handling lives on the root CLI entrypoint"
+    },
+    {
+      "from": "activity:github:potpie-issue-992",
+      "type": "MENTIONS",
+      "to": "bug_pattern:cli-domain-error-exit-zero",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:github:potpie-issue-992",
+      "type": "MENTIONS",
+      "to": "policy:agent-safe-cli-output",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-issue-992",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-993",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-issue-992",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Nih1tGupta",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-issue-981",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#981"
+    },
+    {
+      "from": "activity:github:potpie-issue-981",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#981"
+    },
+    {
+      "from": "activity:github:potpie-issue-981",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#981"
+    },
+    {
+      "from": "activity:github:potpie-issue-981",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/readers/infra_topology.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#981"
+    },
+    {
+      "from": "activity:github:potpie-issue-981",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/readers/features.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#981 PROVIDES/IMPLEMENTED_IN belong here"
+    },
+    {
+      "from": "activity:github:potpie-issue-981",
+      "type": "MENTIONS",
+      "to": "feature:infra-topology",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-issue-981",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-999",
+      "truth": "agent_claim",
+      "confidence": 0.7
+    },
+    {
+      "from": "activity:github:potpie-issue-981",
+      "type": "IN_PERIOD",
+      "to": "period:2026-06",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Nih1tGupta",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-issue-978",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#978"
+    },
+    {
+      "from": "activity:github:potpie-issue-978",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#978"
+    },
+    {
+      "from": "activity:github:potpie-issue-978",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#978"
+    },
+    {
+      "from": "activity:github:potpie-issue-978",
+      "type": "MENTIONS",
+      "to": "feature:potpie-setup-wizard",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-issue-978",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-972",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-issue-978",
+      "type": "IN_PERIOD",
+      "to": "period:2026-06",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-issue-977",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#977"
+    },
+    {
+      "from": "activity:github:potpie-issue-977",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#977"
+    },
+    {
+      "from": "activity:github:potpie-issue-977",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#977"
+    },
+    {
+      "from": "activity:github:potpie-issue-977",
+      "type": "TOUCHED",
+      "to": "service:potpie-daemon",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#977 falkordb_lite runs embedded inside the daemon"
+    },
+    {
+      "from": "activity:github:potpie-issue-977",
+      "type": "TOUCHED",
+      "to": "datastore:falkordb-lite",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#977"
+    },
+    {
+      "from": "activity:github:potpie-issue-977",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-943",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:github:potpie-issue-977",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "AUTHORED",
+      "to": "activity:github:potpie-issue-973",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#973"
+    },
+    {
+      "from": "activity:github:potpie-issue-973",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#973"
+    },
+    {
+      "from": "activity:github:potpie-issue-973",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#973"
+    },
+    {
+      "from": "activity:github:potpie-issue-973",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/adapters/outbound/pots/local_pot_store.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#973 cites local_pot_store.py:85-92"
+    },
+    {
+      "from": "activity:github:potpie-issue-973",
+      "type": "MENTIONS",
+      "to": "feature:pot-and-source-management-cli",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-issue-973",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-974",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:github:potpie-issue-973",
+      "type": "IN_PERIOD",
+      "to": "period:2026-06",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:nndn",
+      "type": "AUTHORED",
+      "to": "activity:git:potpie-a72b8ac",
+      "truth": "timeline_event",
+      "evidence": "git:potpie-ai/potpie@a72b8ac2"
+    },
+    {
+      "from": "activity:git:potpie-a72b8ac",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@a72b8ac2"
+    },
+    {
+      "from": "activity:git:potpie-a72b8ac",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@a72b8ac2"
+    },
+    {
+      "from": "activity:git:potpie-a72b8ac",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/api.py",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@a72b8ac2"
+    },
+    {
+      "from": "activity:git:potpie-a72b8ac",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1016",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:git:potpie-a72b8ac",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:nndn",
+      "type": "AUTHORED",
+      "to": "activity:git:potpie-efe87dc",
+      "truth": "timeline_event",
+      "evidence": "git:potpie-ai/potpie@efe87dc9"
+    },
+    {
+      "from": "activity:git:potpie-efe87dc",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@efe87dc9"
+    },
+    {
+      "from": "activity:git:potpie-efe87dc",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@efe87dc9"
+    },
+    {
+      "from": "activity:git:potpie-efe87dc",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-engine/pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@efe87dc9"
+    },
+    {
+      "from": "activity:git:potpie-efe87dc",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1016",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:git:potpie-efe87dc",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:nndn",
+      "type": "AUTHORED",
+      "to": "activity:git:potpie-7241e62",
+      "truth": "timeline_event",
+      "evidence": "git:potpie-ai/potpie@7241e62c"
+    },
+    {
+      "from": "activity:git:potpie-7241e62",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@7241e62c"
+    },
+    {
+      "from": "activity:git:potpie-7241e62",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@7241e62c"
+    },
+    {
+      "from": "activity:git:potpie-7241e62",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/cli/main.py",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@7241e62c"
+    },
+    {
+      "from": "activity:git:potpie-7241e62",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1018",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:git:potpie-7241e62",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:nndn",
+      "type": "AUTHORED",
+      "to": "activity:git:potpie-b85bbf5",
+      "truth": "timeline_event",
+      "evidence": "git:potpie-ai/potpie@b85bbf5e"
+    },
+    {
+      "from": "activity:git:potpie-b85bbf5",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@b85bbf5e"
+    },
+    {
+      "from": "activity:git:potpie-b85bbf5",
+      "type": "TOUCHED",
+      "to": "service:potpie-daemon",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@b85bbf5e"
+    },
+    {
+      "from": "activity:git:potpie-b85bbf5",
+      "type": "TOUCHED",
+      "to": "service:potpie-mcp-server",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@b85bbf5e"
+    },
+    {
+      "from": "activity:git:potpie-b85bbf5",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/daemon/main.py",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@b85bbf5e"
+    },
+    {
+      "from": "activity:git:potpie-b85bbf5",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1018",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:git:potpie-b85bbf5",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:nndn",
+      "type": "AUTHORED",
+      "to": "activity:git:potpie-e61b9bb",
+      "truth": "timeline_event",
+      "evidence": "git:potpie-ai/potpie@e61b9bbd"
+    },
+    {
+      "from": "activity:git:potpie-e61b9bb",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@e61b9bbd"
+    },
+    {
+      "from": "activity:git:potpie-e61b9bb",
+      "type": "TOUCHED",
+      "to": "service:context-core",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@e61b9bbd"
+    },
+    {
+      "from": "activity:git:potpie-e61b9bb",
+      "type": "TOUCHED",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/ontology.py",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@e61b9bbd"
+    },
+    {
+      "from": "activity:git:potpie-e61b9bb",
+      "type": "MENTIONS",
+      "to": "document:cg-ontology",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:git:potpie-e61b9bb",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1018",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:git:potpie-e61b9bb",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:nndn",
+      "type": "AUTHORED",
+      "to": "activity:git:potpie-6f29b80",
+      "truth": "timeline_event",
+      "evidence": "git:potpie-ai/potpie@6f29b80a"
+    },
+    {
+      "from": "activity:git:potpie-6f29b80",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@6f29b80a"
+    },
+    {
+      "from": "activity:git:potpie-6f29b80",
+      "type": "TOUCHED",
+      "to": "service:context-core",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@6f29b80a"
+    },
+    {
+      "from": "activity:git:potpie-6f29b80",
+      "type": "MENTIONS",
+      "to": "decision:three-layer-product-engine-core-split",
+      "truth": "agent_claim",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:git:potpie-6f29b80",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "AUTHORED",
+      "to": "activity:git:potpie-a191a5e",
+      "truth": "timeline_event",
+      "evidence": "git:potpie-ai/potpie@a191a5ea"
+    },
+    {
+      "from": "activity:git:potpie-a191a5e",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@a191a5ea"
+    },
+    {
+      "from": "activity:git:potpie-a191a5e",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@a191a5ea"
+    },
+    {
+      "from": "activity:git:potpie-a191a5e",
+      "type": "TOUCHED",
+      "to": "code:potpie:pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@a191a5ea"
+    },
+    {
+      "from": "activity:git:potpie-a191a5e",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-991",
+      "truth": "agent_claim",
+      "confidence": 0.95
+    },
+    {
+      "from": "activity:git:potpie-a191a5e",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "AUTHORED",
+      "to": "activity:git:potpie-5af8ea5",
+      "truth": "timeline_event",
+      "evidence": "git:potpie-ai/potpie@5af8ea5f"
+    },
+    {
+      "from": "activity:git:potpie-5af8ea5",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@5af8ea5f"
+    },
+    {
+      "from": "activity:git:potpie-5af8ea5",
+      "type": "TOUCHED",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@5af8ea5f"
+    },
+    {
+      "from": "activity:git:potpie-5af8ea5",
+      "type": "TOUCHED",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@5af8ea5f"
+    },
+    {
+      "from": "activity:git:potpie-5af8ea5",
+      "type": "MENTIONS",
+      "to": "feature:pot-and-source-management-cli",
+      "truth": "agent_claim",
+      "confidence": 0.8
+    },
+    {
+      "from": "activity:git:potpie-5af8ea5",
+      "type": "IN_PERIOD",
+      "to": "period:2026-06",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "AUTHORED",
+      "to": "activity:git:potpie-dbc92c2",
+      "truth": "timeline_event",
+      "evidence": "git:potpie-ai/potpie@dbc92c23"
+    },
+    {
+      "from": "activity:git:potpie-dbc92c2",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@dbc92c23"
+    },
+    {
+      "from": "activity:git:potpie-dbc92c2",
+      "type": "TOUCHED",
+      "to": "service:mom-api",
+      "truth": "source_observation",
+      "evidence": "git:potpie-ai/potpie@dbc92c23 deprecated the hosted FastAPI server"
+    },
+    {
+      "from": "activity:git:potpie-dbc92c2",
+      "type": "MENTIONS",
+      "to": "decision:local-first-cli-pivot",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:git:potpie-dbc92c2",
+      "type": "IN_PERIOD",
+      "to": "period:2026-06",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:nndn",
+      "type": "PERFORMED",
+      "to": "activity:github:potpie-review-1013-nndn",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#1013 review APPROVED 2026-07-17T13:03:20Z"
+    },
+    {
+      "from": "activity:github:potpie-review-1013-nndn",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1013"
+    },
+    {
+      "from": "activity:github:potpie-review-1013-nndn",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1013",
+      "truth": "agent_claim",
+      "confidence": 0.98
+    },
+    {
+      "from": "activity:github:potpie-review-1013-nndn",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1018",
+      "truth": "agent_claim",
+      "confidence": 0.75,
+      "note": "approved the smaller slice while his own superseding PR was open"
+    },
+    {
+      "from": "activity:github:potpie-review-1013-nndn",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:potpie-review-1013-codex",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1013"
+    },
+    {
+      "from": "activity:github:potpie-review-1013-codex",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-1013",
+      "truth": "agent_claim",
+      "confidence": 0.98
+    },
+    {
+      "from": "activity:github:potpie-review-1013-codex",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:nndn",
+      "type": "PERFORMED",
+      "to": "activity:github:potpie-review-999-nndn",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#999 review APPROVED 2026-07-13T11:38:39Z"
+    },
+    {
+      "from": "activity:github:potpie-review-999-nndn",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#999"
+    },
+    {
+      "from": "activity:github:potpie-review-999-nndn",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-999",
+      "truth": "agent_claim",
+      "confidence": 0.98
+    },
+    {
+      "from": "activity:github:potpie-review-999-nndn",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:potpie-review-999-coderabbit",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#999"
+    },
+    {
+      "from": "activity:github:potpie-review-999-coderabbit",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-999",
+      "truth": "agent_claim",
+      "confidence": 0.98
+    },
+    {
+      "from": "activity:github:potpie-review-999-coderabbit",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:BrhKmr23",
+      "type": "PERFORMED",
+      "to": "activity:github:potpie-review-995-brhkmr",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie#995 review COMMENTED 2026-07-14T09:08:12Z"
+    },
+    {
+      "from": "activity:github:potpie-review-995-brhkmr",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#995"
+    },
+    {
+      "from": "activity:github:potpie-review-995-brhkmr",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-995",
+      "truth": "agent_claim",
+      "confidence": 0.98
+    },
+    {
+      "from": "activity:github:potpie-review-995-brhkmr",
+      "type": "MENTIONS",
+      "to": "activity:github:potpie-issue-994",
+      "truth": "agent_claim",
+      "confidence": 0.85
+    },
+    {
+      "from": "activity:github:potpie-review-995-brhkmr",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    }
+  ]
+}

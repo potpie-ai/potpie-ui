@@ -28,10 +28,10 @@ import {
   DEMO_PROJECT_ID,
   DEMO_QUESTION_RUN_ID,
   DEMO_REPO_BRANCH,
-  DEMO_REPO_FULL_NAME,
-  DEMO_REPO_ID,
+  DEMO_REPO_ENTRY,
   getDemoCreateRecipeResponse,
   isDemoBuildFlowActive,
+  isDemoRepoName,
   isRedisDlqDemoRequest,
   resetDemoBuildFlowState,
 } from "@/lib/mock/demoBuildFlow";
@@ -150,26 +150,18 @@ export default function NewChatPage() {
     retryOnMount: false,
   });
 
+  // The demo repo is always present here — regardless of search, loading or backend
+  // availability — so selecting it always resolves on submit. IdeaInputCard owns the
+  // decision of when to actually show it in the dropdown.
   const repositories = useMemo(() => {
     const repos: Repo[] = allRepositories?.length ? allRepositories : [];
-    const hasDemoRepo = repos.some(
-      (repo: Repo) =>
-        (repo.full_name || repo.name)?.trim().toLowerCase() ===
-        DEMO_REPO_FULL_NAME
-    );
-    const demoMatchesSearch =
-      !repoSearch ||
-      DEMO_REPO_FULL_NAME.includes(repoSearch.trim().toLowerCase());
-    if (hasDemoRepo || !demoMatchesSearch) return repos;
-    const demoRepo: Repo = {
-      id: DEMO_REPO_ID,
-      name: "redis",
-      full_name: DEMO_REPO_FULL_NAME,
-      url: `https://github.com/${DEMO_REPO_FULL_NAME}`,
-      default_branch: DEMO_REPO_BRANCH,
-    };
-    return [demoRepo, ...repos];
-  }, [allRepositories, repoSearch]);
+    return [
+      DEMO_REPO_ENTRY as Repo,
+      ...repos.filter(
+        (repo: Repo) => !isDemoRepoName(repo.full_name || repo.name)
+      ),
+    ];
+  }, [allRepositories]);
 
   const selectedRepoName = useMemo(() => {
     if (!state.selectedRepo || !repositories.length) return null;
@@ -184,7 +176,7 @@ export default function NewChatPage() {
     queryKey: ["user-branch", selectedRepoName, branchSearch],
     queryFn: () => {
       if (!selectedRepoName) return Promise.resolve([]);
-      if (selectedRepoName.trim().toLowerCase() === DEMO_REPO_FULL_NAME) {
+      if (isDemoRepoName(selectedRepoName)) {
         if (!state.selectedBranch) {
           setState((prev) => ({ ...prev, selectedBranch: DEMO_REPO_BRANCH }));
         }

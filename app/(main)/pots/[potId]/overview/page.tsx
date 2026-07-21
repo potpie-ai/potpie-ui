@@ -4,7 +4,8 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import PotService from "@/services/PotService";
 import { toast } from "@/components/ui/sonner";
-import PotOverview from "../../components/PotOverview";
+import { PotPage } from "@/app/(main)/pots/components/kit";
+import PotOverview, { PotDangerZone } from "../../components/PotOverview";
 import PotContextQueryCard from "../../components/PotContextQueryCard";
 import { usePotContext } from "../PotContext";
 
@@ -24,9 +25,12 @@ export default function PotOverviewPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <PotOverview pot={pot} isOwner={isOwner} onArchive={handleArchive} />
-      <PotContextQueryCard potId={pot.id} />
-    </div>
+    <PotPage width="content" className="space-y-8">
+      <PotOverview pot={pot} />
+      <div className="border-t border-border/60 pt-8">
+        <PotContextQueryCard potId={pot.id} />
+      </div>
+      <PotDangerZone pot={pot} isOwner={isOwner} onArchive={handleArchive} />
+    </PotPage>
   );
 }

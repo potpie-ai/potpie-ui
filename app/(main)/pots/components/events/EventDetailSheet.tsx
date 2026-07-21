@@ -1,8 +1,8 @@
 "use client";
 
-// Side-panel detail view for a single event. Replaces the accordion expansion.
-// Holds three tabs (Summary, Activity, Payload). In Phase 1 the Activity tab
-// becomes the live-streaming surface; Phase 0 just shows persisted data.
+// Side-panel detail view for a single event. Holds three tabs (Summary,
+// Activity, Payload); the Activity tab is the live-streaming surface.
+// Metadata renders as a DefList, payloads as mono blocks with copy buttons.
 
 import { useMemo } from "react";
 import { RotateCcw } from "lucide-react";
@@ -16,8 +16,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { PotEvent } from "@/services/PotService";
+import { DefItem, DefList, MonoChip, StatusDot } from "../kit";
 import { useEventDetail } from "./useEventsQuery";
 import { useEventActivityStream } from "./useEventStream";
 import { EventStatusBadge } from "./EventStatusBadge";
@@ -64,8 +66,8 @@ export function EventDetailSheet({
   // and we have a stable event_id. Auto-reconnects on event change.
   const activity = useEventActivityStream(open ? eventId : null, open);
 
-  // Live tool-call count from the stream — shown as a chip in the header so
-  // the user sees progress at a glance. Falls back to persisted count for
+  // Live tool-call count from the stream — shown in the header so the user
+  // sees progress at a glance. Falls back to persisted count for
   // post-mortem viewing of completed events.
   const liveToolCount = useMemo(
     () => activity.entries.filter((e) => e.kind === "tool_call").length,
@@ -82,67 +84,63 @@ export function EventDetailSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-xl flex h-full flex-col overflow-hidden p-0"
+        className="pot-theme flex h-full w-full flex-col overflow-hidden bg-background p-0 text-foreground sm:max-w-xl"
       >
-        <SheetHeader className="space-y-2 border-b border-border/60 px-5 py-4 text-left">
-          <div className="flex items-start gap-2">
-            <div className="min-w-0 flex-1">
-              <SheetTitle className="truncate pr-8 text-base font-semibold">
-                {title}
-              </SheetTitle>
-              <SheetDescription className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                {event ? getKindLabel(event.ingestion_kind) : ""}
-                {event ? ` · ${getSourceLabel(event)}` : ""}
-              </SheetDescription>
-            </div>
+        <SheetHeader className="space-y-2.5 border-b border-border/70 px-6 py-5 text-left">
+          <div className="min-w-0">
+            <SheetTitle className="truncate pr-8 text-base font-semibold">
+              {title}
+            </SheetTitle>
+            <SheetDescription className="mt-0.5 line-clamp-2 text-[13px] text-muted-foreground">
+              {event ? getKindLabel(event.ingestion_kind) : ""}
+              {event ? ` · ${getSourceLabel(event)}` : ""}
+            </SheetDescription>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
             {status ? <EventStatusBadge status={status} /> : null}
             {liveActive ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-medium text-blue-700">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-foreground">
+                <StatusDot tone="busy" pulse />
                 Live
               </span>
             ) : null}
             {event?.received_at ? (
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-[13px] text-muted-foreground">
                 Received {formatDate(event.received_at)}
               </span>
             ) : null}
             {workCount > 0 ? (
-              <span className="text-[11px] text-muted-foreground">
-                · {workCount} tool{workCount === 1 ? "" : "s"}
+              <span className="font-mono text-xs text-muted-foreground">
+                {workCount} tool{workCount === 1 ? "" : "s"}
               </span>
             ) : null}
           </div>
-          {event?.event_id ? (
-            <p className="truncate font-mono text-[10px] text-muted-foreground">
-              {event.event_id}
-            </p>
-          ) : null}
 
-          <div className="flex items-center gap-2 pt-1">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
             <Button
               size="sm"
               variant="outline"
-              className="h-7 gap-1.5 text-xs"
+              className="h-8 gap-1.5 text-[13px]"
               disabled={!eventId || retrying}
               onClick={() => eventId && onRetry(eventId)}
             >
-              <RotateCcw className={cn("h-3 w-3", retrying && "animate-spin")} />
+              <RotateCcw className={cn("h-3.5 w-3.5", retrying && "animate-spin")} />
               {retrying ? "Re-queuing…" : "Reprocess"}
             </Button>
+            {event?.event_id ? (
+              <MonoChip className="max-w-[260px]">{event.event_id}</MonoChip>
+            ) : null}
           </div>
         </SheetHeader>
 
         {isError ? (
-          <div className="px-5 py-4 text-sm text-red-600">
+          <p className="px-6 py-4 text-sm text-rose-600 dark:text-rose-400">
             {error?.message ?? "Failed to load event"}
-          </div>
+          </p>
         ) : (
           <Tabs defaultValue="activity" className="flex flex-1 flex-col overflow-hidden">
-            <div className="px-5 pt-2">
+            <div className="px-6 pt-3">
               <TabsList className="h-8">
                 <TabsTrigger value="summary" className="text-xs">Summary</TabsTrigger>
                 <TabsTrigger value="activity" className="text-xs">
@@ -151,14 +149,14 @@ export function EventDetailSheet({
                 <TabsTrigger value="payload" className="text-xs">Payload</TabsTrigger>
               </TabsList>
             </div>
-            <Separator />
+            <Separator className="mt-3" />
 
-            <TabsContent value="summary" className="flex-1 overflow-y-auto px-5 py-4">
+            <TabsContent value="summary" className="flex-1 overflow-y-auto px-6 py-5">
               <SummaryTab event={event} loading={isLoading && !event} />
             </TabsContent>
             <TabsContent
               value="activity"
-              className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
+              className="flex-1 space-y-6 overflow-y-auto px-6 py-5"
             >
               {/* Live entries come first — this is the surface the user
                   cares about while the agent is running. Persisted runs
@@ -168,13 +166,16 @@ export function EventDetailSheet({
               ) : null}
               <AgentActivityTimeline event={event} loading={isLoading && !event} />
             </TabsContent>
-            <TabsContent value="payload" className="flex-1 overflow-y-auto px-5 py-4">
+            <TabsContent value="payload" className="flex-1 overflow-y-auto px-6 py-5">
               {event ? (
                 <EventPayloadView event={event} />
               ) : isLoading ? (
-                <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+                <div className="space-y-2.5">
+                  <Skeleton className="h-3.5 w-28 rounded bg-muted" />
+                  <Skeleton className="h-24 w-full rounded-lg bg-muted" />
+                </div>
               ) : (
-                <p className="text-xs text-muted-foreground">No payload.</p>
+                <p className="text-[13px] text-muted-foreground">No payload.</p>
               )}
             </TabsContent>
           </Tabs>
@@ -187,35 +188,44 @@ export function EventDetailSheet({
 function SummaryTab({ event, loading }: { event?: PotEvent; loading: boolean }) {
   if (loading) {
     return (
-      <div className="space-y-2">
-        <div className="h-3 w-32 rounded bg-muted animate-pulse" />
-        <div className="h-2.5 w-2/3 rounded bg-muted/70 animate-pulse" />
+      <div className="space-y-2.5">
+        <Skeleton className="h-3.5 w-32 rounded bg-muted" />
+        <Skeleton className="h-3 w-2/3 rounded bg-muted" />
+        <Skeleton className="h-3 w-1/2 rounded bg-muted" />
       </div>
     );
   }
   if (!event) {
-    return <p className="text-xs text-muted-foreground">No event selected.</p>;
+    return (
+      <p className="text-[13px] text-muted-foreground">No event selected.</p>
+    );
   }
-  const rows: Array<[string, React.ReactNode]> = [
-    ["Kind", getKindLabel(event.ingestion_kind)],
-    ["Source", getSourceLabel(event)],
-  ];
-  if (event.repo_name) rows.push(["Repository", <span key="r" className="font-mono">{event.repo_name}</span>]);
-  if (event.event_type) rows.push(["Event type", event.event_type]);
-  if (event.action) rows.push(["Action", event.action]);
-  if (event.received_at) rows.push(["Received", formatDate(event.received_at)]);
-  if (event.completed_at) rows.push(["Completed", formatDate(event.completed_at)]);
-  if (event.error) rows.push(["Error", <span key="e" className="text-red-600">{event.error}</span>]);
 
   return (
-    <dl className="grid grid-cols-3 gap-x-3 gap-y-2 text-xs">
-      {rows.map(([k, v]) => (
-        <div key={k} className="contents">
-          <dt className="col-span-1 text-[11px] uppercase tracking-wide text-muted-foreground">{k}</dt>
-          <dd className="col-span-2 min-w-0 break-words">{v}</dd>
-        </div>
-      ))}
-    </dl>
+    <DefList columns={2}>
+      <DefItem label="Kind">{getKindLabel(event.ingestion_kind)}</DefItem>
+      <DefItem label="Source">{getSourceLabel(event)}</DefItem>
+      {event.repo_name ? (
+        <DefItem label="Repository" mono>
+          {event.repo_name}
+        </DefItem>
+      ) : null}
+      {event.event_type ? (
+        <DefItem label="Event type">{event.event_type}</DefItem>
+      ) : null}
+      {event.action ? <DefItem label="Action">{event.action}</DefItem> : null}
+      {event.received_at ? (
+        <DefItem label="Received">{formatDate(event.received_at)}</DefItem>
+      ) : null}
+      {event.completed_at ? (
+        <DefItem label="Completed">{formatDate(event.completed_at)}</DefItem>
+      ) : null}
+      {event.error ? (
+        <DefItem label="Error" className="sm:col-span-2">
+          <span className="text-rose-600 dark:text-rose-400">{event.error}</span>
+        </DefItem>
+      ) : null}
+    </DefList>
   );
 }
 

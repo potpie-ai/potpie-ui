@@ -1,0 +1,628 @@
+{
+  "features": [
+    {
+      "slug": "change-timeline",
+      "name": "Change timeline — what changed recently, and what touched this",
+      "lifecycle": "completed",
+      "summary": "A windowed, scope-filtered read over Activity entities so an agent can ask 'what changed here recently' and get merged PRs, tickets, deploys and incidents back as ranked evidence.",
+      "description": "Implemented by TimelineReader in potpie/context-engine/.../application/readers/timeline_reader.py (UC3/P9) and surfaced as the `recent_changes` subgraph through `potpie graph read` and the potpie-change-timeline agent skill. It takes a scope plus a time window and returns the Activity entities that touched that scope, ranked by recency and scope overlap, using MENTIONS provenance so a PR, ticket, deploy or alert that merely named the service still resolves back to it — before MENTIONS, an activity bound only to a person via PERFORMED was invisible to 'what touched service:auth-svc this week'. Search terms: what changed recently, recent PRs, change history, regression window, timeline reader, recent_changes view, what shipped last week."
+    },
+    {
+      "slug": "infra-topology",
+      "name": "Infra topology & blast-radius read",
+      "lifecycle": "completed",
+      "summary": "A bounded neighbourhood walk over topology predicates that answers which environment runs a service, what it depends on, and what breaks if it goes down.",
+      "description": "Implemented by InfraTopologyReader in potpie/context-engine/.../application/readers/infra_topology.py and exposed as the infra/architecture subgraph plus the potpie-infra-architecture agent skill. It traverses DEFINED_IN, DEPLOYED_TO, DEPENDS_ON, USES, HOSTED_ON, OWNED_BY, PROVIDES and IMPLEMENTED_IN claim edges with a depth bound, filters by the `environment` edge property, honours `as_of` through the bitemporal predicate, and supports blast-radius queries by walking DEPENDS_ON inbound. Free-text queries are scored with semantic_similarity after discovery so ranking is query-sensitive while the traversal stays query-free. Search terms: what environment runs this service, service dependencies, blast radius, who owns this service, infra topology, datastore usage, deployment target."
+    },
+    {
+      "slug": "debug-memory",
+      "name": "Debug memory — prior bugs, fixes and failed attempts",
+      "lifecycle": "completed",
+      "summary": "Symptom-first recall of previously seen failures, the fixes that worked, and the fixes that were tried and did not, so an agent does not re-walk a dead end.",
+      "description": "Implemented by PriorBugsReader in potpie/context-engine/.../application/readers/prior_bugs.py (UC4/P9) and loaded by the potpie-debug-memory agent skill before any debugging session. It takes a symptom signature plus scope and runs a native vector query through the claim-query port's fact_query over BugPattern claim edges, restricted to live edges and the agent's scope-or-broader, ranked by verification × scope-overlap × recency × corroboration. It deliberately surfaces both RESOLVED fixes and ATTEMPTED_FIX_FAILED ones, labelling the latter so the agent avoids repeating them. Search terms: have we seen this error before, prior bug, known fix, failed fix attempt, flaky test history, stack trace lookup, incident recall."
+    },
+    {
+      "slug": "code-parsing",
+      "name": "Repository code parsing into the code knowledge graph",
+      "lifecycle": "completed",
+      "summary": "Tree-sitter parsing of a cloned repo into files, classes, functions and their relationships — the code knowledge graph the per-repo agents retrieve over.",
+      "description": "The parsing pipeline in potpie/parsing: potpie/parsing/parsing/py_graph.py builds a networkx graph of Tag records (file, symbol name, kind, line and byte spans) using tree_sitter with tree_sitter_language_pack and grep_ast for language detection, with pygments as the fallback lexer. It is paired with the Rust + maturin `parsing_rs` extension module (Cargo.toml, src/) exposed to Python, and the resulting graph is persisted into Neo4j by the celery-parsing-worker on the shared NFS repo volume. Search terms: repo parsing, code knowledge graph, tree-sitter, symbol extraction, parse repository failed, py_graph, parsing_rs, define/reference tags."
+    },
+    {
+      "slug": "telemetry",
+      "name": "CLI telemetry and error reporting controls",
+      "lifecycle": "completed",
+      "summary": "Opt-out product analytics and crash reporting for the CLI, with `potpie telemetry status/enable/disable` so users can see and change what is sent.",
+      "description": "Added in potpie-ai/potpie PR #955. Lives in potpie/cli/telemetry: settings.py resolves the PostHog api key and host, product_analytics.py and usage_events.py emit anonymous usage and onboarding events keyed by identity_store.py, and sentry_runtime.py lazily imports sentry_sdk to capture unexpected CLI exceptions only. The whole subsystem is switched off by POTPIE_TELEMETRY_DISABLED, which accepts the full 0/false/no/off vocabulary, and `potpie telemetry status` prints exactly which sinks are live. Search terms: disable telemetry, opt out of analytics, does potpie phone home, POTPIE_TELEMETRY_DISABLED, posthog, sentry, crash reporting."
+    },
+    {
+      "slug": "harness-orchestration",
+      "name": "Harness run orchestration (pie)",
+      "lifecycle": "in_progress",
+      "summary": "The enterprise platform's agent-run pipeline: drive a coding harness over ACP, stream its activity, and reconcile the run into durable records.",
+      "description": "Specified in spec/modules/harness-orchestration.md in potpie-ai/pie and built across the feat/spec0-harness-runtime through feat/spec7-sidecar-packaging branches. runs/steps_impl.py implements five named idempotent steps over a serializable RunState — preflight, assemble, execute, parse, reconcile — with a typed failure vocabulary (WorkspaceUnreadyError, AuthError, HarnessUnavailableError) that runs/pipeline.py maps onto exit codes. harness/acp.py is the Agent Client Protocol transport for a long-lived `copilot --acp` process: newline-delimited JSON-RPC 2.0 over stdio, session/new plus session/prompt turns, session/update streaming and session/request_permission tool gating. apps/cli stream_format.py holds the pure formatting rules both the append-only and Rich live presenters share. Search terms: pie run, harness runner, ACP transport, copilot --acp, run pipeline steps, stream event mismatch, resume a run, golden stream."
+    },
+    {
+      "slug": "context-graph-project-memory",
+      "name": "Context Graph — durable project memory for AI agents",
+      "lifecycle": "completed",
+      "summary": "The core product: a compact, sourced claim store that gives agents durable memory of a project instead of re-reading raw code, PRs and chat every task.",
+      "description": "Potpie's headline capability, described in the root README as turning 'your codebase and software development lifecycle into a living context graph for AI agents'. It stores compact claims plus source refs — decisions, ownership, infra topology, prior bugs and fixes, conventions, features — and deliberately never stores payloads (no PR diffs, no doc bodies, no chat transcripts, no logs). Search terms: context graph, project memory, agent memory, durable context, claims not payloads, knowledge graph for agents, docs/context-graph/vision.md. The canonical claim store is the source of truth; semantic index, traversal views and analytics rollups are rebuildable projections off it."
+    },
+    {
+      "slug": "graph-workbench-propose-commit",
+      "name": "Graph workbench: two-phase propose → commit write door",
+      "lifecycle": "completed",
+      "summary": "`potpie graph propose` validates and stores a plan, `potpie graph commit <plan_id> --verify` applies it and reads the claims back.",
+      "description": "The canonical write door for the context graph, shipped as data-plane contract v1.5 in `application/services/graph_workbench.py`. `graph propose` validates and lowers a semantic-DSL batch and persists a plan record with no graph write; `graph commit <plan_id> --verify` applies the stored plan by id (the agent never resends mutations) and downgrades on missing readback or quality regression. Medium/high-risk plans require `--approved-by`; `graph mutate` survives only as a legacy wrapper that internally calls propose+commit and emits a steering warning. Search terms: propose commit, plan_id, --verify, graph mutate legacy wrapper, review_required, approved-by, optimistic concurrency `_global`, plan states pending/committed/expired, chunked `graph bulk apply` with `--start-chunk` and `--manifest`."
+    },
+    {
+      "slug": "semantic-mutation-dsl",
+      "name": "Semantic mutation DSL — 10 flat write operations",
+      "lifecycle": "completed",
+      "summary": "Agent-facing structured write proposals over a small flat op vocabulary that validates and lowers into graph writes.",
+      "description": "The only supported way to write the graph: a flat semantic-mutation DSL of 10 operations, all marked APPLICABLE in the live catalog. Op fields are FLAT — `op / subject / predicate / object / value / truth / confidence / evidence[] / description`, and `append_event` uses `verb / occurred_at / actor / targets[] / mentions[]`. Nested shapes like `{\"event\":{…}}` or `{\"claim\":{…}}` will not parse and are the most common authoring mistake. `potpie graph mutation-template --kind repo-baseline|feature|preference|infra-snapshot|bug-fix|decision|timeline-event` emits a schema-only skeleton to fill from sources actually read."
+    },
+    {
+      "slug": "bitemporal-claim-validity",
+      "name": "Bitemporal claims with truth classes",
+      "lifecycle": "completed",
+      "summary": "Every fact is a time-stamped claim carrying a truth class and provenance, so the timeline is a read-time query over `valid_at` rather than stored temporal edges.",
+      "description": "Claims are the unit of truth in the graph: each is sourced, time-stamped and tagged with one of 7 truth classes (authoritative_fact, source_observation, agent_claim, user_decision, preference, timeline_event, quality_finding) that feeds the ranker. `authoritative_fact` and `source_observation` require evidence; `agent_claim` pairs with a confidence float. There are deliberately no stored temporal or causal edges — no TRIGGERED_BY, PRECEDED_BY or CAUSED — because the timeline is reconstructed at read time from `valid_at`/`recorded_at`. Search terms: bitemporal, valid_at, recorded_at, truth class, provenance, source_ref, claim ranking."
+    },
+    {
+      "slug": "claim-supersession-retraction",
+      "name": "Supersession, retraction and merge instead of hard delete",
+      "lifecycle": "completed",
+      "summary": "Facts are never hard-deleted; they are superseded, retracted, invalidated or merged so history stays auditable.",
+      "description": "The graph has no destructive delete on the agent surface — the `potpie-graph` skill states 'never hard-delete' and steers writers to validity windows, retraction, supersession and entity merge. A superseding Decision emits the system `SUPERSEDES` edge; stale facts fall out of `--current` reads instead of vanishing. Edge qualifiers are part of identity, so a relation's `environment` qualifier joins the identity key `(subject, predicate, object, environment)` and prod/staging coexist rather than supersede each other. The only genuinely destructive operation is `potpie pot reset` (a `MATCH (n {group_id:$gid}) DETACH DELETE n`) — note there is no `graph reset` command."
+    },
+    {
+      "slug": "ontology-catalog-classification",
+      "name": "Live ontology catalog + soft-fail classification",
+      "lifecycle": "completed",
+      "summary": "24 entity types, 25 public predicates plus RELATED_TO, discoverable at runtime via `potpie graph catalog` rather than baked into prose.",
+      "description": "The declarative vocabulary (ONTOLOGY_VERSION `2026-06-graph`, GRAPH_CONTRACT_VERSION `v1.5`) that every write is validated against, exposed live through `potpie graph catalog --task \"<task>\" --profile read` and `potpie graph describe <subgraph> --view <view> --examples`. The governing rule taught to agents is 'trust the catalog's current operation partition over any example in a skill file'. PRs, commits, issues, incidents, deployments and alerts all collapse to a single `Activity` entity distinguished by `activity_type` — there is no PullRequest, Commit, Issue, Component, Interface or Runbook label. Off-ontology labels and predicates soft-fail: they are downgraded (often to `RELATED_TO`) and a `QualityIssue` marker records the downgrade instead of rejecting the write."
+    },
+    {
+      "slug": "semantic-search-local-embedder",
+      "name": "Semantic search over retrieval cards with a bundled local embedder",
+      "lifecycle": "completed",
+      "summary": "Vector recall with zero API keys — the embedder ships with the CLI so semantic search works offline out of the box.",
+      "description": "Retrieval ships a bundled local embedder by default so semantic search needs no OpenAI/cloud key; disable it with `CONTEXT_ENGINE_EMBEDDER=none`. Every claim is embedded and searched as a single 'retrieval card' — the agent-authored `description` leads — and one shared card builder serves both the embed-on-write and read paths, so retrieval quality tracks the description an agent writes. Recall runs through `ClaimQueryPort.find_claims` → `semantic_similarity` with a `--query-threshold` default of 0.70. Because the bundled embedder is small, query expansion is explicitly the agent's job (broaden 'add retry to payments client' to also carry 'timeout, flaky, backoff, external call'). Known issue: HashingEmbedder emits 256-dim vectors against a 1536-dim index default (potpie#909)."
+    },
+    {
+      "slug": "named-view-graph-read",
+      "name": "Named-view reads — 8 subgraphs, 9 views, ranked evidence",
+      "lifecycle": "completed",
+      "summary": "`potpie graph read --subgraph <s> --view <v>` returns an AgentEnvelope of ranked evidence; there is no server-side answer synthesis.",
+      "description": "The Retrieve axis of the query model. Reads resolve a declarative `<subgraph>.<view>` contract (`GraphViewSpec` in `domain/graph_views.py`) across 8 subgraphs — debugging, recent_changes, infra_topology, decisions, features, code_topology, knowledge, admin — and 9 views including `debugging.prior_occurrences`, `recent_changes.timeline`, `infra_topology.service_neighborhood`, `decisions.preferences_for_scope`, `decisions.active_decisions`, `features.feature_context`, `code_topology.ownership_by_path`, `knowledge.document_context`, `admin.inspection_slice`. Missing required scope returns `missing_required_scope` instead of running a malformed read, and a wrong subgraph name (`--subgraph bugs`) fails with 'unknown graph view' plus `did_you_mean` migration guidance. `potpie timeline recent` is the exact same path as `graph read --subgraph recent_changes --view timeline`; text presentation is shaped independently by `--format events|table|raw`, `--detail compact|full` and `--relations summary|full`."
+    },
+    {
+      "slug": "entity-identity-resolution",
+      "name": "Entity identity resolution before writes",
+      "lifecycle": "completed",
+      "summary": "`potpie graph search-entities` is the Filter axis — structured per-entity lookup so agents reuse canonical keys instead of minting near-duplicates.",
+      "description": "The discipline that keeps the graph from fragmenting: resolve identity before writing, then reuse the returned canonical `key`. Inventing a near-duplicate (`service:payments` vs `service:local:payments-api`) splits the graph and breaks every future read. `graph search-entities` does not go through the read trunk — it queries `claim_query.find_claims` directly with structured filters (type, predicate, subgraph, scope, truth, source_system, source_family, environment, external_id, source_refs, since/until), aggregates claim rows per entity and returns ranked `GraphEntityCandidate`s. Search terms: duplicate entities, entity key collision, canonical key, identity resolution, --supporting-claims, graph quality duplicate-candidates."
+    },
+    {
+      "slug": "graph-neighborhood-traversal",
+      "name": "Bounded graph traversal (`graph neighborhood`)",
+      "lifecycle": "completed",
+      "summary": "Depth-limited, predicate-typed, direction-aware walks over the graph — the Traverse axis, now first-class rather than buried in a view.",
+      "description": "`potpie graph neighborhood --entity <key> --predicate <p> --depth 2 --direction out|in|both` answers questions like 'what depends on payments-api two hops out?' and 'walk this bug to its fix and the PR that shipped it', backed by `backend.inspection.neighborhood`. `graph inspect <key>` is a legacy alias that warns toward `neighborhood`. The same depth/direction controls are plumbed through `ReadRequest` into `InfraTopologyReader`, so in-view traversal and the standalone op share semantics. Deliberately out of scope: arbitrary shortest path, PageRank/centrality, cycle detection and unbounded recursive aggregation — this is a project-memory graph for retrieval-into-context, not a graph analytics engine. Not available on the `neo4j` backend profile."
+    },
+    {
+      "slug": "graph-quality-diagnostics",
+      "name": "Read-only graph quality diagnostics",
+      "lifecycle": "completed",
+      "summary": "`potpie graph quality …` surfaces duplicates, stale facts, conflicting claims, orphans, low-confidence claims and projection drift — and never writes.",
+      "description": "Seven read-only diagnostics under `potpie graph quality`: `summary`, `duplicate-candidates`, `stale-facts`, `conflicting-claims`, `orphan-entities`, `low-confidence --threshold 0.5`, and `projection-drift`. Quality scoring is diagnostic only — it recommends repairs through propose/commit or parking the item in the inbox, and never mutates the graph itself. Agents are told to check `coverage`, `freshness` and `quality` on a read envelope before relying on the results. Search terms: graph health, duplicate entities, thin description warning, weak retrieval card, orphan entity, semantic index drift, stale claim."
+    },
+    {
+      "slug": "graph-inbox",
+      "name": "Graph inbox — capture uncertain work without asserting facts",
+      "lifecycle": "completed",
+      "summary": "Pending graph work an agent isn't confident enough to commit lands in the inbox and is never returned as a graph fact until processed.",
+      "description": "A safety valve on the write path: writes never bypass validation, so an ambiguous request becomes an inbox item or a low-authority observation rather than an unsafe canonical fact. Commands are `potpie graph inbox add | list | show <id> | claim <id> | mark-applied <id> --plan <id> | mark-rejected <id> --reason <text> | close <id>`, with states pending → claimed → applied/rejected/closed and `mark-applied` requiring a linked plan or mutation id. Search terms: uncertain claim, not confident enough to commit, pending graph work, triage queue, inbox item never a fact."
+    },
+    {
+      "slug": "pot-tenancy-isolation",
+      "name": "Pots — the unit of tenancy and isolation",
+      "lifecycle": "completed",
+      "summary": "Every query, source, claim, mutation and inbox item is scoped to exactly one pot; the pot id *is* the storage `group_id`.",
+      "description": "A Pot is Potpie's isolation boundary and workspace concept. The pot id is stamped as `group_id` on every entity node and relationship edge, which is why `pot reset` is literally `MATCH (n {group_id:$gid}) DETACH DELETE n`. First local setup creates and activates a `default` pot; a pot can be local or (roadmap) managed, and the active pot decides routing. Repo→pot binding is managed with `potpie pot linked [--summary]` and `potpie pot default show|set|clear`, consumed by `resolve_pot_id`, with `pot create/use --also-default-for-current-repo` setting the binding in one step and a warning when the repo default and selected pot diverge. Cross-pot federation is an explicit anti-goal. Search terms: wrong pot, empty pot 0 claims, pot scope resolution order, group_id, tenancy."
+    },
+    {
+      "slug": "swappable-graph-backends",
+      "name": "Swappable graph backends (falkordb_lite default, no Docker)",
+      "lifecycle": "completed",
+      "summary": "The GraphBackend port is a bundle of 6 capabilities; the OSS default `falkordb_lite` is embedded over a local file with no Docker, Neo4j or cloud key.",
+      "description": "'The graph model is the invariant; physical storage is an adapter.' `GraphBackend` exposes 6 ports — canonical `mutation` and `claim_query`, plus the rebuildable projections `semantic`, `inspection`, `analytics`, `snapshot` — behind `capabilities()` / `provision()`. Backend selection precedence is `CONTEXT_ENGINE_BACKEND` > legacy `GRAPH_DB_BACKEND` > `falkordb_lite`, overridable with `potpie setup --backend <profile>`; `potpie backend list` and `potpie backend status` report profiles and capability coverage. Unbuilt capabilities surface as a structured not-implemented contract via `_require_backend_capability` rather than a crash — for example `graph export/import` (snapshot) is real only on `in_memory`/`embedded`, and `neighborhood` is unavailable on `neo4j`. Search terms: no Docker required, embedded FalkorDB, backend profile, CapabilityNotImplemented, GRAPH_DB_BACKEND."
+    },
+    {
+      "slug": "windowed-reconciliation",
+      "name": "Windowed event batching and reconciliation",
+      "lifecycle": "in_progress",
+      "summary": "Inbound source events are batched per pot and reconciled into claims on a window; the optional agent planner is off by default.",
+      "description": "On the HTTP ingestion-server composition root, non-record events go through `event_admission.admit_event(...)`: the event is persisted idempotently on `scope + source_id` (returning `duplicate` on a repeat), upserted into the pot's open batch, then either enqueued immediately or left for the windowed flusher. Lifecycle vocabulary in the live internal Postgres store is `queued / processing / done / error` — not the old six-state `pending/processing/applied/failed_retryable/failed_terminal/timed_out` list, which described a consumer that does not exist yet. A service-side reconciliation agent exists as an optional extra on this path only and is off by default (`reconciliation_flags.agent_planner_enabled()` returns False), consistent with the anti-goal 'no Potpie-owned LLM/reconciliation agent as the canonical source of graph intelligence'. Windowed mode itself is off by default and still being tuned."
+    },
+    {
+      "slug": "github-webhook-ingestion",
+      "name": "GitHub webhook ingestion of merged PRs",
+      "lifecycle": "completed",
+      "summary": "`POST /webhooks/github` verifies HMAC fail-closed, emits a ContextEvent for merged PRs, maps repo → pot and stamps a server-trusted webhook actor.",
+      "description": "The live source-event entry point on the ingestion server. `GitHubConnector.normalize_webhook()` verifies the HMAC signature and fails closed unless `CONTEXT_ENGINE_ALLOW_UNSIGNED_WEBHOOKS=1` is set, then emits a `ContextEvent` for merged pull requests, resolves the repo→pot mapping and stamps a server-trusted `webhook` Actor. The ingress W3C `traceparent` is persisted onto the event row's `correlation_id` so the later fan-in span links back. Only `github` and `notion` remain as outbound `SourceConnectorPort` connectors — `connectors/jira/` and `connectors/linear/` are stale `.pyc` only, and `propose_plan` was removed so connectors no longer write claims directly. Search terms: webhook 401 signature mismatch, unsigned webhook, merged PR ingestion, repo to pot mapping."
+    },
+    {
+      "slug": "external-event-ledger",
+      "name": "External Event Ledger (managed or self-hosted source-event service)",
+      "lifecycle": "planned",
+      "summary": "A separate service owning provider creds, webhooks and replay cursors that graphs pull from — designed and CLI-surfaced, but the clients are TODO stubs.",
+      "description": "The third product boundary: a managed-or-self-hostable source-event service that local or managed graphs *pull* from, with per-`(pot, source)` replay cursors. It is explicitly never the graph's source of truth. The CLI surface exists — `potpie ledger status | sources list | query | use managed|self-hosted <url> | pull --source <id> | disconnect` — but `adapters/outbound/ledger/managed_client.py` and `self_hosted_client.py` are TODO stubs, so these commands are non-functional against any real provider today. Do not confuse this with the internal Postgres event store, which is the live 'ledger' and has no cursor concept at all — it is a work queue. Search terms: ledger pull does nothing, cursor, replay, two ledgers."
+    },
+    {
+      "slug": "managed-cloud-graph",
+      "name": "Managed Potpie graph (hosted backend + collaboration)",
+      "lifecycle": "planned",
+      "summary": "The same service modules running on hosted stores with hosted auth and collaboration — wired for, but every command still raises CapabilityNotImplemented.",
+      "description": "The managed product boundary. `HostShell` is designed to 'swap the wiring without changing the facade', so local and managed share one graph model — there is no separate cloud ontology. Today `potpie use --managed`, `potpie pot list --managed` and the entire `potpie cloud` group (`cloud login | status | push | pull | skills sync`) raise `CapabilityNotImplemented`. State stays local by default and there is no hidden cloud dependency for local use. Search terms: managed backend, cloud sync, CapabilityNotImplemented, potpie cloud push, hosted graph, team sharing roadmap."
+    },
+    {
+      "slug": "potpie-setup-wizard",
+      "name": "One-command setup wizard (`potpie setup`)",
+      "lifecycle": "completed",
+      "summary": "Idempotent first-run that provisions config, local storage, the daemon, the active default pot, source registration and agent skills.",
+      "description": "`potpie setup --repo . --agent claude` builds a `SetupPlan` covering config, storage, daemon, the active `default` pot, repo source registration and skill installation, and is safe to re-run. `--backend` picks the GraphBackend profile (default `falkordb_lite`), `--daemon`/`--in-process` selects host mode, `--dry-run` previews without executing, and `--scan` is an opt-in working-tree scan that is OFF by default — setup does not scan your repo unless asked. There is deliberately no separate manual ingest step: the CLI registers sources and the configured agent ingests when the task requires it. Search terms: potpie setup, first run, onboarding, wizard, uv tool install potpie, setup --dry-run, why is my pot empty after setup."
+    },
+    {
+      "slug": "pot-and-source-management-cli",
+      "name": "Pot and source management from the CLI",
+      "lifecycle": "completed",
+      "summary": "`potpie pot create/use/list/info/rename/reset/archive` and `potpie source add/list/status/remove` manage workspaces and their registered sources.",
+      "description": "The control-plane surface for workspaces. `potpie source add repo .` is generic registration only — it performs no scan or ingest, and registering a repo also sets the repo default binding. `potpie source status` with no id prints a per-pot summary of all sources; with an id it reports one source. `potpie pot reset [--confirm]` is the destructive per-pot wipe. Fixed real bugs in this area: `pot create --repo .` failing to register the current repo (potpie#973, PR #974), pot resolution reason missing from `source list` output (PR #937), and empty-pot recovery guidance surfacing too late (potpie#971/#978). Search terms: pot list, pot use, source add repo, pot has 0 claims, which pot am I in."
+    },
+    {
+      "slug": "potpie-doctor-diagnostics",
+      "name": "Local diagnostics: `potpie doctor` and `potpie status`",
+      "lifecycle": "completed",
+      "summary": "Composed readiness reporting for daemon, backend capabilities, skill drift, install facts and repo→pot routing.",
+      "description": "`potpie doctor` composes `backend.capabilities()` + `backend.mutation.readiness()` + `daemon.status()` + `ledger.status()` and additionally reports `effective_current_repo_pot` and `repo_default_pot` so you can see how the current directory routes. It surfaces uv-tool install facts (uv tool env, PATH, python shebang) because `python -m pip show potpie-context-engine` is misleading for local dev installs — prefer `uv tool list`, `which -a potpie`, `make cli-status`. `potpie status` is the separate agent-readiness contract (daemon, backend, pot, skill state); `--host` is a deprecated no-op and `--verify` moved to `potpie auth status --verify`. Search terms: potpie doctor, daemon not running, skill drift, DaemonStartError exit 2, readiness, which potpie binary."
+    },
+    {
+      "slug": "cli-integration-auth",
+      "name": "Integration auth for GitHub, Linear, Jira and Confluence",
+      "lifecycle": "completed",
+      "summary": "Browser OAuth login groups plus `potpie auth status [--verify]` for the agent's own integration reads — credentials stay local.",
+      "description": "`potpie github login|logout|repos`, `potpie linear login|logout|ls|select`, `potpie jira …` and `potpie confluence …` store credentials for the *agent's own* integration reads, which are harness-led rather than Potpie connector queueing. `potpie auth status` is the explicit local integration-auth report and `--verify` runs a lightweight live API check. Jira/Linear reads live in `adapters/outbound/cli_auth/{atlassian_read_client,linear_read_client}.py`; the old pot-level CLI queue-ingest commands were removed in PR #990. A real fix here: Linear OAuth callback ports collided with localhost dev servers (potpie#967, PR #968). An anti-goal keeps source-provider credentials out of the local daemon by default. Bitbucket support is proposed under potpie#911 (unified Atlassian login)."
+    },
+    {
+      "slug": "gitlab-cli-integration",
+      "name": "GitLab CLI integration",
+      "lifecycle": "in_progress",
+      "summary": "Bring GitLab alongside GitHub as a first-class source provider for CLI auth, repo listing and source registration.",
+      "description": "Tracked as potpie#997 '[Feature]: Add GitLab CLI integration' — currently open. The seams already exist: `sandbox/domain/ports/git_platform.py` is explicitly written to abstract 'GitHub, GitLab, Bitbucket, Gitea, etc.', `_git_ops.py` lowercase-compares remote hosts across GitHub/GitLab, and the legacy `code_provider/provider_factory.py` has a `ProviderType.GITLAB` branch that still raises `NotImplementedError(\"GitLab provider not yet implemented\")` with a `https://gitlab.com` base URL default. The enterprise Pie architecture doc calls this out directly: one customer uses GitHub/Linear/Slack/Datadog, another uses GitLab/Jira/Teams/Confluence, and Pie 'should support those differences through adapters, not forks'. Search terms: GitLab support, self-hosted GitLab, non-GitHub remote, gitlab provider not implemented."
+    },
+    {
+      "slug": "mcp-context-tools",
+      "name": "In-process MCP server (4 `context_*` tools)",
+      "lifecycle": "deprecated",
+      "summary": "The 4-tool MCP compatibility surface (`context_resolve`, `context_search`, `context_record`, `context_status`) — being removed as an executable integration by PR #1019.",
+      "description": "Agents could reach the same graph internals through exactly four in-process MCP tools: `context_resolve`, `context_search`, `context_status` and `context_record` (the only MCP write). These were compatibility adapters over the same internals, never a second engine — the richer `graph …` workbench stayed CLI-only. PR #1019 ('refactor(daemon): move daemon into root package and remove MCP') removes the `potpie-mcp` console script, the Context Engine MCP adapter, MCP-specific tests, the `mcp` dependency and the shipped MCP fallback guidance in CLI templates; the historical `mcp` actor/source vocabulary is retained only for stored-data and API-filter compatibility. Known bug on the way out: potpie#1008 — a date-only or naive `as_of` crashes `context_resolve`/`context_search` with a TypeError in recency scoring. Skills still carry MCP fallback recipes for harnesses that have no shell."
+    },
+    {
+      "slug": "agent-skills-bundle",
+      "name": "Agent skills bundle + Skill Manager",
+      "lifecycle": "completed",
+      "summary": "Eight instruction bundles that teach a coding harness how to drive the CLI, installed and drift-checked via `potpie skills`.",
+      "description": "Potpie's intelligence lives in the user's harness, taught by skills rather than by a Potpie-owned LLM. The bundle ships `potpie-cli` (v2), `potpie-graph` (v5 — THE contract skill teaching read → resolve → propose/commit → inbox → quality, propose/commit only, never `graph mutate`), `potpie-repo-baseline`, `potpie-source-ingestion`, and four use-case skills: `potpie-project-preferences`, `potpie-infra-architecture`, `potpie-change-timeline`, `potpie-debug-memory`. Each use-case skill has the same shape — Fast Path read, Apply Results, Record flow, plus an MCP fallback recipe. Managed by `potpie skills list | install [<id>] --agent claude|codex|cursor|opencode --scope global|project | update --all | status | remove`, with a real correctness gate on install and drift reporting; `potpie skills add <source>` is still a TODO stub and there is no top-level `potpie install`."
+    },
+    {
+      "slug": "claude-code-plugin",
+      "name": "Claude Code plugin (hooks + slash commands)",
+      "lifecycle": "in_progress",
+      "summary": "A self-contained Claude Code plugin with five model-free lifecycle hooks and two slash commands — shipped in-tree, but with no first-class CLI install path yet.",
+      "description": "`potpie/cli/templates/claude_plugin/` is a complete plugin: `.claude-plugin/plugin.json` + `marketplace.json` plus its own byte-identical copies of the 7 plugin skills. `hooks/hooks.json` wires five lifecycle entries to one thin fail-safe adapter `hooks/potpie_nudge.py` — SessionStart→`session_start`, PreToolUse(Write|Edit|MultiEdit|NotebookEdit)→`pre_edit`, PreToolUse(Bash)→`pre_deploy` on deploy markers, PostToolUse(Bash)→`test_failed`/`test_passed` on test markers, Stop→`stop`. Two slash commands ship: `/potpie-feature` (load context before feature work) and `/potpie-record` (record durable learnings after). Still in progress: no `potpie` command installs the plugin — the bundle agent type `claude-plugin` lays files under `.claude/potpie-plugin/` but nothing invokes it, the plugin README still references a non-existent `potpie install`, and today's install is manual via `/plugin marketplace add`."
+    },
+    {
+      "slug": "zero-token-nudges",
+      "name": "Zero-token nudges — graph memory injected at lifecycle moments",
+      "lifecycle": "completed",
+      "summary": "A deterministic hook reads the graph at session/edit/deploy/test boundaries and injects the relevant slice into the agent's context without spending tokens to ask for it.",
+      "description": "`potpie graph nudge --event <e> --session <id>` is the trigger surface, with six `NudgeEvent` values: `session_start`, `pre_edit`, `pre_deploy`, `test_failed`, `test_passed`, `stop`. Each maps to exactly one `NudgePolicy` (enforced at import time by `_check_nudge_policies_coherent()`), with `direction` either **data** (read named views and inject ranked evidence) or **instruction** (return a fixed write-prompt the agent decides on — never an auto-write). The whole brain is deterministic with no model on the path; `test_failed` reads `debugging.prior_occurrences` + `recent_changes.timeline`. `LocalInjectionLedger` persists injected keys per session to `~/.potpie/nudge_sessions.json` (atomic write, bounded to 500 sessions) so dedup survives the short-lived hook processes, and `NudgeService` returns `silent=True` when nothing is fresh. `NudgePolicy.triggers_ingest` is dead — a nudge never ingests. Hook knobs: `POTPIE_HOOK_DEBUG`, `POTPIE_HOOK_TIMEOUT`, `POTPIE_BIN`, `POTPIE_POT`."
+    },
+    {
+      "slug": "harness-led-repo-baseline",
+      "name": "Harness-led repo baseline and source ingestion (scanners deleted)",
+      "lifecycle": "completed",
+      "summary": "Repo baselining is done by agent skills authoring semantic mutations, not by Potpie-owned scanners — those were deleted in commit 5af8ea5f.",
+      "description": "The biggest ingestion change versus older docs: `adapters/outbound/scanners/` (codeowners, openapi, kubernetes, dependency-manifest, default_registry) holds only stale `__pycache__` — all `.py` source was removed in commit `5af8ea5f` ('mega-removal of dead CE surface') along with the top-level `potpie ingest` command. Baselining now runs through the `potpie-repo-baseline` skill (source priority, evidence matrix, canonical entity families with `PROVIDES`/`IMPLEMENTED_IN`) and the todo-driven phased `potpie-source-ingestion` skill (phases 0–8, parallel read-only subagents, GitHub/Linear/Jira hydrated via the agent's *own* integration tools, evidence matrix → identity resolution → propose/commit `--verify` → quality gate). Search terms: how do I ingest a repo, no ingest command, scanner removed, repo baseline, ingest a PR or ticket."
+    },
+    {
+      "slug": "pots-web-surface",
+      "name": "Pots web surface (overview, sources, members, agent setup)",
+      "lifecycle": "completed",
+      "summary": "The Next.js pot workspace at `/pots/[potId]` with Overview, Graph, Sources, Events, Agent setup, Members and Add context sections.",
+      "description": "The web home for a pot, implemented in `app/(main)/pots/` of potpie-ui with a shared nav defined in `app/(main)/pots/[potId]/layout.tsx` (SECTIONS: overview, graph, sources, events, agent, users, add-context). Panels include `PotOverview`, `PotSourcesPanel`, `PotMembersPanel`, `PotAgentSetupPanel`, `PotAddContextPanel` and `PotContextQueryCard`, built on the shared `components/kit.tsx` primitives and the `.pot-theme` token set. Pot lookup resolves by exact id first, then by slug with real pots taking precedence over frontend-only demo pots so a real pot named `potpie` is never shadowed. Search terms: pot workspace, pot detail page, agent setup instructions, copy CLI snippet, pot sources list."
+    },
+    {
+      "slug": "pot-graph-explorer-web",
+      "name": "Web graph explorer / context graph canvas",
+      "lifecycle": "completed",
+      "summary": "An interactive React Flow canvas over a pot's entities and relationships, with node inspection, legend, filters and stats.",
+      "description": "Shipped at `/pots/[potId]/graph` (`PotGraphExplorer` → `PotGraphCanvas`) and at the cross-pot `/context-graph` route (`ProjectContextGraphExplorer`), which explores 'context relationships across your pots — services, features, repositories, and more'. Supporting components live in `app/(main)/pots/components/graph/`: `GraphControls`, `GraphLegend`, `GraphStatsPanel`, `NodeInspectorPanel`, `GraphDetailsSheet` and an `ontology.ts` mapping labels/predicates to visual treatment. Built on `reactflow` with `reactflow/dist/style.css` imported at the page. Search terms: visualize the graph, graph canvas, node inspector, entity explorer, see my context graph in the browser."
+    },
+    {
+      "slug": "local-graph-explorer-ui",
+      "name": "Local read-only graph explorer (`potpie ui`)",
+      "lifecycle": "completed",
+      "summary": "`potpie ui` ensures the daemon, discovers its base_url and opens `<base>/ui` — a read-only explorer served straight out of the local daemon.",
+      "description": "The zero-setup way to see your graph without any cloud account: `potpie ui [--open/--no-open] [--pot <ref>]`. The daemon serves compiled UI assets (packaged with the root distribution per PR #1019) and the explorer is strictly read-only. Related fixes: graph-explorer npm install warnings (PR #984), and a bounded UI dev port fallback preferring 3000 (potpie#969, PR #970) that was later reverted in PR #986. Search terms: potpie ui, local graph viewer, open explorer in browser, daemon serves ui, port already in use."
+    },
+    {
+      "slug": "events-ingestion-console",
+      "name": "Events console and ingestion pipeline view",
+      "lifecycle": "completed",
+      "summary": "A live event stream with filters, bulk actions, payload inspection and a visual queued → processing → done/error pipeline.",
+      "description": "Implemented under `app/(main)/pots/components/events/` in potpie-ui: `EventList`, `EventRow`, `EventFilters`, `EventStatusBadge`, `EventDetailSheet`, `EventPayloadView`, `EventBulkActionBar`, `IngestionPipeline`, `LiveActivityTimeline`, `AgentActivityTimeline` and `EventIngestionSettings`, driven by hooks `useEventsQuery`, `useEventStream`, `useEventsLiveSync`, `useIngestPipeline` and `useIngestionConfig` over `services/EventStreamService.ts`. Status vocabulary mirrors the internal Postgres event store: queued, processing, done, error. Search terms: why is my event stuck in queued, ingestion failed, event payload, replay event, live activity feed, ingestion settings."
+    },
+    {
+      "slug": "pot-membership-invites",
+      "name": "Pot membership, invitations and join flow",
+      "lifecycle": "completed",
+      "summary": "Invite teammates to a pot, accept via an invitation banner or the `/pots/join` route, and manage members and roles.",
+      "description": "The collaboration surface for a pot in potpie-ui: `PotMembersPanel` at `/pots/[potId]/users` lists and manages members, `PotInvitationBanner` surfaces pending invitations inside the pot layout, and `app/(main)/pots/join/page.tsx` handles accepting an invite link. Backed by `services/PotService.ts` and the `lib/hooks/usePotInvitation.ts` hook. Search terms: invite to pot, share a pot, accept invitation, pot members, remove member, seat, pot access."
+    },
+    {
+      "slug": "integrations-hub",
+      "name": "Integrations hub (GitHub, Linear, Jira, Confluence, Sentry, Slack)",
+      "lifecycle": "completed",
+      "summary": "Browser OAuth connect/disconnect pages plus redirect handlers for every source integration Potpie indexes.",
+      "description": "The web counterpart to CLI integration auth, at `app/(main)/integrations/` in potpie-ui with a hub page and per-provider routes for `linear`, `jira`, `confluence`, `sentry` and `slack`, each with its own `redirect/` (or `success/`) OAuth callback page, plus a generic `[integrationId]` detail route. GitHub connection has its own flows: `app/(auth)/link-github` and `app/(main)/github-setup-complete`. Backed by `services/IntegrationService.ts`. Integration coverage per the README: GitHub indexes repos/PRs/issues/reviews/source history, Linear indexes teams/issues/projects/documents, Jira indexes projects/issues/status/changelog, Confluence indexes spaces/pages/runbooks/decisions. Search terms: connect Linear, OAuth redirect failed, disconnect integration, install GitHub app, Slack webhook setup."
+    },
+    {
+      "slug": "recipe-build-pipeline",
+      "name": "Recipe pipeline: idea → clarifying questions → spec → plan → code",
+      "lifecycle": "in_progress",
+      "summary": "The end-to-end build flow in potpie-workflows that takes a natural-language product ask through questions, a specification, a phased plan and finally codegen.",
+      "description": "Modeled as a `Recipe` with a status machine in `src/core/recipes/types.py`: PENDING_QUESTIONS → SPEC_IN_PROGRESS → SPEC_READY → PLAN_IN_PROGRESS → PLAN_READY, with task kinds SPEC_GENERATION and PLAN_GENERATION and pointers `current_question_task_id`, `current_spec_task_id`, `current_plan_task_id`. Exposed over `GET/POST /api/v1/recipes` (documented in `QUESTION_GENERATION_API.md`) and driven asynchronously through Celery in `src/adapters/celery_recipe_subscriber.py`, with Redis-backed idempotency. The user-facing surface is potpie-ui's `/idea` entry point and the `/task/[taskId]/{qna,spec,plan,plan_overview,code}` route family. Search terms: build a feature from a prompt, recipe stuck in PENDING_QUESTIONS, spec task failed, plan generation timeout."
+    },
+    {
+      "slug": "multi-batch-clarifying-questions",
+      "name": "Multi-batch clarifying questions (Janus structured interview)",
+      "lifecycle": "in_progress",
+      "summary": "Replaces one-shot question generation with a multi-round interview that asks follow-ups until the request is actually specified — behind a feature flag.",
+      "description": "The Janus agent gained a `structured interview` mode (`JANUS_INTERVIEW_INITIAL_PROMPT` / `JANUS_INTERVIEW_CONTINUATION_PROMPT` in `src/core/agents/janus.py`) that runs multi-batch clarifying rounds and only sets `interview_complete: true` when the user request is fully specified — explicitly noted as rare. It is gated by `src/utils/recipe_feature_flags.py` ('When true, clarifying questions use multi-round Janus interviews'), with the legacy path (Janus prose + QA formatter) still the default per the docstring in `src/adapters/celery_recipe_subscriber.py`. The QA agent in `src/core/agents/qa.py` validates every emitted question for structural integrity, criticality enum (blocker/important/nice_to_have), non-empty `context_refs`, option label/description shape and a max of 15 questions. Search terms: clarifying questions, follow-up round, question batch, interview_complete, blocker question, multiple_choice."
+    },
+    {
+      "slug": "spec-generation-pipeline",
+      "name": "Deep-agent specification generation",
+      "lifecycle": "completed",
+      "summary": "A multi-agent pipeline that researches the codebase and produces a technical specification for a requested feature.",
+      "description": "Implemented in `src/core/agents/specgen/` in potpie-workflows as a staged pipeline: `requirements_agent`, `research_agent` / `hybrid_research_agent`, `architecture_agent`, `technical_design_agent`, `dependency_scan`, `enrichment_agent`, `author_agent`, `assembler_agent`, `validator_agent`, plus `sanity.py`, `memory.py` and `trace.py` for tracing. It runs on OpenRouter (`OPENROUTER_API_KEY` is required for recipe spec jobs) with `SPECGEN_*` env knobs for models, limits and artifact persistence, and is surfaced in potpie-ui at `/task/[taskId]/spec` via `services/SpecService.ts`. Search terms: generate a spec, technical design doc, requirements agent, spec validator, OPENROUTER_API_KEY missing, spec artifact."
+    },
+    {
+      "slug": "phased-plan-generation",
+      "name": "Phased implementation plan generation",
+      "lifecycle": "completed",
+      "summary": "Turns an approved spec into an ordered, phase-by-phase implementation plan with diagrams and validation.",
+      "description": "Implemented in `src/core/agents/plangen/` in potpie-workflows: `pipeline.py`, `plan_author.py`, `plan_research_agent.py`, `catalog.py`, `deep_tools.py`, `phase_formatting.py`, `diagram_specialist.py` (with a `PhaseDiagramBatch` model), `validator.py`, `memory.py` and `trace.py`, entry-pointed by `generate_phased_plan.py`. Mermaid diagrams are produced by the diagram specialist and repaired by `src/core/agents/diagram_fixer.py` / `diagram_utils.py` when they fail to parse. Editing flows through `plan_editor_agent.py`; the UI lives at `/task/[taskId]/plan` and `/task/[taskId]/plan_overview` backed by `services/PlanService.ts`. Search terms: implementation plan, phases, plan editor, mermaid diagram broken, phase validator, plan_overview."
+    },
+    {
+      "slug": "codegen-pr-automation",
+      "name": "Codegen and automated pull requests",
+      "lifecycle": "in_progress",
+      "summary": "Executes plan phases as real code changes in a sandbox and opens a pull request through the GitHub App.",
+      "description": "`src/modules/codegen/` in potpie-workflows (`codegen_service.py`, `codegen_router.py`, `codegen_job_store.py`, `codegen_schema.py`, `github_app.py`) drives the write path, with agents `codegen_agent.py`, `applicator_agent.py`, `patch_validator.py`, `phase_validator.py` and `pr_body_agent.py`. The agent toolbelt in `src/core/tools/` is filesystem- and search-shaped: `read`, `write`, `edit`, `multiedit`, `apply_patch`, `grep`, `ripgrep`, `ast_grep`, `glob`, `tree`, `bash`, `github_grep`, `webfetch`, `websearch`, `context7`, `mermaid`. The corresponding potpie-ui surface is `/task/[taskId]/code` and `/builds`. Still in progress: patch application and phase validation are the fragile steps and are actively being hardened. Search terms: generate code, apply patch failed, open a PR automatically, phase failed validation, codegen job stuck."
+    },
+    {
+      "slug": "workflow-automation-builder",
+      "name": "Workflow automation builder (triggers, nodes, executions)",
+      "lifecycle": "completed",
+      "summary": "A visual workflow editor with triggers, agent nodes and flow control, plus an execution history and log viewer.",
+      "description": "potpie-workflows models workflows as node graphs — `src/core/nodes/` has `triggers/`, `agents/`, `flow_control/`, `manual_steps/`, a `factory.py` and `data_models.py` — served by `src/modules/workflows/` (`workflows_router.py`, `workflows_service.py`, `workflows_controller.py`, `execution_logs/`) with `src/modules/triggers/` and `src/modules/webhooks/` for inbound activation. Execution runs on Celery workers (`start_celery_worker.py`, `celery_monitor.py`, `start_event_bus_worker.py`) with Redis-backed idempotency. The editor UI lives in potpie-ui at `app/(main)/workflows/` including `workflows/create`, `workflows/[workflowId]`, `workflows/[workflowId]/executions/[executionId]` and `components/editor/`, backed by `services/WorkflowService.ts`. Search terms: workflow editor, trigger a workflow, execution log, celery worker not picking up jobs, webhook trigger."
+    },
+    {
+      "slug": "agent-response-streaming",
+      "name": "Streaming agent responses over Redis streams",
+      "lifecycle": "completed",
+      "summary": "Long-running agent work streams tokens and tool events to the client through a Redis-backed stream manager instead of blocking on a request.",
+      "description": "`src/core/streams/` in potpie-workflows holds `redis_stream_manager.py`, `streaming_agent.py`, `agent_factory.py`, `agent_config.py` and `tool_instrumentation.py`, with `celery_recipe_streaming.py` streaming clarifying-question generation to Redis. On the client side potpie-ui consumes it through `services/EventStreamService.ts` and the chat/task views. Because it is Redis-backed, a dead or unreachable Redis shows up as a hung stream rather than an error — `REDIS_URL` defaults to `redis://localhost:6379/0`. Search terms: streaming response, SSE, tokens not appearing, stream stalled, redis stream, tool call events, DLQ."
+    },
+    {
+      "slug": "pie-observability-contract",
+      "name": "Pie observability — one contract over Loguru, Sentry and Logfire",
+      "lifecycle": "in_progress",
+      "summary": "A vendor-swappable `potpie-observability` package giving structured logging, error reporting and tracing behind a single interface.",
+      "description": "The `observability/` package in the enterprise `pie` monorepo exposes `config.py`, `profiles.py`, `sink.py`, `tracing.py`, `intercept.py` and pluggable sinks (`console`, `json_stdout`, `loguru_sink`, `sentry_sink`, `logfire_sink`) plus framework integrations for `fastapi` and `celery`. It follows Pie's modular principle: swapping the observability vendor should have a blast radius bounded by the module. The deployment stack (Loki/Grafana) lives in `deploy/observability/`. Still in progress — sink coverage, profile defaults and trace propagation across long-running agent runs are being filled in. Search terms: structured logging, log sink, trace agent run, Sentry DSN, Logfire, Loki, Grafana, request correlation id."
+    },
+    {
+      "slug": "sensitive-data-redaction",
+      "name": "Sensitive-data redaction before logs leave the process",
+      "lifecycle": "completed",
+      "summary": "A logging.Filter scrubs secrets, tokens, emails, phone numbers and cloud keys from messages and structured fields before any sink or vendor API sees them.",
+      "description": "`observability/src/observability/redaction.py` in the `pie` repo runs as a `logging.Filter` so every handler and sink receives scrubbed output, using only local regexes and conservative replacements with no app-layer dependencies. It emits distinct markers — `***REDACTED***`, `***REDACTED_EMAIL***`, `***REDACTED_PHONE***`, `***REDACTED_NAME***`, `***REDACTED_API_KEY***`, `***REDACTED_CLOUD_KEY***` — and keys off a `SENSITIVE_FIELD_NAMES` set covering `access_token`, `api_key`, `api_secret`, `authorization`, `aws_access_key_id`, `aws_secret_access_key`, `aws_session_token`, `azure_storage_key`, `client_secret`, `dsn`, `id_token`, `password` and more. This is the enterprise control that lets customer logs reach a third-party sink. Search terms: PII in logs, secret leaked to Sentry, redaction filter, scrub tokens, compliance logging."
+    },
+    {
+      "slug": "pie-sso-team-access",
+      "name": "Enterprise SSO, teams and workspace access control",
+      "lifecycle": "planned",
+      "summary": "Org-level single sign-on plus team/workspace scoping and RBAC for the enterprise Pie platform.",
+      "description": "Specified in `spec/modules/sso-team-access.md` in the `pie` monorepo — the only module spec written so far — against the platform overview's requirement for 'multiple organizations, multiple projects, controlled access, repeatable environments, auditability'. Pie's architecture doc calls out authorization decisions, identity reconciliation, SSO behavior and team/workspace context as exactly the domain rules that should get behavior-first tests rather than living in handlers or UI code. Not yet built. Search terms: SSO, SAML, Okta, org, workspace, RBAC, team access, seat management, enterprise login."
+    },
+    {
+      "slug": "release-gating",
+      "name": "Release gating for agent-authored changes",
+      "lifecycle": "proposed",
+      "summary": "Policy checks that must pass before agent-generated code is allowed to merge or deploy in an enterprise environment.",
+      "description": "A proposed enterprise control in `pie`: agent-authored changes should pass explicit policy, review and evaluation gates before they reach a protected branch or an environment. It follows directly from the platform overview's insistence that long-running work, agent-generated code, reviews, experiments and deployment workflows all pass through the same systems customers use, with auditability and controlled access. The related shipped precedent in OSS Potpie is potpie#902 ('ensure destructive semantic mutations can't auto-commit past review'), which forces medium/high-risk plans through `--approved-by`. Search terms: merge gate, approval policy, guardrails for agent PRs, review required, deploy gate, evaluation gate."
+    },
+    {
+      "slug": "vscode-codebase-assistant",
+      "name": "Potpie for VS Code",
+      "lifecycle": "completed",
+      "summary": "An in-editor extension for codebase Q&A, debugging, plan/spec review and terminal-driven agent work without leaving VS Code.",
+      "description": "The `potpie-vscode-extension` repo ships a webview chat plus supporting services: `ChatViewProvider.ts`, `ConversationStore.ts`, `ActiveSessionService.ts`, `SocketIOManager.ts` for realtime, `SpecService.ts` / `PlanService.ts` / `TaskSplittingService.ts` / `ValidationService.ts`, a `LocalServer.ts`, and a full auth stack under `src/auth/` (Firebase REST, JWT, token storage, an `AuthCallbackServer` for browser login). Terminal execution is guarded by `TerminalCommandAllowlist.ts` and `terminal/CommandValidator.ts` with a `StickyTerminalService`. Marketed features: codebase Q&A, a debugging agent that takes a stacktrace and returns root cause plus a fix path, chat management, and support for any local or remote repo. Search terms: VS Code extension, .vsix, editor chat, ask about my codebase in the IDE, extension login failed."
+    },
+    {
+      "slug": "slack-codebase-assistant",
+      "name": "Potpie for Slack",
+      "lifecycle": "completed",
+      "summary": "A Slack bot that lets a team ask questions about their codebase and get grounded answers in-channel.",
+      "description": "The `potpie-slack` repo is a Python Slack app (`bot/`, `src/`, `spec/`, `run_migrations.py`, `start.sh`, a Dockerfile) backed by PostgreSQL and documented against the Potpie API in `POTPIE_API_DOCUMENTATION.md`. It is the documented extension in the public docs under `extensions/slack`. Requires Slack app credentials and Python 3.10+. Search terms: Slack bot, ask potpie in Slack, slash command, channel integration, bot not responding, slack app credentials."
+    },
+    {
+      "slug": "per-repo-code-agents",
+      "name": "Per-repo code agents (QnA, debugging, unit/integration test, code changes)",
+      "lifecycle": "deprecated",
+      "summary": "The original Potpie product — a set of hosted agents over a parsed per-repo knowledge graph, plus custom agents with a tool catalog.",
+      "description": "The first-generation product, still documented at docs.potpie.ai under `agents/` (introduction, debugging-agent, qna-agent, integration-test-agent, unit-test-agent, code-changes-agent) and `custom-agents/` with a tool catalog (`get_code_from_probable_node_name`, `get_code_from_node_id`, `ask_knowledge_graph_queries`, `get_nodes_from_tags`, `get_code_graph_from_node_name`, `change_detection`), served by `production-api.potpie.ai`. Superseded by the CLI-first Context Graph: the implementation now sits under `legacy/` in the potpie repo and the graphiti-core dependency and dead resolution-service were torn down (potpie#893). potpie-ui still carries the matching legacy routes `/agents`, `/all-agents`, `/shared-agent`, `/repositories` and `/repo`. Search terms: old potpie agents, custom agent, parse my repo, knowledge graph of code, node_id, legacy API, agent id."
+    },
+    {
+      "slug": "context-core-package-split",
+      "name": "Product / engine / core package split",
+      "lifecycle": "in_progress",
+      "summary": "Carving the graph engine into an independently packaged `potpie-context-core` library with the CLI, daemon and host services owned by the root product package.",
+      "description": "An in-flight restructuring visible in recent `main` commits: 'Move the CLI into the root potpie package' (7241e62c), 'Move the daemon, MCP server, and host-app services into the root package' (b85bbf5e), 'Carve the graph core into a potpie-context-core library' (e61b9bbd), 'Give potpie-context-core a curated api surface' (cde14cba) and 'Flatten potpie-context-core into a library-shaped package' (6f29b80a), alongside 'Split context-engine dependencies into per-adapter-family extras' (efe87dc9) and the `potpie_context_engine` namespace move (a72b8ac2). PR #1019 continues it by making the root distribution own `potpie-daemon` via `potpie.daemon.main:main`. Explicitly not finished: four temporary Context Engine imports of `potpie.daemon` remain explicit and test-bounded until the independent Context Engine package PR removes the transitional product coupling. The `pie` repo tracks the consumer side in `spec/context-engine-module-reuse.md`. Search terms: monorepo split, package boundary, potpie-context-core, import cycle, transitional coupling, wheel contents."
+    },
+    {
+      "slug": "auth-keys-and-billing",
+      "name": "Account auth, API keys and subscription billing",
+      "lifecycle": "completed",
+      "summary": "Firebase-backed sign-in across web, CLI and extension, plus API key management and subscription/plan handling.",
+      "description": "potpie-ui owns the account surface: `app/(auth)/{sign-in,sign-up,onboarding,cli-success,link-github}`, `app/(main)/account`, `app/(main)/key-management`, `app/(main)/settings` and `app/(main)/user-subscription`, backed by `services/AuthService.ts` and `services/SettingsService.ts` with Firebase configured via environment variables. `app/(auth)/cli-success` is the browser landing page that closes the `potpie login` loop (covered by `lib/auth/cli-success.test.ts`), and the CLI stores either a Firebase browser session or an API key via `potpie login --api-key/-k --url/-u`; local OSS `potpie whoami` reports a `none` identity because account features are optional. Pro-gated capabilities surface through `lib/hooks/useProFeatureError.ts`. Search terms: sign in, login redirect, API key, revoke key, upgrade plan, subscription, pro feature locked, potpie login from terminal."
+    }
+  ],
+  "edges": [
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:change-timeline", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/application/readers/timeline_reader.py" },
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:infra-topology", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/application/readers/infra_topology.py" },
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:debug-memory", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/application/readers/prior_bugs.py" },
+    { "from": "service:potpie-parsing", "type": "PROVIDES", "to": "feature:code-parsing", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/parsing/parsing/py_graph.py" },
+    { "from": "service:celery-parsing-worker", "type": "PROVIDES", "to": "feature:code-parsing", "truth": "agent_claim", "confidence": 0.85, "note": "The parsing worker is what actually runs the parse and writes the code graph into Neo4j." },
+    { "from": "service:potpie-cli", "type": "PROVIDES", "to": "feature:telemetry", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie#955" },
+    { "from": "service:pie-harness-runner", "type": "PROVIDES", "to": "feature:harness-orchestration", "truth": "authoritative_fact", "evidence": "code:pie/spec/modules/harness-orchestration.md" },
+    { "from": "service:pie-cli", "type": "PROVIDES", "to": "feature:harness-orchestration", "truth": "agent_claim", "confidence": 0.85, "note": "`pie run` is the human entrypoint that drives the ACP session and renders the stream." },
+    { "from": "repo:potpie-ai/potpie", "type": "PROVIDES", "to": "feature:context-graph-project-memory", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/vision.md", "note": "README frames the repo as 'Context Graph for AI Native SDLC'." },
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:context-graph-project-memory", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-core/src/potpie_context_core/ontology.py" },
+    { "from": "feature:context-graph-project-memory", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/README.md" },
+    { "from": "feature:context-graph-project-memory", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src" },
+
+    { "from": "repo:potpie-ai/potpie", "type": "PROVIDES", "to": "feature:graph-workbench-propose-commit", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/commands/graph.py" },
+    { "from": "service:potpie-cli", "type": "PROVIDES", "to": "feature:graph-workbench-propose-commit", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/cli-flow.md#write-route-hostgraph_workbench" },
+    { "from": "feature:graph-workbench-propose-commit", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/application/services/graph_workbench.py" },
+    { "from": "feature:graph-workbench-propose-commit", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/commands/graph.py" },
+
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:semantic-mutation-dsl", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/writing.md#2-the-semantic-dsl-flat-ops" },
+    { "from": "feature:semantic-mutation-dsl", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/writing.md#21-the-10-operations" },
+    { "from": "feature:semantic-mutation-dsl", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-core/src/potpie_context_core/ontology.py" },
+
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:bitemporal-claim-validity", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/ontology.md" },
+    { "from": "feature:bitemporal-claim-validity", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-core/src/potpie_context_core/ontology.py" },
+    { "from": "feature:bitemporal-claim-validity", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/vision.md#claims-not-payloads" },
+
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:claim-supersession-retraction", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/writing.md#9-coherence-invariants" },
+    { "from": "feature:claim-supersession-retraction", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/skills.md#4-potpie-graph-v5" },
+
+    { "from": "repo:potpie-ai/potpie", "type": "PROVIDES", "to": "feature:ontology-catalog-classification", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-core/src/potpie_context_core/ontology.py" },
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:ontology-catalog-classification", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/ontology.md" },
+    { "from": "feature:ontology-catalog-classification", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-core/src/potpie_context_core/ontology.py" },
+    { "from": "feature:ontology-catalog-classification", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "source_observation", "evidence": "code:potpie/docs/context-graph/cli-flow.md#read--contract-route-hostgraph", "note": "Surfaced live through `potpie graph catalog` / `graph describe`." },
+
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:semantic-search-local-embedder", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/querying.md#5-the-recall-mechanism" },
+    { "from": "feature:semantic-search-local-embedder", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie#909" },
+    { "from": "feature:semantic-search-local-embedder", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie#976" },
+
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:named-view-graph-read", "truth": "authoritative_fact", "evidence": "code:potpie/domain/graph_views.py" },
+    { "from": "service:potpie-cli", "type": "PROVIDES", "to": "feature:named-view-graph-read", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/querying.md#8-named-views--graphviewspec" },
+    { "from": "feature:named-view-graph-read", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie#995" },
+    { "from": "feature:named-view-graph-read", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/read_presenter.py" },
+
+    { "from": "service:potpie-cli", "type": "PROVIDES", "to": "feature:entity-identity-resolution", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/querying.md#7-the-3-axis-query-model" },
+    { "from": "feature:entity-identity-resolution", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/querying.md#7-the-3-axis-query-model", "note": "DefaultGraphService.search_entities → claim_query.find_claims, bypassing the read trunk." },
+    { "from": "feature:entity-identity-resolution", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/commands/graph.py" },
+
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:graph-neighborhood-traversal", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/cli-flow.md#backend-capability-commands" },
+    { "from": "feature:graph-neighborhood-traversal", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/architecture.md#the-graphbackend-port" },
+    { "from": "feature:graph-neighborhood-traversal", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/commands/graph.py" },
+
+    { "from": "service:potpie-cli", "type": "PROVIDES", "to": "feature:graph-quality-diagnostics", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/cli-flow.md#quality-graph-quality--read-only-diagnostics" },
+    { "from": "feature:graph-quality-diagnostics", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/writing.md#11-quality-scoring-diagnostic-only" },
+    { "from": "feature:graph-quality-diagnostics", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/commands/graph.py" },
+
+    { "from": "service:potpie-cli", "type": "PROVIDES", "to": "feature:graph-inbox", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/cli-flow.md#inbox-graph-inbox--capture-uncertain-work" },
+    { "from": "feature:graph-inbox", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/writing.md#10-inbox" },
+    { "from": "feature:graph-inbox", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/commands/graph.py" },
+
+    { "from": "repo:potpie-ai/potpie", "type": "PROVIDES", "to": "feature:pot-tenancy-isolation", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/vision.md#pots-as-tenancy" },
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:pot-tenancy-isolation", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/services/pot_management.py" },
+    { "from": "feature:pot-tenancy-isolation", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/services/pot_management.py" },
+    { "from": "feature:pot-tenancy-isolation", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie#961" },
+
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:swappable-graph-backends", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/architecture.md#the-graphbackend-port" },
+    { "from": "feature:swappable-graph-backends", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/architecture.md#backend-selection-precedence" },
+    { "from": "feature:swappable-graph-backends", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/cli-flow.md#backend-group" },
+
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:windowed-reconciliation", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/ingestion-nudge.md#5-windowed-batching--reconciliation" },
+    { "from": "feature:windowed-reconciliation", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/bootstrap/ingestion_server.py" },
+    { "from": "feature:windowed-reconciliation", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/application/services/ingestion_submission_service.py" },
+
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:github-webhook-ingestion", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/ingestion-nudge.md#entry-points" },
+    { "from": "feature:github-webhook-ingestion", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/adapters/outbound/connectors/github" },
+    { "from": "feature:github-webhook-ingestion", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/ingestion-nudge.md#2-how-raw-episodesevents-enter" },
+
+    { "from": "repo:potpie-ai/potpie", "type": "PROVIDES", "to": "feature:external-event-ledger", "truth": "source_observation", "evidence": "code:potpie/docs/context-graph/cli-flow.md#event-ledger", "note": "CLI surface exists; clients are TODO stubs." },
+    { "from": "feature:external-event-ledger", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "source_observation", "evidence": "code:potpie/potpie/cli/commands/ledger.py" },
+    { "from": "feature:external-event-ledger", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "agent_claim", "confidence": 0.6, "note": "Port definitions live in domain/ports/ledger/; adapters are stubs." },
+
+    { "from": "repo:potpie-ai/potpie", "type": "PROVIDES", "to": "feature:managed-cloud-graph", "truth": "source_observation", "evidence": "code:potpie/docs/context-graph/vision.md#product-shape", "note": "Designed and wired-for; every command raises CapabilityNotImplemented." },
+    { "from": "feature:managed-cloud-graph", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "source_observation", "evidence": "code:potpie/potpie/cli/commands/cloud.py" },
+
+    { "from": "service:potpie-cli", "type": "PROVIDES", "to": "feature:potpie-setup-wizard", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/services/setup_orchestrator.py" },
+    { "from": "repo:potpie-ai/potpie", "type": "PROVIDES", "to": "feature:potpie-setup-wizard", "truth": "authoritative_fact", "evidence": "code:potpie/README.md#step-2-run-the-potpie-setup-wizard" },
+    { "from": "feature:potpie-setup-wizard", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/ui/setup_ux.py" },
+
+    { "from": "service:potpie-cli", "type": "PROVIDES", "to": "feature:pot-and-source-management-cli", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/commands/pots.py" },
+    { "from": "feature:pot-and-source-management-cli", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie#974" },
+    { "from": "feature:pot-and-source-management-cli", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/services/pot_management.py" },
+
+    { "from": "service:potpie-cli", "type": "PROVIDES", "to": "feature:potpie-doctor-diagnostics", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/cli-flow.md#top-level-commands" },
+    { "from": "feature:potpie-doctor-diagnostics", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/cli_install_status.py" },
+    { "from": "feature:potpie-doctor-diagnostics", "type": "IMPLEMENTED_IN", "to": "service:potpie-daemon", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie#941", "note": "doctor composes daemon.status() alongside backend readiness." },
+
+    { "from": "service:potpie-cli", "type": "PROVIDES", "to": "feature:cli-integration-auth", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/commands/auth.py" },
+    { "from": "feature:cli-integration-auth", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/auth" },
+    { "from": "feature:cli-integration-auth", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie#968" },
+
+    { "from": "repo:potpie-ai/potpie", "type": "PROVIDES", "to": "feature:gitlab-cli-integration", "truth": "source_observation", "evidence": "github:potpie-ai/potpie#997", "note": "Open feature request; provider factory still raises NotImplementedError." },
+    { "from": "feature:gitlab-cli-integration", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "agent_claim", "confidence": 0.55, "note": "Target surface is the `potpie <provider> login` group; not built yet." },
+
+    { "from": "service:potpie-mcp-server", "type": "PROVIDES", "to": "feature:mcp-context-tools", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/mcp/server.py" },
+    { "from": "feature:mcp-context-tools", "type": "IMPLEMENTED_IN", "to": "service:potpie-mcp-server", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie#1019", "note": "PR #1019 removes the potpie-mcp console script and the CE MCP adapter." },
+    { "from": "feature:mcp-context-tools", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/vision.md#one-cli-surface-for-humans-and-agents", "note": "The 4 tools are adapters over the same graph internals, not a second engine." },
+
+    { "from": "service:potpie-cli", "type": "PROVIDES", "to": "feature:agent-skills-bundle", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/services/skill_manager.py" },
+    { "from": "repo:potpie-ai/potpie", "type": "PROVIDES", "to": "feature:agent-skills-bundle", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/skills.md#3-the-8-core-bundle-skills" },
+    { "from": "feature:agent-skills-bundle", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/services/skills/agent_installer.py" },
+
+    { "from": "repo:potpie-ai/potpie", "type": "PROVIDES", "to": "feature:claude-code-plugin", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/templates/claude_plugin" },
+    { "from": "feature:claude-code-plugin", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/templates/claude_plugin/hooks/hooks.json" },
+    { "from": "feature:claude-code-plugin", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "source_observation", "evidence": "code:potpie/docs/context-graph/skills.md#5-the-claude-code-plugin", "note": "Bundle agent type `claude-plugin` exists but no CLI command invokes it yet." },
+
+    { "from": "service:context-engine", "type": "PROVIDES", "to": "feature:zero-token-nudges", "truth": "authoritative_fact", "evidence": "code:potpie/application/services/nudge_service.py" },
+    { "from": "service:potpie-cli", "type": "PROVIDES", "to": "feature:zero-token-nudges", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/ingestion-nudge.md#74-the-cli-surface" },
+    { "from": "feature:zero-token-nudges", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/domain/nudge.py" },
+    { "from": "feature:zero-token-nudges", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/cli/templates/claude_plugin/hooks/potpie_nudge.py" },
+
+    { "from": "repo:potpie-ai/potpie", "type": "PROVIDES", "to": "feature:harness-led-repo-baseline", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/ingestion-nudge.md#4-scanners-gone-connectors-trimmed" },
+    { "from": "feature:harness-led-repo-baseline", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/services/skills/bundle_catalog.py", "note": "Delivered as the potpie-repo-baseline + potpie-source-ingestion skills." },
+    { "from": "feature:harness-led-repo-baseline", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/skills.md#3-the-8-core-bundle-skills" },
+
+    { "from": "repo:potpie-ai/potpie-ui", "type": "PROVIDES", "to": "feature:pots-web-surface", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/pots/[potId]/layout.tsx" },
+    { "from": "service:potpie-ui", "type": "PROVIDES", "to": "feature:pots-web-surface", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/pots/page.tsx" },
+    { "from": "feature:pots-web-surface", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/pots/components/PotOverview.tsx" },
+    { "from": "feature:pots-web-surface", "type": "IMPLEMENTED_IN", "to": "service:potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/services/PotService.ts" },
+
+    { "from": "repo:potpie-ai/potpie-ui", "type": "PROVIDES", "to": "feature:pot-graph-explorer-web", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/pots/components/PotGraphExplorer.tsx" },
+    { "from": "service:potpie-ui", "type": "PROVIDES", "to": "feature:pot-graph-explorer-web", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/context-graph/page.tsx" },
+    { "from": "feature:pot-graph-explorer-web", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/pots/components/graph/PotGraphCanvas.tsx" },
+    { "from": "feature:pot-graph-explorer-web", "type": "IMPLEMENTED_IN", "to": "service:potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/pots/components/graph/ontology.ts" },
+
+    { "from": "service:potpie-daemon", "type": "PROVIDES", "to": "feature:local-graph-explorer-ui", "truth": "authoritative_fact", "evidence": "code:potpie/docs/context-graph/cli-flow.md#top-level-commands" },
+    { "from": "service:potpie-daemon", "type": "PROVIDES", "to": "feature:local-graph-explorer-ui", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie#1019", "note": "Root distribution packages the daemon UI assets." },
+    { "from": "feature:local-graph-explorer-ui", "type": "IMPLEMENTED_IN", "to": "service:potpie-daemon", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie#984" },
+    { "from": "feature:local-graph-explorer-ui", "type": "IMPLEMENTED_IN", "to": "service:potpie-daemon", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/daemon" },
+
+    { "from": "repo:potpie-ai/potpie-ui", "type": "PROVIDES", "to": "feature:events-ingestion-console", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/pots/[potId]/events/page.tsx" },
+    { "from": "service:potpie-ui", "type": "PROVIDES", "to": "feature:events-ingestion-console", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/pots/components/events/IngestionPipeline.tsx" },
+    { "from": "feature:events-ingestion-console", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/pots/components/events/index.ts" },
+    { "from": "feature:events-ingestion-console", "type": "IMPLEMENTED_IN", "to": "service:potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/services/EventStreamService.ts" },
+
+    { "from": "repo:potpie-ai/potpie-ui", "type": "PROVIDES", "to": "feature:pot-membership-invites", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/pots/join/page.tsx" },
+    { "from": "service:potpie-ui", "type": "PROVIDES", "to": "feature:pot-membership-invites", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/pots/components/PotMembersPanel.tsx" },
+    { "from": "feature:pot-membership-invites", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/lib/hooks/usePotInvitation.ts" },
+
+    { "from": "repo:potpie-ai/potpie-ui", "type": "PROVIDES", "to": "feature:integrations-hub", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/integrations/page.tsx" },
+    { "from": "service:potpie-ui", "type": "PROVIDES", "to": "feature:integrations-hub", "truth": "authoritative_fact", "evidence": "code:potpie-ui/services/IntegrationService.ts" },
+    { "from": "feature:integrations-hub", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/integrations/linear/redirect/page.tsx" },
+    { "from": "feature:integrations-hub", "type": "IMPLEMENTED_IN", "to": "service:potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/integrations/[integrationId]/page.tsx" },
+
+    { "from": "repo:potpie-ai/potpie-workflows", "type": "PROVIDES", "to": "feature:recipe-build-pipeline", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/modules/recipes/recipes_router.py" },
+    { "from": "service:workflows-rest-server", "type": "PROVIDES", "to": "feature:recipe-build-pipeline", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/QUESTION_GENERATION_API.md" },
+    { "from": "feature:recipe-build-pipeline", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-workflows", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/core/recipes/types.py" },
+    { "from": "feature:recipe-build-pipeline", "type": "IMPLEMENTED_IN", "to": "service:workflows-celery-worker", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/adapters/celery_recipe_subscriber.py" },
+    { "from": "feature:recipe-build-pipeline", "type": "IMPLEMENTED_IN", "to": "service:potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/idea/page.tsx", "note": "User-facing entry point and the /task/[taskId]/* route family." },
+
+    { "from": "repo:potpie-ai/potpie-workflows", "type": "PROVIDES", "to": "feature:multi-batch-clarifying-questions", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/core/agents/janus.py" },
+    { "from": "service:workflows-celery-worker", "type": "PROVIDES", "to": "feature:multi-batch-clarifying-questions", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/adapters/celery_recipe_subscriber.py" },
+    { "from": "feature:multi-batch-clarifying-questions", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-workflows", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/utils/recipe_feature_flags.py", "note": "Gated behind a feature flag; legacy single-shot path is still the default." },
+    { "from": "feature:multi-batch-clarifying-questions", "type": "IMPLEMENTED_IN", "to": "service:potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/task/[taskId]/qna/page.tsx" },
+
+    { "from": "repo:potpie-ai/potpie-workflows", "type": "PROVIDES", "to": "feature:spec-generation-pipeline", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/core/agents/specgen/pipeline.py" },
+    { "from": "service:workflows-celery-worker", "type": "PROVIDES", "to": "feature:spec-generation-pipeline", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/core/agents/specgen/assembler_agent.py" },
+    { "from": "feature:spec-generation-pipeline", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-workflows", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/core/agents/specgen/validator_agent.py" },
+    { "from": "feature:spec-generation-pipeline", "type": "IMPLEMENTED_IN", "to": "service:potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/services/SpecService.ts" },
+
+    { "from": "repo:potpie-ai/potpie-workflows", "type": "PROVIDES", "to": "feature:phased-plan-generation", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/core/agents/plangen/pipeline.py" },
+    { "from": "service:workflows-celery-worker", "type": "PROVIDES", "to": "feature:phased-plan-generation", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/generate_phased_plan.py" },
+    { "from": "feature:phased-plan-generation", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-workflows", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/core/agents/plangen/plan_author.py" },
+    { "from": "feature:phased-plan-generation", "type": "IMPLEMENTED_IN", "to": "service:potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/services/PlanService.ts" },
+
+    { "from": "repo:potpie-ai/potpie-workflows", "type": "PROVIDES", "to": "feature:codegen-pr-automation", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/modules/codegen/codegen_service.py" },
+    { "from": "service:workflows-rest-server", "type": "PROVIDES", "to": "feature:codegen-pr-automation", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/modules/codegen/codegen_router.py" },
+    { "from": "feature:codegen-pr-automation", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-workflows", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/modules/codegen/github_app.py" },
+    { "from": "feature:codegen-pr-automation", "type": "IMPLEMENTED_IN", "to": "service:workflows-celery-worker", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/core/agents/applicator_agent.py" },
+
+    { "from": "repo:potpie-ai/potpie-workflows", "type": "PROVIDES", "to": "feature:workflow-automation-builder", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/modules/workflows/workflows_router.py" },
+    { "from": "service:workflows-rest-server", "type": "PROVIDES", "to": "feature:workflow-automation-builder", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/core/nodes/factory.py" },
+    { "from": "feature:workflow-automation-builder", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-workflows", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/core/nodes/triggers" },
+    { "from": "feature:workflow-automation-builder", "type": "IMPLEMENTED_IN", "to": "service:potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/workflows/components/editor" },
+
+    { "from": "repo:potpie-ai/potpie-workflows", "type": "PROVIDES", "to": "feature:agent-response-streaming", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/core/streams/redis_stream_manager.py" },
+    { "from": "service:workflows-rest-server", "type": "PROVIDES", "to": "feature:agent-response-streaming", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/core/streams/streaming_agent.py" },
+    { "from": "feature:agent-response-streaming", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-workflows", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/adapters/celery_recipe_streaming.py" },
+    { "from": "feature:agent-response-streaming", "type": "IMPLEMENTED_IN", "to": "service:potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/services/EventStreamService.ts" },
+
+    { "from": "repo:potpie-ai/pie", "type": "PROVIDES", "to": "feature:pie-observability-contract", "truth": "authoritative_fact", "evidence": "code:pie/observability/src/observability/sink.py" },
+    { "from": "service:pie-observability", "type": "PROVIDES", "to": "feature:pie-observability-contract", "truth": "authoritative_fact", "evidence": "code:pie/README.md" },
+    { "from": "feature:pie-observability-contract", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/pie", "truth": "authoritative_fact", "evidence": "code:pie/observability/src/observability/sinks" },
+    { "from": "feature:pie-observability-contract", "type": "IMPLEMENTED_IN", "to": "service:pie-observability", "truth": "authoritative_fact", "evidence": "code:pie/observability/src/observability/tracing.py" },
+
+    { "from": "repo:potpie-ai/pie", "type": "PROVIDES", "to": "feature:sensitive-data-redaction", "truth": "authoritative_fact", "evidence": "code:pie/observability/src/observability/redaction.py" },
+    { "from": "service:pie-observability", "type": "PROVIDES", "to": "feature:sensitive-data-redaction", "truth": "authoritative_fact", "evidence": "code:pie/observability/src/observability/redaction.py" },
+    { "from": "feature:sensitive-data-redaction", "type": "IMPLEMENTED_IN", "to": "service:pie-observability", "truth": "authoritative_fact", "evidence": "code:pie/observability/src/observability/redaction.py" },
+
+    { "from": "repo:potpie-ai/pie", "type": "PROVIDES", "to": "feature:pie-sso-team-access", "truth": "source_observation", "evidence": "code:pie/spec/modules/sso-team-access.md", "note": "Specified, not yet built." },
+    { "from": "feature:pie-sso-team-access", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/pie", "truth": "source_observation", "evidence": "code:pie/spec/modules/sso-team-access.md" },
+
+    { "from": "repo:potpie-ai/pie", "type": "PROVIDES", "to": "feature:release-gating", "truth": "agent_claim", "confidence": 0.5, "note": "Proposed enterprise control implied by spec/overview.md; no module yet." },
+    { "from": "feature:release-gating", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/pie", "truth": "agent_claim", "confidence": 0.5, "note": "Target home is a Pie policy module; OSS precedent is potpie#902." },
+
+    { "from": "repo:potpie-ai/potpie-vscode-extension", "type": "PROVIDES", "to": "feature:vscode-codebase-assistant", "truth": "authoritative_fact", "evidence": "code:potpie-vscode-extension/README.md" },
+    { "from": "service:potpie-vscode-extension", "type": "PROVIDES", "to": "feature:vscode-codebase-assistant", "truth": "authoritative_fact", "evidence": "code:potpie-vscode-extension/src/extension.ts" },
+    { "from": "feature:vscode-codebase-assistant", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-vscode-extension", "truth": "authoritative_fact", "evidence": "code:potpie-vscode-extension/src/ChatViewProvider.ts" },
+    { "from": "feature:vscode-codebase-assistant", "type": "IMPLEMENTED_IN", "to": "service:potpie-vscode-extension", "truth": "authoritative_fact", "evidence": "code:potpie-vscode-extension/src/auth/SessionManager.ts" },
+
+    { "from": "repo:potpie-ai/potpie-slack", "type": "PROVIDES", "to": "feature:slack-codebase-assistant", "truth": "authoritative_fact", "evidence": "code:potpie-slack/README.md" },
+    { "from": "service:potpie-slack-bot", "type": "PROVIDES", "to": "feature:slack-codebase-assistant", "truth": "authoritative_fact", "evidence": "code:potpie-slack/bot" },
+    { "from": "feature:slack-codebase-assistant", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-slack", "truth": "authoritative_fact", "evidence": "code:potpie-slack/POTPIE_API_DOCUMENTATION.md" },
+    { "from": "feature:slack-codebase-assistant", "type": "IMPLEMENTED_IN", "to": "service:potpie-slack-bot", "truth": "authoritative_fact", "evidence": "code:potpie-slack/start.sh" },
+    { "from": "repo:potpie-ai/mintlify-docs", "type": "PROVIDES", "to": "feature:slack-codebase-assistant", "truth": "source_observation", "evidence": "code:mintlify-docs/extensions/slack", "note": "Documented as the Slack extension in the public docs." },
+
+    { "from": "repo:potpie-ai/mintlify-docs", "type": "PROVIDES", "to": "feature:per-repo-code-agents", "truth": "source_observation", "evidence": "code:mintlify-docs/docs.json", "note": "Public docs still document the agents/ and custom-agents/ product." },
+    { "from": "feature:per-repo-code-agents", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/app/modules", "note": "Implementation now sits under legacy/ after the Context Graph pivot." },
+    { "from": "feature:per-repo-code-agents", "type": "IMPLEMENTED_IN", "to": "service:mom-api", "truth": "source_observation", "evidence": "code:mintlify-docs/docs.json", "note": "OpenAPI source is https://production-api.potpie.ai/openapi.json." },
+    { "from": "feature:per-repo-code-agents", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/all-agents/page.tsx", "note": "Legacy /agents, /all-agents, /shared-agent, /repositories routes." },
+
+    { "from": "repo:potpie-ai/potpie", "type": "PROVIDES", "to": "feature:context-core-package-split", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-core/pyproject.toml" },
+    { "from": "feature:context-core-package-split", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie#1019" },
+    { "from": "feature:context-core-package-split", "type": "IMPLEMENTED_IN", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml" },
+    { "from": "feature:context-core-package-split", "type": "IMPLEMENTED_IN", "to": "service:potpie-daemon", "truth": "authoritative_fact", "evidence": "github:potpie-ai/potpie#1019", "note": "Root distribution owns potpie-daemon via potpie.daemon.main:main." },
+    { "from": "feature:context-core-package-split", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/pie", "truth": "source_observation", "evidence": "code:pie/spec/context-engine-module-reuse.md", "note": "Pie tracks the consumer side of the carve-out." },
+
+    { "from": "repo:potpie-ai/potpie-ui", "type": "PROVIDES", "to": "feature:auth-keys-and-billing", "truth": "authoritative_fact", "evidence": "code:potpie-ui/services/AuthService.ts" },
+    { "from": "service:potpie-ui", "type": "PROVIDES", "to": "feature:auth-keys-and-billing", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/key-management/page.tsx" },
+    { "from": "feature:auth-keys-and-billing", "type": "IMPLEMENTED_IN", "to": "repo:potpie-ai/potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/lib/auth/cli-success.test.ts" },
+    { "from": "feature:auth-keys-and-billing", "type": "IMPLEMENTED_IN", "to": "service:potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/app/(main)/user-subscription/page.tsx" },
+    { "from": "feature:auth-keys-and-billing", "type": "IMPLEMENTED_IN", "to": "service:potpie-cli", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/services/auth_service.py", "note": "potpie login/logout stores a Firebase session or API key; whoami reports `none` locally." }
+  ]
+}

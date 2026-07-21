@@ -17,6 +17,14 @@ import {
   isDemoRecipeId,
   startDemoPlanGeneration,
 } from "@/lib/mock/demoBuildFlow";
+import {
+  connectVectorDemoPlanStream,
+  getVectorDemoPlanChatResponse,
+  getVectorDemoPlanStatus,
+  isVectorDemoRecipeId,
+  startVectorDemoPlanGeneration,
+  VECTOR_DEMO_PLAN_RUN_ID,
+} from "@/lib/mock/demoVectorSearchFlow";
 
 export default class PlanService {
   private static readonly BASE_URL = process.env.NEXT_PUBLIC_WORKFLOWS_URL;
@@ -30,6 +38,9 @@ export default class PlanService {
   static async regeneratePlan(recipeId: string): Promise<PlanSubmitResponse> {
     if (isDemoRecipeId(recipeId)) {
       return startDemoPlanGeneration();
+    }
+    if (isVectorDemoRecipeId(recipeId)) {
+      return startVectorDemoPlanGeneration();
     }
     try {
       const headers = await getHeaders();
@@ -55,6 +66,9 @@ export default class PlanService {
   ): Promise<PlanSubmitResponse> {
     if (isDemoRecipeId(request.recipe_id)) {
       return startDemoPlanGeneration();
+    }
+    if (isVectorDemoRecipeId(request.recipe_id)) {
+      return startVectorDemoPlanGeneration();
     }
     try {
       const recipeId = request.recipe_id;
@@ -87,6 +101,9 @@ export default class PlanService {
   ): Promise<PlanStatusResponse> {
     if (isDemoRecipeId(recipeId)) {
       return getDemoPlanStatus();
+    }
+    if (isVectorDemoRecipeId(recipeId)) {
+      return getVectorDemoPlanStatus();
     }
     try {
       console.log("[PlanService] Fetching plan status for recipe:", recipeId);
@@ -142,6 +159,12 @@ export default class PlanService {
         connectDemoPlanStream(options);
       }
       return { runId: DEMO_PLAN_RUN_ID };
+    }
+    if (isVectorDemoRecipeId(recipeId)) {
+      if (options.consumeStream !== false && options.onEvent) {
+        connectVectorDemoPlanStream(options);
+      }
+      return { runId: VECTOR_DEMO_PLAN_RUN_ID };
     }
     const headers = await getHeaders();
     const url = `${this.API_BASE}/${recipeId}/plan/generate-stream${options.streamTokens !== false ? "?stream_tokens=true" : ""}`;
@@ -249,6 +272,9 @@ export default class PlanService {
     if (isDemoRecipeId(recipeId)) {
       return getDemoPlanChatResponse(request.message);
     }
+    if (isVectorDemoRecipeId(recipeId)) {
+      return getVectorDemoPlanChatResponse(request.message);
+    }
     try {
       const headers = await getHeaders();
       const response = await axios.post<{
@@ -297,6 +323,10 @@ export default class PlanService {
   ): void {
     if (isDemoRecipeId(recipeId)) {
       connectDemoPlanStream(options);
+      return;
+    }
+    if (isVectorDemoRecipeId(recipeId)) {
+      connectVectorDemoPlanStream(options);
       return;
     }
     const url = `${this.API_BASE}/${recipeId}/plan/stream?run_id=${encodeURIComponent(runId)}${options.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`;

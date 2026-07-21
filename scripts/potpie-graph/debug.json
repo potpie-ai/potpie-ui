@@ -1,0 +1,1607 @@
+{
+  "bug_patterns": [
+    {
+      "slug": "naive-as-of-tz-typeerror",
+      "name": "Naive as_of crashes recency scoring with offset-naive/offset-aware TypeError",
+      "symptom_signature": "TypeError: can't subtract offset-naive and offset-aware datetimes",
+      "first_seen": "2026-07-13",
+      "summary": "Date-only or naive ISO as_of passed to context_resolve/context_search crashes the whole read inside RankingService._recency_score.",
+      "description": "Passing a date-only timestamp such as as_of=\"2024-06-01\" (or any naive ISO like \"2024-06-01T10:30:00\") to the MCP context_resolve / context_search tools raises `TypeError: can't subtract offset-naive and offset-aware datetimes` and kills the entire read instead of returning an envelope. The chain is: `_parse_as_of_iso` in the MCP inbound adapter only special-cases the trailing `Z`, so `datetime.fromisoformat` returns a naive datetime; readers forward it as the ranker clock via `TaskContext(now=req.as_of)`; `RankingService.rank` keeps a caller-supplied `now` as-is; and `_recency_score` normalizes `valid_at` to tz-aware (`valid_at.replace(tzinfo=timezone.utc)`) but never normalizes `now`, so `max(now - valid_at, timedelta(0))` mixes the two. Searchable as: naive datetime as_of, time-travel read crash, potpie MCP as_of TypeError, tz-aware mismatch in ranking.py, \"2024-06-01 works but 2024-06-01T00:00:00Z crashes\" (actually the reverse). Every include family flows through the same ranker, so one naive as_of fails all of them at once."
+    },
+    {
+      "slug": "falkordb-node-id-zero-claim-invisibility",
+      "name": "Claims anchored on the first-created entity are invisible on falkordb_lite",
+      "symptom_signature": "commit reports success but graph read / search / verify readback return zero rows for the Repository entity",
+      "first_seen": "2026-07-05",
+      "summary": "On the default embedded FalkorDB backend, claims bound to internal node id 0 return no rows from every read surface while commit still reports success.",
+      "description": "On the default `falkordb_lite` embedded backend, any claim anchored on a pot's first-created entity — internal node id 0, which in the standard onboarding flow is always the Repository — was invisible to every read surface even though `graph commit` reported success. The embedded engine returns zero rows for a source-anchored traversal when the bound source node is id 0, and both claim read paths plus the embedding-attach query used exactly that MATCH shape, so every miss was silent. Symptoms people search for: \"potpie commit succeeded but graph read is empty\", \"repository claims missing from graph explorer\", \"verify readback shows 0 claims\", \"falkordb lite returns no rows\", \"my first entity has no edges\". Root cause is query shape: endpoint-node bindings in `FIND_CLAIMS_CYPHER` and the two vector queries forced a node-anchored scan instead of an `Edge By Index Scan`."
+    },
+    {
+      "slug": "vector-query-silent-empty-results",
+      "name": "Vector query failure degrades to an empty result set with no warning",
+      "symptom_signature": "semantic search returns [] with no error; claims present in the graph never appear in resolve or search output",
+      "first_seen": "2026-07-05",
+      "summary": "A missing, stale, or unreachable embedding made a claim vanish from reads instead of degrading to a lexical score.",
+      "description": "When the vector portion of `fact_query` failed — missing embedding, embedding written by a different model, or an unreachable vector index — the backend returned an empty list and the claim disappeared entirely from verify readback, named views, semantic search, and the web graph explorer. No log line, no quality flag, no repair hint; the read simply looked like the data was not there. Search phrasings: \"potpie search returns nothing but graph status shows claims\", \"semantic search empty results falkordb\", \"claim exists but resolve never retrieves it\", \"vector query returns [] silently\". The fix direction is lexical membership with a vector score overlay so a broken embedding costs ranking quality, not visibility."
+    },
+    {
+      "slug": "hashing-embedder-silent-default",
+      "name": "Fresh daemon/MCP/CI processes silently use the 256-dim hashing embedder",
+      "symptom_signature": "semantic search quality is far worse from the daemon/MCP than from the CLI, with no visible difference in graph status",
+      "first_seen": "2026-06-29",
+      "summary": "Any process that never ran potpie setup fell back to the bundled HashingEmbedder, producing a silently lower quality tier than sentence-transformers.",
+      "description": "`build_embedder()` defaulted to `local`, which is the bundled 256-dimension `HashingEmbedder`. `potpie setup` selects and persists sentence-transformers, so an interactive install looked fine — but any process that never ran setup (a freshly spawned daemon, the MCP server, a CI job) silently used the hashing embedder instead. Semantic retrieval quality collapsed with no signal: `graph status` reported the same `match_mode` for both, so a hashing-vector store and a semantic-vector store were indistinguishable. Searchable as: \"potpie semantic search results are bad in CI\", \"MCP retrieval worse than CLI\", \"all-MiniLM-L6-v2 not being used\", \"hashing embedder fallback\", \"embeddings silently degrade to lexical\"."
+    },
+    {
+      "slug": "embedder-vector-dimension-mismatch",
+      "name": "Vector index created at 1536 dims while embeddings are written at 256",
+      "symptom_signature": "vector index dimension 1536 but stored embedding dimension 256; semantic reads silently degrade",
+      "first_seen": "2026-06-22",
+      "summary": "Index creators default to 1536 (OpenAI text-embedding-3-small) via a getattr fallback while the bundled HashingEmbedder emits 256, so an embedder=None index-creation path builds a mismatched index.",
+      "description": "The bundled OSS `HashingEmbedder` emits 256 dimensions (`_DEFAULT_DIMENSIONS = 256` in `adapters/outbound/intelligence/local_embedder.py`) but every vector-index creator defaults to 1536 for OpenAI `text-embedding-3-small` via `getattr(self._embedder, \"dimensions\", 1536)` — in `neo4j_writer.py`, `falkordb_writer.py` (`_ensure_indexes_sync(..., embedding_dim: int = 1536)`), and `cypher.py::ensure_canonical_indexes`. That is consistent when an embedder is wired; the hazard is the fallback path, because the writers and the embedded backend all accept `embedder=None`. If `ensure_indexes` runs with no embedder it builds a 1536-wide index while later writes emit 256-wide vectors, and semantic reads silently degrade instead of erroring. Search: \"vector dimension mismatch potpie\", \"1536 vs 256 embedding\", \"index width does not match stored vectors\", \"knn returns nothing after backend switch\"."
+    },
+    {
+      "slug": "resolve-intent-silent-feature-default",
+      "name": "potpie resolve silently defaults to intent=feature without any detection",
+      "symptom_signature": "intent=feature confidence=low shown for every task; debugging and recent-change queries return zero timeline items",
+      "first_seen": "2026-07-06",
+      "summary": "Running resolve without --intent hardcodes intent=feature and prints it as though it were detected, routing debugging and change queries to the wrong retrieval shape.",
+      "description": "`potpie resolve \"<task>\"` without `--intent` silently hardcoded `intent=feature` and printed it in the output header as if classification had happened — no intent detection ran at all. Because the feature retrieval shape does not include the `timeline` family, queries like \"what changed recently in the auth service?\" or \"the payment webhook is throwing a 500\" returned zero timeline items and often the same claim set regardless of the task text. `confidence=low` compounded the confusion because it is coverage-based, not match quality. Search: \"potpie resolve always says intent=feature\", \"resolve returns no timeline\", \"intent not detected\", \"confidence low but results are relevant\", \"resolve ignores my question\". Expected behaviour is explicit → detected → default (`unknown`) with the selection provenance reported."
+    },
+    {
+      "slug": "resolve-mode-inert-flag",
+      "name": "resolve --mode is accepted, documented and recommended but never affects retrieval",
+      "symptom_signature": "--mode fast and --mode deep return byte-identical results; --mode garbage is accepted and echoed back",
+      "first_seen": "2026-07-13",
+      "summary": "ResolveMode is echoed into response metadata and read by nothing downstream, so a documented depth knob is inert and unvalidated.",
+      "description": "`potpie resolve --mode` is documented as `fast | balanced | verify | deep` and described as retrieval depth, but `ResolveRequest.mode` / `SearchRequest.mode` have exactly two consumers in the engine and both are metadata echoes in `graph_service.py`. Nothing in the orchestrator, readers or ranker branches on it; the only retrieval-shaping preference on the read path is `freshness_preference`. `ResolveMode = str` with the valid values living only in a comment, so `--mode garbage` is accepted and reported back as if real. Worse, the inert knob is advertised on three surfaces — the CLI reference docs, the MCP `context_resolve(mode: str = \"fast\")` signature, and `CONTEXT_RESOLVE_RECIPES`, which makes `potpie status` actively recommend a non-default mode that resolve then discards. Same failure class as the ignored graph-read flags and the undetected intent: a documented flag that silently does nothing."
+    },
+    {
+      "slug": "graph-read-flags-accepted-but-ignored",
+      "name": "graph read and timeline recent flags accepted but never applied on the default backend",
+      "symptom_signature": "--repo, --query, --scope and --format accepted with no change in output; scoped run still shows a project-wide banner",
+      "first_seen": "2026-07-06",
+      "summary": "Several scope/query/presentation flags on graph read, timeline recent and preferences were parsed and discarded, so filtered output was indistinguishable from unfiltered.",
+      "description": "Several `potpie graph read` / `timeline recent` / `preferences` flags were accepted by the CLI but never applied by the underlying read path, so output could be byte-identical to an unfiltered query. Timeline `--repo` and `--query` did not change the candidate set; preferences `--scope` (`repo:`, `path:`, `service:`) did not narrow results; `--format table`, text-mode `--detail`, text-mode `--relations` and unknown `--scope` keys had no visible effect; and a scoped run still printed a project-wide-style banner implying the filters had been applied. That produces both false negatives (\"there is no data\" when a filter would have matched) and false positives (\"my scope narrowed this\" when it did not). Search: \"potpie graph read --scope does nothing\", \"timeline recent ignores --repo\", \"filter not applied\", \"cosmetic CLI flags\"."
+    },
+    {
+      "slug": "cli-domain-error-exit-zero",
+      "name": "Domain errors and ok:false JSON envelopes still exit 0",
+      "symptom_signature": "potpie --json cloud status prints \"code\": \"not_implemented\" and echo $? prints 0; command chains keep running after failure",
+      "first_seen": "2026-07-06",
+      "summary": "The CLI printed correct structured failures but returned exit status 0, so shell chains and CI could not detect the error.",
+      "description": "`potpie --json cloud status` returned `\"code\": \"not_implemented\"`, `potpie --json graph status` returned `\"ok\": false` (e.g. `ambiguous_pot`), and `potpie --json graph nudge --event bogus` returned `ok:false` with error details — yet all three exited 0. `potpie --json cloud status && echo \"should not print\"` printed. Parser and usage errors behaved correctly (`potpie pot create` → `Error: Missing argument 'NAME'`, exit 2), which made the inconsistency worse: automation had to parse JSON to discover failure for domain errors while relying on exit status for usage errors. Search: \"potpie exit code 0 on error\", \"ok false but $? is 0\", \"CI does not fail on potpie error\", \"shell && after potpie keeps going\"."
+    },
+    {
+      "slug": "cli-parse-time-json-envelope-drift",
+      "name": "--json is ignored for parse-time failures because it is set in the root callback",
+      "symptom_signature": "potpie --json pot create prints Typer text panels and exits 2 instead of a JSON error envelope",
+      "first_seen": "2026-06-29",
+      "summary": "The --json flag is bound in the root Typer callback, which only runs after parsing succeeds, so missing-argument and unknown-subcommand errors escape as human text.",
+      "description": "`potpie --json` is documented to return a flat JSON error shape and exit 1 for validation failures, but parse-time errors (missing args, unknown subcommands) bypass that path entirely and emit Typer's rich human text panels with exit 2. Runtime and graph failures then use yet another JSON shape, so automation had to handle three formats and three exit codes for one CLI. Root cause: `set_json()` lives in the root Typer callback in `host_cli.py`, which only executes after argument parsing succeeds. Search: \"potpie --json returns human text\", \"Typer error panel instead of JSON\", \"exit 2 vs exit 1 potpie\", \"cannot parse potpie error output\", POT-1771-adjacent CLI envelope work."
+    },
+    {
+      "slug": "graph-read-missing-scope-reports-ok",
+      "name": "graph read returns ok:true when a required scope is missing",
+      "symptom_signature": "unsupported includes missing_required_scope but top-level ok is true and the process exits 0",
+      "first_seen": "2026-06-29",
+      "summary": "features.feature_context reported missing_required_scope in the quality block while still returning a success envelope and exit 0.",
+      "description": "`potpie --json graph read --subgraph features --view feature_context --limit 5` exits 0 with top-level `ok: true` even though `unsupported` contains `missing_required_scope` and `result.quality.reason` is `missing_required_scope`. A caller that checks `ok` — which is every agent harness — treats a validation failure as an empty-but-valid result. Expected behaviour is that a missing required scope is either a validation failure or an explicit unsupported status, with a non-zero exit that still preserves the structured payload, while views that intentionally support no-scope orientation keep working. Tracked as Linear POT-1771. Search: \"missing_required_scope but ok true\", \"potpie graph read empty result no error\", \"view requires scope\"."
+    },
+    {
+      "slug": "infra-topology-flat-similarity-ranking",
+      "name": "Infra topology claims all score the same regardless of the query",
+      "symptom_signature": "infra_topology results ranked by a flat default semantic_similarity; --query has no effect on ordering",
+      "first_seen": "2026-06-25",
+      "summary": "InfraTopologyReader never went through the semantic similarity path, so every infra claim carried the default 0.5 score and query relevance was ignored.",
+      "description": "Every reader except `InfraTopologyReader` stamped a real `semantic_similarity` onto its rows; infra topology claims fell through to the flat `_clamp(..., default=0.5)` in `RankingService`, so a blast-radius or neighborhood read returned the same ordering no matter what the user asked. `graph read --query` was not even accepted on `infra_topology.service_neighborhood`. The subtlety is that topology traversal must stay query-free — BFS and blast-radius semantics depend on it — so similarity has to be stamped after discovery rather than pushed into the traversal. Search: \"potpie infra topology ranking ignores query\", \"blast radius results in arbitrary order\", \"semantic_similarity 0.5 default\", \"service_neighborhood --query unsupported\"."
+    },
+    {
+      "slug": "service-logs-embedded-backend-no-log-file",
+      "name": "potpie service logs falkordb_lite returns a bare \"no log file\"",
+      "symptom_signature": "{\"lines\": []} / human output: no log file — for falkordb_lite, embedded and in_memory backends",
+      "first_seen": "2026-06-30",
+      "summary": "service logs only checked for logs/service-<name>.log and had no branch for embedded graph backends that run inside the daemon.",
+      "description": "`potpie service logs falkordb_lite` returned a generic `no log file` message even though `falkordb_lite` runs embedded inside the daemon rather than as a managed subprocess with its own `service-<name>.log`. Users debugging graph problems went looking for a file that can never exist and got no status, profile, `recommended_log_command`, or `database_path` — the same vague answer for `embedded`, `in_memory` and the `falkordblite` alias. `service_logs` only checked `<home>/logs/service-<name>.log` and emitted `{\"lines\": []}` when absent, with no classification of the requested name, so an unknown service name and an embedded backend were indistinguishable. `context_engine_falkordb_lite_path()` already existed in `settings_env.py` but was unused here. Search: \"potpie service logs no log file\", \"where are falkordb lite logs\", \"potpie daemon logs\", \"embedded backend has no service log\"."
+    },
+    {
+      "slug": "pot-create-repo-dot-broken-source",
+      "name": "pot create --repo . registers a broken source with name=\".\" and location=null",
+      "symptom_signature": "{\"kind\":\"repo\",\"name\":\".\",\"location\":null} in source list; repo default not set after pot create --repo .",
+      "first_seen": "2026-06-29",
+      "summary": "pot create and source add repo used two different code paths; only source add resolved the repo location and set the repo-local default.",
+      "description": "`potpie pot create <name> --use --repo .` creates the pot but registers an unusable repo source: `source list` shows `name=\".\"` and `location=null`, and the repo-local default is never set, so repo-scoped pot resolution breaks immediately afterwards. `source add repo .` already handled this correctly. Root cause is two divergent paths: `source add repo` runs `resolve_repo_location()` → `add_source(location=...)` → `set_repo_default()`, while `LocalPotStore.create()` appended a bare `{kind: repo, name: repo}` row inline with no location and no default. Users had to manually re-run `source add` plus `pot default set`, and automation could not treat `pot create --repo` as equivalent to source registration. Search: \"potpie pot create --repo . location null\", \"source list shows dot\", \"repo default not set\", \"pot create does not register repo\"."
+    },
+    {
+      "slug": "source-add-empty-pot-dead-end",
+      "name": "source add repo on an empty pot leaves the user with no next step",
+      "symptom_signature": "source add repo succeeds, graph status shows 0 claims, and no guidance is printed",
+      "first_seen": "2026-06-30",
+      "summary": "Registration-only source add gave no follow-up guidance on brand-new pots, so users completed the command successfully and still had an empty graph.",
+      "description": "Source registration is intentionally registration-only and does not trigger ingestion or scanning — that part is correct. The problem was that adding a repository to a brand-new or otherwise empty pot printed a bare success with no follow-up: the command succeeded, `graph status` reported 0 claims, and there was no hint to inspect linked pots, switch to a populated pot, or start a manual graph mutation workflow. JSON output carried no `recommended_next_action` either, so agent harnesses had nothing to act on. Search: \"potpie source add repo did nothing\", \"pot is empty after adding repo\", \"no ingestion started\", \"recommended_next_action missing\", \"empty pot dead end\"."
+    },
+    {
+      "slug": "doctor-missing-uv-tool-install-facts",
+      "name": "pip show reports a false negative for uv-tool installs and doctor has no install diagnostics",
+      "symptom_signature": "python -m pip show potpie-context-engine: WARNING: Package(s) not found — but potpie is on PATH and working",
+      "first_seen": "2026-06-30",
+      "summary": "Local dev installs via `make cli-install` (uv tool install) are invisible to system pip, and potpie doctor reported no cli_install section to correct the misdiagnosis.",
+      "description": "Local development installs `potpie` via `make cli-install`, which is `uv tool install`, not system `pip`. `python -m pip show potpie-context-engine` therefore fails or reports a false negative because the package lives in the uv tool environment and `python` may not even be on PATH. `potpie doctor` reported daemon, backend and ledger status but had no CLI install diagnostics — no PATH resolution, no `which -a potpie`, no uv tool version, no interpreter shebang, and no guidance about which commands to run instead of `pip show`. Agents and docs defaulted to `pip show` and drew the wrong conclusion that potpie was not installed. Search: \"pip show potpie-context-engine not found\", \"potpie installed but pip cannot see it\", \"uv tool install potpie\", \"potpie doctor cli_install\", \"which -a potpie\"."
+    },
+    {
+      "slug": "linear-oauth-callback-port-conflict",
+      "name": "potpie linear login fails when the local OAuth callback port is taken",
+      "symptom_signature": "linear login hangs or errors before the browser redirect completes; address already in use on the callback port",
+      "first_seen": "2026-06-29",
+      "summary": "The Linear OAuth flow bound a common local callback port that another dev process frequently already held, breaking login before the redirect returned.",
+      "description": "`potpie linear login` completes the Linear OAuth flow through a local callback server. When the callback port was already used by another local process — very common on a dev machine running several servers — login failed before the browser redirect completed, often with a bind error or a silent hang. The fix direction is a small fixed set of uncommon ports (primary `http://localhost:28757/callback`, fallback `http://localhost:28763/callback`), with the selected port used consistently in three places that had drifted apart: the listener, the `redirect_uri` sent to Linear, and the `redirect_uri` replayed during token exchange. A mismatch in any one of those produces an OAuth `redirect_uri_mismatch`. Search: \"potpie linear login stuck\", \"address already in use callback\", \"redirect_uri_mismatch linear\", \"OAuth port conflict CLI\"."
+    },
+    {
+      "slug": "legacy-context-engine-import-drift",
+      "name": "main branch unrunnable: ImportError for bundle_to_agent_envelope and handle_apply_episode",
+      "symptom_signature": "ImportError: cannot import name 'bundle_to_agent_envelope' from 'domain.agent_context_port'",
+      "first_seen": "2026-06-17",
+      "summary": "Two symbol renames in the context-engine workspace package were never propagated to consumers in legacy/, leaving main unimportable.",
+      "description": "At one point `main` was unrunnable: `uv run --project legacy python -c \"import app.main\"` failed with two separate ImportErrors because symbol renames and removals inside the `potpie/context-engine` workspace package were never propagated to the `legacy/` application layer. The missing symbols were `bundle_to_agent_envelope` from `domain.agent_context_port` and `handle_apply_episode`. This is the recurring cross-package drift pattern in a uv workspace monorepo: the engine package's tests pass, the legacy consumer is not in the same test path, and the breakage only surfaces at import time on a clean clone. Search: \"cannot import name bundle_to_agent_envelope\", \"handle_apply_episode ImportError\", \"potpie main branch broken imports\", \"legacy app.main fails to import\"."
+    },
+    {
+      "slug": "destructive-mutation-approval-bypass",
+      "name": "Destructive semantic mutations can auto-commit past human review",
+      "symptom_signature": "retract_claim / supersede_claim / merge_duplicate_entities applied with auto_committed=true and a self-asserted approved_by",
+      "first_seen": "2026-06-19",
+      "summary": "SemanticMutationRequest.approved_by defaults to None and SemanticMutationResult.auto_committed is settable, so expensive-to-reverse mutations could skip genuine review.",
+      "description": "The agent-facing write tier carries both an approval field and an auto-commit flag alongside destructive mutation kinds. `SemanticMutation` supports `retract_claim`, `end_relation_validity`, `supersede_claim` and `merge_duplicate_entities`; `SemanticMutationRequest.approved_by` defaults to `None` and is parsed straight off the request; `SemanticMutationResult.auto_committed` defaults to `False` but is serialized and settable. A record→semantic write path could therefore set `auto_committed=True` and/or supply a self-asserted `approved_by` and have a supersede, merge or retract applied without genuine human review — silently rewriting or collapsing graph state. Merges and supersessions are expensive to reverse, which makes this a data-integrity and authorization hole rather than a correctness nit. Search: \"potpie auto_committed destructive mutation\", \"approved_by not authenticated\", \"merge_duplicate_entities without review\", \"graph commit bypasses approval\"."
+    },
+    {
+      "slug": "potpie-ui-input-greyed-out",
+      "name": "Input text renders greyed out when filled and black when disabled",
+      "symptom_signature": "input box greyed out — filled text is grey/low contrast, disabled input renders as solid black text",
+      "first_seen": "2025-08-12",
+      "summary": "The shared shadcn Input primitive hardcodes placeholder:text-black and never sets a foreground token, so filled and disabled states invert contrast — reported five separate times.",
+      "description": "The shared `components/ui/input.tsx` primitive renders `placeholder:text-black` with `bg-card` and `disabled:cursor-not-allowed disabled:opacity-50` but never sets an explicit `text-foreground`, so the filled value inherits whatever colour the surrounding surface provides while the placeholder is pinned to literal black. The result users report is that typed text looks greyed out, and a disabled input paradoxically renders its text as solid black — the opposite of the intended affordance. This is the most-repeated bug in potpie-ui: it was filed five times over a month as issues #205, #207, #209, #211 and #213, all with the same one-line body, because each spot fix patched a call site rather than the primitive. Search: \"input box greyed out\", \"disabled input shows black text\", \"placeholder text-black\", \"low contrast input potpie-ui\", \"text unreadable when typing\"."
+    },
+    {
+      "slug": "potpie-ui-auth-open-redirect-token-leak",
+      "name": "Auth pages trust attacker-controlled redirect params and leak the Firebase token",
+      "symptom_signature": "/sign-in?redirect=https://evil.com navigates off-site; ?source=vscode&redirect_uri=https://evil.com receives token and customToken",
+      "first_seen": "2026-06-02",
+      "summary": "Open redirect in the auth layout plus token exfiltration through the vscode callback's unvalidated redirect_uri.",
+      "description": "Two related vulnerabilities in the potpie-ui auth flow, originally reported as potpie-ai/potpie#596. First, an open redirect: `app/(auth)/layout.tsx` ran `router.push(decodeURIComponent(redirect))` on the raw `?redirect=` query value, so `https://app.potpie.ai/sign-in?redirect=https://evil.com` navigated an authenticated user to an arbitrary external site. Second and more severe, token exfiltration: `lib/auth/vscode-callback.ts` used the `?redirect_uri=` value as the callback base and appended the Firebase `token` plus `customToken` to it, so a non-loopback `redirect_uri` such as `?source=vscode&redirect_uri=https://evil.com` sent the user's auth credentials to an attacker-controlled host. Search: \"open redirect potpie-ui sign-in\", \"redirect_uri token leak\", \"firebase customToken exfiltration\", \"unvalidated redirect after login\", \"protocol-relative //evil.com bypass\"."
+    },
+    {
+      "slug": "potpie-ui-nested-button-hydration",
+      "name": "Sidebar renders a <button> inside a <button>, triggering React hydration warnings",
+      "symptom_signature": "In HTML, <button> cannot be a descendant of <button>. This will cause a hydration error.",
+      "first_seen": "2026-07-16",
+      "summary": "SidebarMenuButton renders a native button when asChild is false, and Sidebar.tsx renders another button as its child for Pro-modal and workflow menu items.",
+      "description": "The sidebar navigation renders invalid nested `<button>` elements for menu items that open the Pro Feature modal or perform workflow accessibility checks. `SidebarMenuButton` renders a native `<button>` when `asChild={false}`, and for items with `link.showProModal` or workflow-specific click handling `components/Layouts/Sidebar.tsx` renders another `<button>` as its child — a button inside a button. This violates the HTML content model and triggers React/Next.js hydration warnings in development (Next.js 15.5.x, React 19). Reported against Chrome 149 on Ubuntu 24.04 in local development mode with mock auth. Search: \"button cannot be a descendant of button\", \"hydration error sidebar\", \"validateDOMNesting nested button\", \"Next.js hydration warning potpie-ui\", \"asChild Slot pattern\"."
+    },
+    {
+      "slug": "potpie-ui-mobile-sidebar-unreachable",
+      "name": "No control to open the sidebar below 768px, so mobile navigation is unreachable",
+      "symptom_signature": "on viewports under 768px there is no visible sidebar toggle; navigation is inaccessible on New Chat, Integrations, Workflows and Chat",
+      "first_seen": "2026-07-18",
+      "summary": "The mobile Sheet sidebar exists and is driven by openMobile state, but its only trigger lives inside AppSidebar, which is hidden while the sidebar is closed.",
+      "description": "On mobile viewports below 768px, navigation becomes completely inaccessible because no visible control exists to open the sidebar. The mobile implementation is present and correct — a `Sheet` driven by `openMobile` state — but the only `SidebarTrigger` is rendered inside `AppSidebar`, which is itself hidden when the mobile sidebar is closed, producing a classic chicken-and-egg. Rendering `SidebarTrigger` in the shared `app/(main)/layout.tsx` restores access across New Chat, Integrations, Workflows and Chat routes. Verified on Chrome 149 / Ubuntu 24.04, Next.js 15.5.18. Search: \"potpie-ui no menu button on mobile\", \"sidebar cannot be opened below 768px\", \"SidebarTrigger missing\", \"openMobile sheet never opens\", \"responsive navigation broken\"."
+    },
+    {
+      "slug": "potpie-ui-dark-mode-contrast",
+      "name": "Dark mode: black text on dark blue and rules overlapping list numbering",
+      "symptom_signature": "black text on dark blue background is unreadable; horizontal lines overlap numbering in sidebar and right panels",
+      "first_seen": "2025-12-12",
+      "summary": "Dark mode surfaces reuse light-mode literal colours, producing unreadable text and separator rules that collide with ordered-list numbering.",
+      "description": "In dark mode the sidebar and right-hand panels render horizontal separator rules that overlap the list numbering, and black text sits on dark blue surfaces at effectively zero contrast. Light mode improves the text contrast but the rule/number overlap persists in both themes, so it is a layout bug compounded by a token bug. The underlying cause is the same as the input primitive: literal colour values (`text-black`, hardcoded backgrounds) instead of theme tokens in `app/globals.css`, so a theme switch changes the surface but not the ink. Search: \"potpie dark mode unreadable\", \"black text on dark blue\", \"sidebar lines overlapping numbers\", \"low contrast dark theme\", \"WCAG contrast failure potpie-ui\"."
+    },
+    {
+      "slug": "npm-websocket-driver-transitive-cve",
+      "name": "Critical websocket-driver CVE pulled in transitively across the TypeScript repos",
+      "symptom_signature": "pnpm audit: critical severity in websocket-driver 0.7.4 (CVE-2026-54466 / CVE-2026-54490)",
+      "first_seen": "2026-07-15",
+      "summary": "websocket-driver 0.7.4 arrives as a transitive dependency in both potpie-ui and the VS Code extension and cannot be bumped from a direct dependency edit.",
+      "description": "A critical advisory against `websocket-driver` 0.7.4 (tracked as CVE-2026-54466 in the potpie-ui advisory and CVE-2026-54490 in the VS Code extension advisory) surfaced through Vanta in both TypeScript repos. Because the package is transitive, no direct dependency bump moves it — the resolution has to be pinned with a pnpm `overrides` entry and the lockfile refreshed, then confirmed with `pnpm why websocket-driver` showing a single resolved version. This is the recurring shape of the whole Vanta remediation stream: the finding names a package nobody imports directly. Search: \"pnpm audit critical websocket-driver\", \"websocket-driver 0.7.4 vulnerability\", \"transitive dependency cannot be upgraded\", \"pnpm overrides CVE\", Linear POT-1966."
+    },
+    {
+      "slug": "npm-transitive-cve-override-drift",
+      "name": "Vanta npm findings recur because overrides drift out of the lockfile",
+      "symptom_signature": "pnpm audit reports form-data, protobufjs, dompurify or js-yaml again after a previously merged remediation",
+      "first_seen": "2026-03-13",
+      "summary": "The same npm advisories keep reappearing in potpie-ui and the VS Code extension whenever a lockfile refresh resolves a transitive dep back below the override floor.",
+      "description": "potpie-ui and potpie-vscode-extension have carried a continuous stream of Vanta/Dependabot npm findings — `form-data`, `protobufjs`, `dompurify`, `js-yaml` (CVE-2026-53550, vulnerable range `<=4.1.1`), `tmp`, `axios`, `@grpc/grpc-js` — remediated across roughly a dozen PRs between March and July 2026. The recurrence pattern is structural: a fix raises a pnpm `overrides` floor, but a later unrelated `pnpm install` or a new dependency reintroduces a resolution below that floor, and the advisory reopens against the same package. Every durable fix in this family needs the same three checks: raise the override above the vulnerable range, refresh the lockfile, then prove a single resolved version with `pnpm why`. Search: \"Vanta vulnerabilities potpie-ui\", \"js-yaml prototype pollution 4.1.1\", \"dompurify XSS advisory\", \"pnpm overrides keep regressing\", Linear POT-1660."
+    },
+    {
+      "slug": "python-torch-transitive-cve-drift",
+      "name": "torch CVE findings resolve inconsistently between the root and legacy uv lockfiles",
+      "symptom_signature": "Dependabot reports two torch findings; uv lock --check passes but legacy resolves an older torch",
+      "first_seen": "2026-05-25",
+      "summary": "The potpie monorepo carries two uv projects, so a torch constraint bump in the root lockfile leaves the legacy project pinned below the fixed release.",
+      "description": "The potpie repo is a uv workspace with a second project under `legacy/`, each with its own lockfile. Torch CVE remediation therefore has to raise the constraint in both places and regenerate both lockfiles, or Dependabot keeps reporting a finding against the project that was missed — which is exactly what happened repeatedly through 2026 (torch 2.12.0 for Python 3.13.8, then 2.12.1, then 2.13.0 as the first fixed release for CVE-2025-3000). Nested lock metadata also has to be updated to match the shared constraint. The verification that actually catches it is `uv lock --check` plus `uv lock --check --project legacy`, then asserting every resolved torch package is exactly the target version. Search: \"torch CVE-2025-3000\", \"uv lock legacy project out of sync\", \"dependabot torch finding will not close\", \"two lockfiles one monorepo\", Linear POT-1975."
+    }
+  ],
+  "fixes": [
+    {
+      "slug": "ensure-utc-in-ranker-and-mcp-boundary",
+      "name": "Normalize naive as_of/now to UTC in both the ranker and the MCP boundary",
+      "fix_steps": "1. Add a module-private `_ensure_utc()` helper to `domain/ranking.py`. 2. Call it on the caller-supplied `now` inside `RankingService.rank()` so naive and aware datetimes can never mix regardless of entry point. 3. Reuse the same helper for `valid_at` inside `_recency_score`, replacing the previous inline `replace(tzinfo=timezone.utc)`. 4. In `adapters/inbound/mcp/server.py`, make `_parse_as_of_iso` interpret naive timestamps as UTC and always return a tz-aware datetime, preserving explicit offsets and the `Z` suffix. 5. Add ranking tests for naive `now` against both aware and naive `valid_at`, plus `test_mcp_as_of_parsing.py` covering every accepted as_of form.",
+      "verification_status": "verified",
+      "summary": "Layered fix: the domain helper hardens the ranker for any caller, the boundary fix makes MCP input semantics explicit (naive means UTC).",
+      "description": "The durable fix for the naive-datetime crash is deliberately two-layered rather than a single boundary patch. `domain/ranking.py` gains `_ensure_utc()`, applied to the caller-supplied `now` in `rank()` and reused for `valid_at` in `_recency_score`, so naive and aware datetimes cannot mix inside the ranker no matter which entry point supplied the clock — MCP, HTTP, CLI `--as-of`, or replay. `adapters/inbound/mcp/server.py` separately makes the input contract explicit: naive means UTC. After the fix `as_of=\"2024-06-01\"` and `\"2024-06-01T10:30:00\"` return normal envelopes, while `\"...Z\"` and `\"...+05:30\"` behave exactly as before. Validation: 3 new ranking tests, a new `test_mcp_as_of_parsing.py`, full unit suite 2049 passed / 1 skipped / 0 failures, ruff check and format clean."
+    },
+    {
+      "slug": "parse-as-of-boundary-only-patch",
+      "name": "Boundary-only patch to _parse_as_of_iso (insufficient)",
+      "fix_steps": "1. Import `timezone` in `adapters/inbound/mcp/server.py`. 2. In `_parse_as_of_iso`, if the parsed datetime has `tzinfo is None`, return `parsed.replace(tzinfo=timezone.utc)`. 3. Ship the 3-line diff with no test and no change to `domain/ranking.py`.",
+      "verification_status": "failed",
+      "summary": "Patched only the MCP entry point, leaving RankingService.rank still willing to accept a naive clock from every other caller.",
+      "description": "A 3-line drive-by patch that applied the UTC-default pattern only inside `_parse_as_of_iso` in the MCP inbound adapter. It genuinely fixes the reported MCP repro, which is why it looks convincing, but it leaves the actual defect in place: `RankingService.rank()` still keeps a caller-supplied `now` exactly as given, and `_recency_score` still normalizes only `valid_at`. Any other path that reaches the ranker with a naive clock — the HTTP read surface, a CLI `--as-of`, replay, or a direct `TaskContext(now=...)` in a test or harness — reproduces `TypeError: can't subtract offset-naive and offset-aware datetimes` unchanged. It also shipped with no regression test, so the next caller to pass a naive datetime would have found the bug again with no guard. DO NOT re-attempt a boundary-only normalization for this symptom; normalize in `domain/ranking.py` as well."
+    },
+    {
+      "slug": "edge-first-claim-reads",
+      "name": "Drop endpoint-node bindings so claim reads compile to an Edge By Index Scan",
+      "fix_steps": "1. Rewrite `FIND_CLAIMS_CYPHER` and both vector queries to drop endpoint-node bindings, keeping `labels()` filters working with unbound endpoints. 2. Confirm the plan shape with an EXPLAIN-based regression test pinned to `Edge By Index Scan`. 3. Make `fact_query` lexical membership plus a vector score overlay so a missing or stale embedding degrades a claim's score instead of removing it from results. 4. Run the FalkorDB roundtrip integration test against a real falkordblite store, including a pot whose Repository is internal node id 0.",
+      "verification_status": "verified",
+      "summary": "Edge-first Cypher removes the node-id-0 blind spot on falkordb_lite and is pinned by an EXPLAIN plan-shape regression test.",
+      "description": "The real fix for invisible claims on the embedded FalkorDB backend was to stop anchoring claim reads on their endpoint nodes. `FIND_CLAIMS_CYPHER` and both vector queries now drop endpoint-node bindings — unbound endpoints still allow the `labels()` filters to work — and the queries compile to a pure `Edge By Index Scan`, which has no special behaviour for internal node id 0. The plan shape itself is pinned by an EXPLAIN-based regression test, because a future query rewrite that silently reintroduces a node scan would reintroduce the invisibility. `fact_query` was additionally reshaped into lexical membership with a vector score overlay, so an unreachable embedding costs ranking position rather than visibility. Verified with the FalkorDB roundtrip integration test and 2,102 passing unit and conformance tests."
+    },
+    {
+      "slug": "falkordb-sentinel-node-preallocation",
+      "name": "Preallocate a sentinel node so no real entity lands on id 0 (rejected)",
+      "fix_steps": "1. On pot provisioning, write a throwaway `:Sentinel` node first so internal id 0 is consumed before any real entity is created. 2. Leave `FIND_CLAIMS_CYPHER` and the vector queries unchanged. 3. Filter the sentinel out of entity counts in `graph status`.",
+      "verification_status": "failed",
+      "summary": "Hid the symptom for brand-new pots only; every existing pot stayed broken and the silent embedding-attach miss was untouched.",
+      "description": "An early attempt that treated node id 0 as the problem rather than the node-anchored query shape. Provisioning wrote a sentinel node first so no real entity would occupy id 0, which made a fresh pot look healthy in local testing. It failed on three counts: every pot created before the change kept its Repository on id 0 and stayed silently unreadable with no migration path; the embedding-attach MATCH used the same node-anchored shape and continued to miss without raising, so vector reads still lost claims; and the sentinel leaked into entity counts and neighborhood traversals, requiring filter special-cases in `graph status` and the explorer. It also encoded a dependency on undocumented internal id allocation order, which the embedded engine does not guarantee. DO NOT re-attempt sentinel or id-offset workarounds for this symptom — fix the query shape."
+    },
+    {
+      "slug": "loud-embedding-attach-and-verify",
+      "name": "Make embedding attach count-verified and vector failures loud",
+      "fix_steps": "1. Make the embedding-attach MATCH edge-first and count-verified; raise on zero matches and report per edge, with a batch summary warning. 2. On vector-query failure, log a warning naming the repair command instead of returning an empty list. 3. Have `commit --verify` readback report `unembedded_claim_keys` when the backend runs in vector mode. 4. Escalate verification status to `watch` with a repair recommendation when any claim is unembedded.",
+      "verification_status": "verified",
+      "summary": "Converted every silent embedding miss into a raised error, a named warning, or a watch status on commit --verify.",
+      "description": "This is the observability half of the embedded-backend work: every failure mode that previously produced an empty list now produces a signal. The attach MATCH is edge-first and count-verified, so zero matches raise and are reported per edge with a batch summary warning rather than being swallowed. Vector-query failures log a warning that names the exact repair command to run. `commit --verify` readback reports `unembedded_claim_keys` when the backend is in vector mode and escalates the verification status to `watch` with a repair recommendation, so an operator learns about a partially embedded commit at commit time instead of discovering it weeks later as missing search results."
+    },
+    {
+      "slug": "semantic-index-repair-reembed",
+      "name": "Make graph repair --semantic-index actually re-embed and migrate the index",
+      "fix_steps": "1. Replace the `graph repair --semantic-index` no-op with a real pass that re-embeds claims whose embeddings are missing, written by a different model, or written at different dimensions. 2. On a dimension change, drop and recreate the vector index before re-embedding. 3. Add a soft `embeddings.reindex` step to `potpie setup` so upgraded installs migrate through the standard onboarding command. 4. Verify with a full recover-and-migrate cycle: strip an embedding, switch the embedder model and dimensions, confirm repair re-embeds everything, rebuilds the index, and search works at the new dimensions.",
+      "verification_status": "verified",
+      "summary": "graph repair --semantic-index became a real re-embed plus index migration, giving existing hashing-256 stores an in-place upgrade path.",
+      "description": "`graph repair --semantic-index` previously did nothing, so there was no way out of a dimension-mismatched or model-mismatched store other than rebuilding the pot. It now re-embeds every claim whose embedding is missing, written by a different model, or written at different dimensions, and drops and recreates the vector index when the dimension changes. `potpie setup` gained a soft `embeddings.reindex` step so upgraded installs migrate through the command people already run. This is what makes the 256-dim hashing default safe to change: existing stores are migrated in place rather than stranded. Verified end to end by stripping an embedding, switching embedder model and dimensions, and confirming repair rebuilt the index and search worked at the new width."
+    },
+    {
+      "slug": "falkordb-writer-dimension-only-patch",
+      "name": "Change the 1536 default to 256 in falkordb_writer only (insufficient)",
+      "fix_steps": "1. Change `_ensure_indexes_sync(..., embedding_dim: int = 1536)` to `256` in `adapters/outbound/graph/falkordb_writer.py`. 2. Leave `neo4j_writer.py` and `cypher.py::ensure_canonical_indexes` at their 1536 defaults. 3. Ship without a repair path for stores already created at the wrong width.",
+      "verification_status": "failed",
+      "summary": "Fixed one of three index creators, moved the mismatch onto the Neo4j backend, and left every already-created index wrong.",
+      "description": "An early attempt at the dimension mismatch that hardcoded 256 in the FalkorDB writer alone. It made the default local path stop mismatching, which is why it passed casually — but the same `getattr(self._embedder, \"dimensions\", 1536)` fallback lives in `adapters/outbound/graph/neo4j_writer.py` and in `cypher.py::ensure_canonical_indexes`, so the Neo4j backend kept creating 1536-wide indexes for 256-wide vectors and the bug simply relocated. Worse, hardcoding 256 is wrong in the opposite direction once sentence-transformers or a hosted embedder is wired, so the patch guaranteed a future mismatch rather than removing the class of bug. It also shipped with no migration, leaving every already-created index at the wrong width with no repair command. DO NOT re-attempt per-writer dimension constants; derive the width from the active embedder and provide a repair path."
+    },
+    {
+      "slug": "sentence-transformers-default-embedder",
+      "name": "Default build_embedder() to auto so non-setup processes get sentence-transformers",
+      "fix_steps": "1. Change the unset default in `build_embedder()` from `local` to `auto`. 2. Surface the active embedder `{name, dimensions}` in `graph status` beside `match_mode`. 3. Pin `CONTEXT_ENGINE_EMBEDDER=local` in the test conftest for offline determinism and monkeypatch installation state in default-path tests. 4. Rely on the semantic-index repair pass to migrate existing hashing-256 stores in place.",
+      "verification_status": "verified",
+      "summary": "Closed the gap for fresh daemons, MCP servers and CI that never ran setup and were silently using the 256-dim hashing embedder.",
+      "description": "The shipped `potpie` wheel already carries sentence-transformers and `potpie setup` already selects and persists it, so the only processes still on the bundled hashing embedder were the ones that never ran setup — a fresh daemon, the MCP server, a CI job. Flipping the `build_embedder()` unset default from `local` to `auto` closes that gap. Because a hashing-vector store and a semantic-vector store previously looked identical, `graph status` now reports the active embedder name and dimensions alongside `match_mode` so the quality tier is visible. Test determinism is preserved by pinning `CONTEXT_ENGINE_EMBEDDER=local` in conftest and monkeypatching installation state for the default-path tests."
+    },
+    {
+      "slug": "detect-context-intent-and-report-source",
+      "name": "Detect resolve intent deterministically and report intent_source",
+      "fix_steps": "1. Add `detect_context_intent(task)` to `domain/agent_context_port.py`: a deterministic, dependency-free, case-insensitive word-boundary keyword matcher seeded from the trigger language in each recipe's `when` field, with a documented priority order for ties and `None` when nothing matches. 2. Change the CLI `--intent` default from `\"feature\"` to `None`. 3. Resolve the effective intent as explicit → detected → default (`unknown`) using the `(value, resolved_via)` pattern from `resolve_pot_id`. 4. Carry the provenance on the existing `ResolveRequest.metadata` → `AgentEnvelope.metadata` passthrough as `intent_source`. 5. Surface it in both outputs: an `intent_source` JSON key and `intent=<x> (source=<...>)` in the human header.",
+      "verification_status": "unverified",
+      "summary": "Deterministic keyword detection replaces the hardcoded feature default, with explicit/detected/default provenance on both output surfaces.",
+      "description": "Restores honesty to the resolve header and routes tasks to the right retrieval shape. Detection is deliberately deterministic and dependency-free — no model call — seeded from the trigger language already written in each recipe's `when` field, and it returns `None` rather than guessing, mirroring the `ontology_classifier` discipline. Correct detection then routes recent-change and debugging tasks to timeline-bearing includes automatically through the existing intent→includes mapping, so \"webhook throwing a 500 error\" becomes `intent=debugging (source=detected)` and \"what changed recently in auth?\" becomes `intent=review (source=detected)` with timeline items instead of none. Vocabulary, recipes, `normalize_context_intent`, `DEFAULT_INTENT_INCLUDES` and the MCP/HTTP surfaces are untouched. 18 new unit tests including a word-boundary anti-false-match case; full suite 2063 passed. Marked unverified because the PR is still open and unmerged."
+    },
+    {
+      "slug": "infra-topology-semantic-similarity",
+      "name": "Wire InfraTopologyReader into the shared semantic similarity path",
+      "fix_steps": "1. Extract a shared `claim_semantic_similarity` helper into `application/readers/_common.py` and adopt it across the readers that had duplicated the logic. 2. Wire `InfraTopologyReader` into that path so infra claims are ranked by query relevance instead of a flat default. 3. Stamp similarity after discovery so topology traversal stays query-free and BFS/blast-radius behaviour is unchanged. 4. Allow `graph read --query` on `infra_topology.service_neighborhood` in the workbench ontology.",
+      "verification_status": "verified",
+      "summary": "Infra claims are now ranked by query relevance while traversal stays query-free, preserving blast-radius semantics.",
+      "description": "The fix threads the needle between two requirements that pull in opposite directions: infra results must respond to the query, but topology traversal must not, or blast-radius and neighborhood semantics change. Similarity is therefore stamped after discovery rather than pushed into the traversal, using a `claim_semantic_similarity` helper extracted into `application/readers/_common.py` and shared across `coding_preferences`, `decisions`, `docs`, `features`, `owners`, `prior_bugs` and `timeline_reader`, which had each carried their own copy. `graph read --query` is now accepted on `infra_topology.service_neighborhood`. Verified with `test_p9_readers.py`, `test_graph_surface_lite_e2e.py`, the graph workbench ontology and surface-lite contract suites, the CLI contract suite, the views suite, and a FalkorDB roundtrip integration test."
+    },
+    {
+      "slug": "input-primitive-token-driven-colors",
+      "name": "Fix the Input primitive to use theme tokens for filled, placeholder and disabled states",
+      "fix_steps": "1. In `components/ui/input.tsx`, replace `placeholder:text-black` with `placeholder:text-muted-foreground`. 2. Add an explicit `text-foreground` so the filled value never inherits an ambiguous colour from the surrounding surface. 3. Replace `disabled:opacity-50` with an explicit disabled foreground/background token pair so disabled text reads as muted rather than solid black. 4. Audit call sites and delete the per-component colour overrides that were papering over the primitive. 5. Add a light/dark visual check for empty, filled, focused and disabled states.",
+      "verification_status": "unverified",
+      "summary": "Fixes the shared primitive rather than the call sites, which is what the five duplicate reports were caused by.",
+      "description": "The correct fix for the five-times-reported greyed-out input is in the primitive, not the screens. `components/ui/input.tsx` moves off literal colours (`placeholder:text-black`) and opacity-based disabling onto theme tokens, so filled text, placeholder text and disabled text each have an explicit, theme-aware foreground. The call-site `className` overrides that accumulated while the primitive stayed broken are removed in the same pass, since leaving them means the next screen inherits the bug again. Marked unverified: issues #205, #207, #209, #211 and #213 are all still open, so the fix is described but not confirmed landed. Verification requires checking empty, filled, focused and disabled states in both themes."
+    },
+    {
+      "slug": "input-per-callsite-text-black-override",
+      "name": "Override input text colour at each call site (rejected, recurred five times)",
+      "fix_steps": "1. Add `className=\"text-black\"` (or a local colour override) to the specific Input that looks wrong on the screen being reported. 2. Ship without touching `components/ui/input.tsx`. 3. Repeat on the next screen someone reports.",
+      "verification_status": "failed",
+      "summary": "Patching the call site instead of the primitive is exactly why the same bug was filed five separate times as #205, #207, #209, #211 and #213.",
+      "description": "The repeated non-fix for the greyed-out input: add a colour override to whichever `<Input>` a reporter happened to be looking at. It makes the screenshot in the issue look right, so the issue gets closed, and the identical bug is filed again from the next screen — which is precisely what happened, five times over one month with the same one-line body each time (#205, #207, #209, #211, #213). It also makes the underlying defect harder to fix later, because the accumulated overrides mask the primitive's behaviour and have to be unwound before a token-based fix can be evaluated. And a hardcoded `text-black` override reintroduces the dark-mode contrast bug on the same element. DO NOT re-attempt call-site colour overrides for this symptom — fix `components/ui/input.tsx`."
+    },
+    {
+      "slug": "safe-redirect-validator",
+      "name": "Add a shared safe-redirect validator for auth callbacks",
+      "fix_steps": "1. Add `lib/auth/safe-redirect.ts` exporting `getSafeInternalPath(raw, fallback)` and `isLoopbackCallbackUrl(raw)`. 2. In `getSafeInternalPath`, decode once defensively, then reject anything not starting with `/`, anything starting with `//`, anything containing a backslash, and anything containing control characters; finally resolve against a sentinel origin and confirm the origin is unchanged. 3. In `isLoopbackCallbackUrl`, accept only http(s) callbacks to localhost, 127.0.0.1 or ::1. 4. Wire `app/(auth)/layout.tsx` to redirect via `getSafeInternalPath(redirectUrl, \"/\")`. 5. Wire `lib/auth/vscode-callback.ts` and `lib/auth/cli-callback.ts` to refuse to append tokens to a non-loopback redirect_uri.",
+      "verification_status": "verified",
+      "summary": "One validator closes both the open redirect and the Firebase token exfiltration path, with defence against protocol-relative, backslash and control-character bypasses.",
+      "description": "A single shared validator fixes both halves of the auth vulnerability. `getSafeInternalPath` collapses any value that could navigate off-site — absolute URLs, protocol-relative `//host`, backslash tricks (browsers treat `/\\evil.com` as `//evil.com`), control characters that can smuggle a scheme past naive checks, and any non-`/` value — down to the fallback, with a final sentinel-origin resolution as a belt-and-braces guard. `isLoopbackCallbackUrl` is the stricter check used on the token-bearing paths: the VS Code and CLI callbacks will only append a Firebase `token`/`customToken` to a loopback address, which is what actually stops credential exfiltration. Both are unit-tested in `lib/auth/cli-success.test.ts` and the surrounding auth test files."
+    },
+    {
+      "slug": "sidebar-aschild-slot-composition",
+      "name": "Use asChild/Slot composition instead of nesting a button inside SidebarMenuButton",
+      "fix_steps": "1. In `components/Layouts/Sidebar.tsx`, stop rendering a child `<button>` for Pro-modal and workflow menu items. 2. Pass `asChild` to `SidebarMenuButton` so it renders via Slot and merges props onto a single element, or move the click handler onto `SidebarMenuButton` itself. 3. Verify no `validateDOMNesting` warning appears in the dev console on Dashboard/Home. 4. Confirm keyboard activation and focus ring still work on the affected items.",
+      "verification_status": "unverified",
+      "summary": "Collapses the nested button into one interactive element via the Slot pattern, removing the hydration warning.",
+      "description": "The nested `<button>` comes from composing two components that each want to own the interactive element. The fix is to let exactly one of them render it: either pass `asChild` so `SidebarMenuButton` renders through Slot and merges props onto the child, or drop the inner button and attach the Pro-modal / workflow-check handler directly to `SidebarMenuButton`. Either way the rendered tree has a single `<button>`, the HTML content model is satisfied, and the React/Next.js hydration warning disappears. Worth checking keyboard activation and the focus ring after the change, since collapsing two elements into one is where accessible behaviour usually gets lost. Marked unverified because issue #427 is still open."
+    },
+    {
+      "slug": "layout-level-sidebar-trigger",
+      "name": "Render SidebarTrigger in the shared main layout so mobile nav is reachable",
+      "fix_steps": "1. Render `SidebarTrigger` in `app/(main)/layout.tsx` rather than only inside `AppSidebar`. 2. Show it only below the 768px breakpoint so the desktop chrome is unchanged. 3. Confirm the `Sheet` opens via `openMobile` on New Chat, Integrations, Workflows and Chat. 4. Check the trigger does not overlap page headers on the affected routes.",
+      "verification_status": "unverified",
+      "summary": "Moves the only mobile trigger out of the element it is supposed to open, restoring navigation below 768px.",
+      "description": "The mobile sidebar itself was never broken — the `Sheet` and its `openMobile` state work correctly. The bug was purely that the only control able to set `openMobile` lived inside `AppSidebar`, which is hidden while the sidebar is closed. Rendering `SidebarTrigger` in the shared `app/(main)/layout.tsx` puts the trigger outside the thing it opens and restores navigation across every route under that layout at once, which is why a layout-level fix beats adding a trigger per page. Reporter confirmed this approach works on New Chat, Integrations, Workflows and Chat on Chrome 149 / Ubuntu 24.04. Marked unverified because issue #431 is still open."
+    },
+    {
+      "slug": "theme-token-contrast-pass",
+      "name": "Move dark-mode surfaces onto theme tokens and fix separator/list collisions",
+      "fix_steps": "1. Replace literal colour classes (`text-black`, hardcoded panel backgrounds) in `app/globals.css` and the sidebar/right-panel components with theme tokens that resolve per theme. 2. Fix the separator rules in the sidebar and right panels so they do not overlap ordered-list numbering, in both themes. 3. Check contrast ratios for body text against every dark surface. 4. Re-check the screenshots attached to the report on both themes.",
+      "verification_status": "unverified",
+      "summary": "Addresses both halves of the dark-mode report: unreadable literal-colour text and separator rules colliding with list numbering.",
+      "description": "The dark-mode report is two bugs wearing one coat. The unreadable black-on-dark-blue text is a token problem — literal colour values survive a theme switch while the surface underneath changes — and is fixed by the same discipline that fixes the Input primitive: no literal colours, tokens only, defined for both themes in `app/globals.css`. The overlapping horizontal rules against list numbering is a layout problem that reproduces in light mode too, so it must be fixed independently rather than being assumed to fall out of the colour work. Marked unverified because issue #246 is still open. Verification means re-shooting the reporter's screenshots in both themes and checking contrast ratios against every dark surface."
+    },
+    {
+      "slug": "service-logs-embedded-backend-guidance",
+      "name": "Classify the requested service and explain embedded graph backends in service logs",
+      "fix_steps": "1. In `adapters/inbound/cli/commands/service.py`, classify the requested name before reporting: embedded graph profile (`falkordb_lite`, `embedded`, `in_memory`, alias `falkordblite`), managed-but-not-started, or unknown. 2. For embedded profiles return `status: embedded_backend`, the `profile`, `recommended_log_command: potpie daemon logs`, and for falkordb_lite the `database_path` from `context_engine_falkordb_lite_path()` in `settings_env.py`. 3. Emit a matching human `detail` list. 4. For a managed service that has not started, point at `potpie service up <name>`; for an unknown name give generic guidance plus the embedded-backend pointer. 5. Add coverage in `tests/unit/test_cli_daemon_service.py`, which had none for this path.",
+      "verification_status": "verified",
+      "summary": "Replaces the bare \"no log file\" with a structured explanation naming the daemon log command and the falkordb_lite database path.",
+      "description": "Instead of treating a missing `logs/service-<name>.log` as one undifferentiated failure, `service logs` now classifies what was actually asked for. Embedded graph profiles get a structured `embedded_backend` response that explains the backend runs inside the daemon, points at `potpie daemon logs`, and — for `falkordb_lite` — includes the database file path from the already-existing but previously unused `context_engine_falkordb_lite_path()` helper. Managed services that simply have not started yet get `potpie service up <name>`, and unknown names get generic guidance rather than being silently conflated with the embedded case. New unit coverage in `test_cli_daemon_service.py` closed the gap that let the original behaviour ship."
+    },
+    {
+      "slug": "register-repo-source-shared-helper",
+      "name": "Extract register_repo_source() so pot create --repo matches source add repo",
+      "fix_steps": "1. Extract a shared `register_repo_source()` helper in `adapters/inbound/cli/commands/pots.py` that runs the same path as `source add repo`: `resolve_repo_location()`, `add_source(location=...)`, `set_repo_default()`. 2. Make `pot create --repo` create the pot and then call the helper. 3. Stop registering sources inside `LocalPotStore.create()` — use `add_source` only. 4. Add `--no-default` to `pot create` to mirror `source add`. 5. Include `source`, `repo_default_set` and `repo_key` in `pot create --json` output. 6. Route post-setup pot creation in `setup_ux.py` through the shared helper too.",
+      "verification_status": "verified",
+      "summary": "Collapses two divergent repo-registration paths into one, so pot create --repo . resolves the location and sets the repo default.",
+      "description": "The bug existed because `pot create --repo` and `source add repo` had independently implemented repo registration and only one of them was correct. The fix deletes the duplicate: `LocalPotStore.create()` no longer writes source rows inline, and both commands plus the post-setup flow in `setup_ux.py` call one `register_repo_source()` helper that resolves `.` / `current` to the git remote or absolute path, registers the source with a real location, and sets the repo default unless `--no-default` is passed. `pot create --json` now reports `source`, `repo_default_set` and `repo_key` so automation can verify registration rather than assume it. Verified with `potpie --json pot create test-pot --use --repo .` followed by `source list` and `pot default show --repo current`, plus the `source add repo .` contract tests in `test_cli_ergonomics.py`."
+    },
+    {
+      "slug": "source-add-next-actions-for-empty-pots",
+      "name": "Emit a next-actions block and recommended_next_action for empty pots",
+      "fix_steps": "1. After a successful `source add repo`, check whether the target pot has zero claims. 2. If empty, print a human `next actions:` block that confirms registration succeeded, states explicitly that no ingestion or scan was started, and lists concrete options (inspect linked pots, switch to a populated pot, start a manual graph mutation workflow). 3. Add `recommended_next_action` to the JSON success payload for the empty-pot case. 4. Keep the non-empty path unchanged so the guidance does not become noise.",
+      "verification_status": "verified",
+      "summary": "Turns a silent registration-only success on a brand-new pot into explicit guidance, including a machine-readable recommended_next_action.",
+      "description": "Registration-only behaviour is deliberate and was kept; what changed is that the CLI now says so. On an empty pot, `source add repo` confirms registration, states plainly that no ingestion or scan was started — the assumption that caused the confusion — and lists concrete next steps. The JSON payload gains `recommended_next_action` so an agent harness can chain on it rather than parsing prose. The guidance is scoped to the zero-claim case specifically so it does not become noise on every subsequent source add. Verified against a pot confirmed empty via `potpie --json graph status`."
+    },
+    {
+      "slug": "doctor-cli-install-diagnostics",
+      "name": "Surface uv-tool install facts in potpie doctor",
+      "fix_steps": "1. Add a `cli_install` section to `potpie doctor` and `potpie --json doctor`. 2. Report `package_name`, `package_version`, `on_path`, all `paths` from a which-style lookup, `primary_path`, `python_interpreter` and `python_version` from the tool environment, `runtime_python` and `runtime_python_version`, `uv_available`, `uv_tool_installed`, `uv_tool_version` and `install_method`. 3. Include a `diagnostic_commands` list: `uv tool list`, `which -a potpie`, `head -n 1 \"$(command -v potpie)\"`, `make cli-status`. 4. Include a `pip_show_note` warning against using `python -m pip show potpie-context-engine` for local dev installs. 5. Add a matching human line: `cli: potpie-context-engine <version> path=<primary_path>`. 6. Update the docs that recommended pip show.",
+      "verification_status": "verified",
+      "summary": "doctor now reports how the CLI was actually installed, so pip show false negatives stop misleading troubleshooting.",
+      "description": "The fix makes `potpie doctor` authoritative about install state instead of leaving people to guess with the wrong tool. A `cli_install` block reports PATH resolution, the resolved interpreter and its version, uv availability and tool version, and the detected install method, plus an explicit list of diagnostic commands that actually work for a uv tool install. The `pip_show_note` field exists specifically to stop agents and docs from recommending `python -m pip show potpie-context-engine`, which returns a false negative for the standard `make cli-install` path. Docs were updated in the same change so the misleading guidance does not survive in two places."
+    },
+    {
+      "slug": "graph-read-missing-scope-nonzero-exit",
+      "name": "Make missing_required_scope a real failure with a non-zero exit",
+      "fix_steps": "1. Treat `missing_required_scope` as a validation failure or an explicit unsupported status rather than folding it into a success envelope. 2. Set top-level `ok: false` and exit non-zero while preserving the full structured payload. 3. Keep views that intentionally support no-scope orientation returning success. 4. Add contract coverage for both a scope-requiring view without scope and a no-scope-orientation view.",
+      "verification_status": "verified",
+      "summary": "graph read now fails loudly when a view's required scope is missing, instead of returning ok:true with an empty result.",
+      "description": "The dangerous part of this bug was that `ok: true` is the field every agent harness checks, so a validation failure was indistinguishable from a legitimately empty graph. The fix propagates `missing_required_scope` from the quality block up to the envelope status and the process exit code while keeping the structured payload intact, so callers get both the machine-readable reason and a signal they cannot accidentally ignore. Views designed to work without scope — orientation-style reads — are explicitly excluded so the change does not break them. Tracked as Linear POT-1771."
+    },
+    {
+      "slug": "cli-json-envelope-and-exit-code-contract",
+      "name": "Normalize --json error envelopes and exit codes across parse-time and runtime failures",
+      "fix_steps": "1. Detect `--json` before Typer's root callback runs, so parse-time failures can honour it — the root callback in `host_cli.py` executes only after parsing succeeds. 2. Emit the same flat JSON error shape for parse errors, validation errors, graph workbench failures and not-implemented capabilities. 3. Map exit codes consistently: 1 for domain/validation failure, 2 for usage/unavailable capability, 0 only for genuine success. 4. Make every `ok:false` and every `code: not_implemented` response exit non-zero. 5. Add contract tests asserting exit code and envelope shape together for each failure class.",
+      "verification_status": "verified",
+      "summary": "One error envelope and one exit-code mapping for parse-time, runtime and graph failures, so automation can trust $? again.",
+      "description": "Addresses the whole family of CLI failure-reporting defects at once: `--json` being ignored for parse-time errors because it is bound in the root Typer callback, three different JSON error shapes across the command groups, and `ok:false` / `not_implemented` responses exiting 0 so shell chains and CI kept running. The fix hoists `--json` detection ahead of parsing, unifies the envelope shape in `commands/_common.py`, and pins an exit-code mapping that automation can rely on: 1 for domain and validation failure, 2 for usage errors and unavailable capabilities, 0 only for success. Contract tests assert envelope shape and exit code together, because fixing one without the other is how this regressed before."
+    },
+    {
+      "slug": "resolve-mode-validation-and-honesty",
+      "name": "Validate --mode against the documented set and report it as not-yet-honored",
+      "fix_steps": "1. Replace `ResolveMode = str` with a constrained set covering `fast | balanced | verify | deep`, moving the valid values out of a comment. 2. Reject an unknown `--mode` value at the boundary instead of echoing it back. 3. Until mode actually shapes retrieval, have the response transparently report that the mode was not applied rather than echoing it in metadata as if honored. 4. Reconcile `CONTEXT_RESOLVE_RECIPES` and `report_status.py` so `potpie status` does not recommend a mode resolve discards. 5. Align the CLI reference in `docs/context-graph/cli-flow.md` and the MCP `context_resolve` signature with whatever is actually implemented.",
+      "verification_status": "unverified",
+      "summary": "Either mode shapes retrieval or the surfaces stop claiming it does — validate the value and stop echoing it as applied.",
+      "description": "The fix direction for the inert `--mode` flag is honesty across all four surfaces that currently advertise it: the type, the CLI docs, the MCP tool signature, and the recipes that `potpie status` recommends. Constraining `ResolveMode` to the documented set makes `--mode garbage` a rejection instead of a silent echo, and reporting the mode as not-yet-applied stops users and agents from attributing retrieval differences to a knob that does nothing. The recipe reconciliation matters most: while `CONTEXT_RESOLVE_RECIPES` assigns `balanced` for review, operations, planning, refactor and security intents, every agent following `potpie status` guidance is passing a dead parameter. Marked unverified — the issue is open and no implementation has landed."
+    },
+    {
+      "slug": "graph-read-flag-application-and-feedback",
+      "name": "Apply accepted scope/query flags or report them as unsupported",
+      "fix_steps": "1. Make accepted scope and query flags actually change the candidate set on the default read path: timeline `--repo` and `--query`, preferences `--scope` for `repo:` / `path:` / `service:`. 2. Where a filter genuinely cannot be applied by the backend, emit an explicit `unsupported` entry and quality feedback rather than returning unfiltered output. 3. Reject or flag unknown `--scope` keys. 4. Make text output state the active filters and any unsupported options. 5. Stop printing the project-wide banner on a scoped run.",
+      "verification_status": "verified",
+      "summary": "Every accepted flag now either changes the result set or is explicitly reported as unsupported, eliminating silent no-ops.",
+      "description": "The governing principle of the fix is that a flag may do nothing only if it says so. Scope and query filters on `graph read`, `timeline recent` and `preferences` now narrow the candidate set on the default backend; where a filter genuinely cannot be pushed down, the response carries an explicit `unsupported` entry and quality feedback instead of silently returning unfiltered rows. Unknown `--scope` keys are flagged rather than swallowed, and the text output reflects the active filters so a scoped run no longer prints a project-wide banner. This removes both failure directions users hit: believing there is no data when the filter was never applied, and believing results were narrowed when they were not."
+    },
+    {
+      "slug": "linear-oauth-fixed-callback-ports",
+      "name": "Use a small fixed set of uncommon callback ports for Linear CLI auth",
+      "fix_steps": "1. Move Linear OAuth off common local ports to a primary `http://localhost:28757/callback` with fallback `http://localhost:28763/callback`. 2. Try the primary first and fall back only when it is busy. 3. Use the selected port consistently in all three places: the local callback listener, the `redirect_uri` sent to Linear, and the `redirect_uri` replayed during token exchange. 4. Test both the primary-available and primary-busy paths.",
+      "verification_status": "verified",
+      "summary": "A primary/fallback port pair with the selected port threaded through the listener, the authorize redirect_uri and the token exchange.",
+      "description": "The port choice is the easy half; the part that actually breaks OAuth is consistency. The redirect URI is sent twice — once on the authorize request and once on token exchange — and both must match the port the CLI is genuinely listening on, or Linear returns `redirect_uri_mismatch` even though the browser round trip appeared to work. The fix selects a port once (primary 28757, fallback 28763, both chosen to avoid the common dev-server range) and threads that single value through the listener, the authorize redirect and the exchange. Acceptance covers both the primary-available and primary-busy paths."
+    },
+    {
+      "slug": "restore-context-engine-consumer-imports",
+      "name": "Propagate context-engine symbol renames to the legacy consumers",
+      "fix_steps": "1. Reproduce on a clean clone: `cd legacy && cp .env.template .env && uv sync --project . && uv run --project . python -c \"import app.main\"`. 2. Restore or re-export `bundle_to_agent_envelope` from `domain.agent_context_port` and `handle_apply_episode`, or update the `legacy/` call sites to the new symbol names. 3. Add an import smoke check for `app.main` to CI so a workspace rename cannot land unnoticed again.",
+      "verification_status": "verified",
+      "summary": "Fixes the ImportErrors that made main unrunnable and adds an import smoke check so cross-package renames are caught in CI.",
+      "description": "Restoring the imports is trivial; the durable part is the CI guard. The failure class is specific to a uv workspace monorepo where the engine package and the legacy application are tested on different paths, so a rename inside `potpie/context-engine` passes every engine test while making `import app.main` fail on a clean clone. An import smoke check for `app.main` catches the entire class for the cost of one CI step. Reproduce with `uv run --project legacy python -c \"import app.main\"` — the symptoms are `ImportError: cannot import name 'bundle_to_agent_envelope' from 'domain.agent_context_port'` and a matching failure for `handle_apply_episode`."
+    },
+    {
+      "slug": "approval-gate-destructive-mutations",
+      "name": "Require authenticated approval before destructive semantic mutations commit",
+      "fix_steps": "1. Require explicit, authenticated approval on the lower→commit path before any `retract_claim`, `end_relation_validity`, `supersede_claim` or `merge_duplicate_entities` is applied. 2. Stop treating a self-asserted `SemanticMutationRequest.approved_by` as sufficient — the identity must come from the authenticated session, not the request body. 3. Prevent a record→semantic write path from setting `auto_committed=True` for destructive kinds. 4. Keep `auto_committed` serialized in `to_dict` for audit, but make it a report of what happened rather than an input. 5. Add tests that a destructive mutation without authenticated approval is refused.",
+      "verification_status": "verified",
+      "summary": "Destructive mutation kinds can no longer be applied on a self-asserted approver or an auto-commit flag supplied by the caller.",
+      "description": "The hardening separates two things that had been conflated: who says a mutation is approved, and where that assertion comes from. Approval identity now has to originate from the authenticated session rather than a field the caller populates, and the auto-commit flag becomes an output describing what happened rather than an input requesting it. The scope is deliberately the destructive kinds — `retract_claim`, `end_relation_validity`, `supersede_claim` and `merge_duplicate_entities` — because merges and supersessions are expensive to reverse, which makes an approval shortcut there a data-integrity and authorization hole rather than a correctness nit. Non-destructive mutations keep their existing lower-friction path."
+    },
+    {
+      "slug": "pnpm-override-websocket-driver",
+      "name": "Pin transitive websocket-driver above the vulnerable range via pnpm overrides",
+      "fix_steps": "1. Add a pnpm `overrides` entry pinning `websocket-driver` to the patched 0.7.5. 2. Refresh the lockfile so the vulnerable 0.7.4 is removed entirely. 3. Validate with `pnpm install --frozen-lockfile`. 4. Assert a single resolved version with `pnpm why websocket-driver`. 5. Confirm clean with `pnpm audit --prod --audit-level critical`. 6. Apply the same override in potpie-vscode-extension, which carries the same transitive dependency.",
+      "verification_status": "verified",
+      "summary": "Overrides plus lockfile refresh plus pnpm why is the verification triple that actually proves a transitive CVE is gone.",
+      "description": "The remediation pattern for a critical transitive npm advisory. A direct dependency bump does nothing here because nothing imports `websocket-driver` directly, so the fix is a pnpm `overrides` floor at 0.7.5 plus a lockfile refresh that removes 0.7.4 from the resolution graph. The verification triple matters as much as the change: `pnpm install --frozen-lockfile` proves the lockfile is coherent, `pnpm why websocket-driver` proves there is exactly one resolved version rather than a patched copy alongside a vulnerable one, and `pnpm audit --prod --audit-level critical` proves the advisory is actually cleared. Applied in both potpie-ui and potpie-vscode-extension. Tracked as Linear POT-1966."
+    },
+    {
+      "slug": "pnpm-override-transitive-cve-batch",
+      "name": "Raise pnpm override floors for form-data, protobufjs, dompurify and js-yaml",
+      "fix_steps": "1. Raise the pnpm `overrides` floor above each vulnerable range — for js-yaml that means above `<=4.1.1`, resolving to 4.3.0 for CVE-2026-53550. 2. Refresh the lockfile. 3. Validate with `pnpm install --frozen-lockfile --ignore-scripts`. 4. Run `pnpm why <package>` for each and confirm exactly one resolved version. 5. Confirm the finding is absent from `pnpm audit --json`.",
+      "verification_status": "verified",
+      "summary": "The standing remediation recipe for the recurring Vanta npm findings in potpie-ui and the VS Code extension.",
+      "description": "This is the repeatable recipe behind roughly a dozen merged remediation PRs across potpie-ui and potpie-vscode-extension between March and July 2026, covering `form-data`, `protobufjs`, `dompurify` and `js-yaml` (CVE-2026-53550, vulnerable at `<=4.1.1`, fixed at 4.3.0). Because these advisories recur whenever a later install resolves a transitive dependency back below the override floor, the verification steps are not optional ceremony — `pnpm why` showing a single resolved version is the only thing that distinguishes a real fix from a floor that a nested resolution quietly ignored. Tracked under Linear POT-1660 and its siblings."
+    },
+    {
+      "slug": "uv-lock-torch-both-projects",
+      "name": "Raise the torch constraint and regenerate both root and legacy uv lockfiles",
+      "fix_steps": "1. Raise every PyTorch constraint to the first fixed release — 2.13.0 for CVE-2025-3000. 2. Regenerate the root lockfile and the `legacy/` lockfile so both Dependabot findings resolve. 3. Update nested lock metadata to match the shared constraint. 4. Validate with `uv lock --check` and `uv lock --check --project legacy`. 5. Assert every resolved torch package is exactly the target version, not merely above the floor.",
+      "verification_status": "verified",
+      "summary": "Both uv projects in the monorepo must be relocked, or the advisory reopens against whichever one was missed.",
+      "description": "The potpie repo is a uv workspace with a second project under `legacy/`, and that is the whole difficulty: a torch constraint bump applied to one lockfile leaves the other pinned below the fixed release, so Dependabot reports a finding that appears already fixed. The remediation therefore always touches both lockfiles plus the nested lock metadata, and the verification is `uv lock --check` run against both projects followed by asserting every resolved torch package is exactly the target version. The same shape recurred across the 2.12.0 (Python 3.13.8 compatibility), 2.12.1 and 2.13.0 (CVE-2025-3000) bumps. Tracked as Linear POT-1975."
+    }
+  ],
+  "edges": [
+    {
+      "from": "bug_pattern:naive-as-of-tz-typeerror",
+      "type": "REPRODUCES",
+      "to": "service:potpie-mcp-server",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1008",
+      "note": "Reported against the MCP four-tool surface: context_resolve/context_search with as_of=\"2024-06-01\"."
+    },
+    {
+      "from": "bug_pattern:naive-as-of-tz-typeerror",
+      "type": "REPRODUCES",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1008",
+      "note": "Actual defect lives in domain/ranking.py::_recency_score, which normalizes valid_at but not now."
+    },
+    {
+      "from": "bug_pattern:naive-as-of-tz-typeerror",
+      "type": "REPRODUCES",
+      "to": "service:potpie-cli",
+      "truth": "agent_claim",
+      "confidence": 0.7,
+      "evidence": null,
+      "note": "Inferred: any CLI path supplying --as-of reaches the same unguarded ranker clock."
+    },
+    {
+      "from": "bug_pattern:falkordb-node-id-zero-claim-invisibility",
+      "type": "REPRODUCES",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "FIND_CLAIMS_CYPHER and both vector queries bound endpoint nodes, breaking on internal node id 0."
+    },
+    {
+      "from": "bug_pattern:falkordb-node-id-zero-claim-invisibility",
+      "type": "REPRODUCES",
+      "to": "service:potpie-daemon",
+      "truth": "agent_claim",
+      "confidence": 0.85,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "falkordb_lite runs embedded inside the daemon, so the daemon is the runtime where this manifests."
+    },
+    {
+      "from": "bug_pattern:vector-query-silent-empty-results",
+      "type": "REPRODUCES",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "fact_query returned [] on vector failure instead of degrading to a lexical score."
+    },
+    {
+      "from": "bug_pattern:vector-query-silent-empty-results",
+      "type": "REPRODUCES",
+      "to": "service:potpie-daemon",
+      "truth": "agent_claim",
+      "confidence": 0.8,
+      "evidence": null,
+      "note": "Explorer reads the same claim path, so affected claims were missing from the UI too."
+    },
+    {
+      "from": "bug_pattern:hashing-embedder-silent-default",
+      "type": "REPRODUCES",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "build_embedder() unset default was `local` (256-dim HashingEmbedder) rather than `auto`."
+    },
+    {
+      "from": "bug_pattern:hashing-embedder-silent-default",
+      "type": "REPRODUCES",
+      "to": "service:potpie-mcp-server",
+      "truth": "agent_claim",
+      "confidence": 0.85,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "MCP server is one of the processes that never runs potpie setup."
+    },
+    {
+      "from": "bug_pattern:embedder-vector-dimension-mismatch",
+      "type": "REPRODUCES",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#909",
+      "note": "getattr(self._embedder, 'dimensions', 1536) fallback in neo4j_writer, falkordb_writer and cypher.ensure_canonical_indexes."
+    },
+    {
+      "from": "bug_pattern:resolve-intent-silent-feature-default",
+      "type": "REPRODUCES",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#996",
+      "note": "potpie resolve without --intent hardcoded intent=feature."
+    },
+    {
+      "from": "bug_pattern:resolve-intent-silent-feature-default",
+      "type": "REPRODUCES",
+      "to": "service:context-engine",
+      "truth": "agent_claim",
+      "confidence": 0.85,
+      "evidence": "github:potpie-ai/potpie#1006",
+      "note": "Detection was added in domain/agent_context_port.py, so the gap was in the engine domain layer."
+    },
+    {
+      "from": "bug_pattern:resolve-mode-inert-flag",
+      "type": "REPRODUCES",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1007",
+      "note": "--mode fast and --mode deep return identical results; --mode garbage is accepted."
+    },
+    {
+      "from": "bug_pattern:resolve-mode-inert-flag",
+      "type": "REPRODUCES",
+      "to": "service:potpie-mcp-server",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1007",
+      "note": "context_resolve exposes mode: str = \"fast\" to harness agents, and it does nothing."
+    },
+    {
+      "from": "bug_pattern:graph-read-flags-accepted-but-ignored",
+      "type": "REPRODUCES",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#994",
+      "note": "timeline --repo/--query and preferences --scope accepted without narrowing results."
+    },
+    {
+      "from": "bug_pattern:cli-domain-error-exit-zero",
+      "type": "REPRODUCES",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#992",
+      "note": "potpie --json cloud status prints not_implemented and exits 0."
+    },
+    {
+      "from": "bug_pattern:cli-parse-time-json-envelope-drift",
+      "type": "REPRODUCES",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#963",
+      "note": "set_json() lives in the root Typer callback in host_cli.py, which runs only after parsing succeeds."
+    },
+    {
+      "from": "bug_pattern:graph-read-missing-scope-reports-ok",
+      "type": "REPRODUCES",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#957",
+      "note": "features.feature_context returns ok:true with unsupported=missing_required_scope. Linear POT-1771."
+    },
+    {
+      "from": "bug_pattern:infra-topology-flat-similarity-ranking",
+      "type": "REPRODUCES",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#999",
+      "note": "InfraTopologyReader never stamped semantic_similarity, falling through to the 0.5 default in RankingService."
+    },
+    {
+      "from": "bug_pattern:service-logs-embedded-backend-no-log-file",
+      "type": "REPRODUCES",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#977",
+      "note": "service_logs only checked <home>/logs/service-<name>.log with no embedded-backend branch."
+    },
+    {
+      "from": "bug_pattern:service-logs-embedded-backend-no-log-file",
+      "type": "REPRODUCES",
+      "to": "service:potpie-daemon",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#977",
+      "note": "falkordb_lite runs inside the daemon, so potpie daemon logs is the correct destination."
+    },
+    {
+      "from": "bug_pattern:pot-create-repo-dot-broken-source",
+      "type": "REPRODUCES",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#973",
+      "note": "LocalPotStore.create() appended {kind: repo, name: '.'} with no location and no repo default."
+    },
+    {
+      "from": "bug_pattern:source-add-empty-pot-dead-end",
+      "type": "REPRODUCES",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#978",
+      "note": "source add repo on a zero-claim pot printed no next actions and no recommended_next_action."
+    },
+    {
+      "from": "bug_pattern:doctor-missing-uv-tool-install-facts",
+      "type": "REPRODUCES",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#979",
+      "note": "potpie doctor had no cli_install section; pip show returns a false negative for uv tool installs."
+    },
+    {
+      "from": "bug_pattern:linear-oauth-callback-port-conflict",
+      "type": "REPRODUCES",
+      "to": "service:potpie-cli",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#967",
+      "note": "potpie linear login bound a common local callback port already held by another dev process."
+    },
+    {
+      "from": "bug_pattern:legacy-context-engine-import-drift",
+      "type": "REPRODUCES",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#896",
+      "note": "main at 602f4dbc was unimportable: bundle_to_agent_envelope and handle_apply_episode missing."
+    },
+    {
+      "from": "bug_pattern:legacy-context-engine-import-drift",
+      "type": "REPRODUCES",
+      "to": "service:mom-api",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#896",
+      "note": "uv run --project legacy python -c 'import app.main' raised ImportError."
+    },
+    {
+      "from": "bug_pattern:destructive-mutation-approval-bypass",
+      "type": "REPRODUCES",
+      "to": "service:context-engine",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#902",
+      "note": "domain/semantic_mutations.py: approved_by defaults to None, auto_committed is settable on destructive kinds."
+    },
+    {
+      "from": "bug_pattern:potpie-ui-input-greyed-out",
+      "type": "REPRODUCES",
+      "to": "code:potpie-ui:components/ui/input.tsx",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#213",
+      "note": "placeholder:text-black plus disabled:opacity-50 with no explicit text-foreground on the shared primitive."
+    },
+    {
+      "from": "bug_pattern:potpie-ui-input-greyed-out",
+      "type": "REPRODUCES",
+      "to": "service:potpie-ui",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#205",
+      "note": "Filed five times (#205, #207, #209, #211, #213) with identical bodies."
+    },
+    {
+      "from": "bug_pattern:potpie-ui-auth-open-redirect-token-leak",
+      "type": "REPRODUCES",
+      "to": "code:potpie-ui:app/(auth)/layout.tsx",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#424",
+      "note": "router.push(decodeURIComponent(redirect)) on the raw ?redirect= query value."
+    },
+    {
+      "from": "bug_pattern:potpie-ui-auth-open-redirect-token-leak",
+      "type": "REPRODUCES",
+      "to": "code:potpie-ui:lib/auth/vscode-callback.ts",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#424",
+      "note": "Appended Firebase token + customToken to an unvalidated ?redirect_uri= base."
+    },
+    {
+      "from": "bug_pattern:potpie-ui-auth-open-redirect-token-leak",
+      "type": "REPRODUCES",
+      "to": "service:potpie-ui",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#596",
+      "note": "Originally reported as a vulnerability against the potpie repo."
+    },
+    {
+      "from": "bug_pattern:potpie-ui-nested-button-hydration",
+      "type": "REPRODUCES",
+      "to": "code:potpie-ui:components/Layouts/Sidebar.tsx",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#427",
+      "note": "SidebarMenuButton renders a native button when asChild=false; Sidebar.tsx renders another inside it."
+    },
+    {
+      "from": "bug_pattern:potpie-ui-mobile-sidebar-unreachable",
+      "type": "REPRODUCES",
+      "to": "code:potpie-ui:app/(main)/layout.tsx",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#431",
+      "note": "Reporter verified that rendering SidebarTrigger here restores mobile navigation."
+    },
+    {
+      "from": "bug_pattern:potpie-ui-mobile-sidebar-unreachable",
+      "type": "REPRODUCES",
+      "to": "code:potpie-ui:components/Layouts/Sidebar.tsx",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#431",
+      "note": "The only SidebarTrigger lived inside AppSidebar, which is hidden when the mobile sheet is closed."
+    },
+    {
+      "from": "bug_pattern:potpie-ui-dark-mode-contrast",
+      "type": "REPRODUCES",
+      "to": "code:potpie-ui:app/globals.css",
+      "truth": "agent_claim",
+      "confidence": 0.8,
+      "evidence": "github:potpie-ai/potpie-ui#246",
+      "note": "Inferred: literal colour values rather than theme tokens are the shared cause of the contrast half."
+    },
+    {
+      "from": "bug_pattern:potpie-ui-dark-mode-contrast",
+      "type": "REPRODUCES",
+      "to": "service:potpie-ui",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#246",
+      "note": "Sidebar and right panels: rules overlapping numbering, black text on dark blue."
+    },
+    {
+      "from": "bug_pattern:npm-websocket-driver-transitive-cve",
+      "type": "REPRODUCES",
+      "to": "code:potpie-ui:package.json",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#436",
+      "note": "websocket-driver 0.7.4 resolved transitively; remediated by a pnpm overrides pin to 0.7.5. Linear POT-1966."
+    },
+    {
+      "from": "bug_pattern:npm-websocket-driver-transitive-cve",
+      "type": "REPRODUCES",
+      "to": "repo:potpie-ai/potpie-vscode-extension",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-vscode-extension#31",
+      "note": "Same transitive dependency, tracked there as CVE-2026-54490."
+    },
+    {
+      "from": "bug_pattern:npm-transitive-cve-override-drift",
+      "type": "REPRODUCES",
+      "to": "code:potpie-ui:package.json",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#437",
+      "note": "js-yaml <=4.1.1 (CVE-2026-53550) resolved back below the override floor. Linear POT-1660."
+    },
+    {
+      "from": "bug_pattern:npm-transitive-cve-override-drift",
+      "type": "REPRODUCES",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#435",
+      "note": "form-data, protobufjs and dompurify remediated in the same recurring stream."
+    },
+    {
+      "from": "bug_pattern:npm-transitive-cve-override-drift",
+      "type": "REPRODUCES",
+      "to": "repo:potpie-ai/potpie-vscode-extension",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie-vscode-extension#29",
+      "note": "Same recurrence pattern across a dozen Vanta remediation PRs in this repo."
+    },
+    {
+      "from": "bug_pattern:python-torch-transitive-cve-drift",
+      "type": "REPRODUCES",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1020",
+      "note": "Two uv projects (root and legacy/) each need relocking or the finding reopens. Linear POT-1975."
+    },
+    {
+      "from": "bug_pattern:python-torch-transitive-cve-drift",
+      "type": "REPRODUCES",
+      "to": "service:mom-api",
+      "truth": "source_observation",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1000",
+      "note": "The legacy project is the lockfile most often left behind."
+    },
+    {
+      "from": "fix:ensure-utc-in-ranker-and-mcp-boundary",
+      "type": "RESOLVED",
+      "to": "bug_pattern:naive-as-of-tz-typeerror",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#1009",
+      "note": "Layered fix in domain/ranking.py plus the MCP boundary; 3 new ranking tests and test_mcp_as_of_parsing.py."
+    },
+    {
+      "from": "fix:parse-as-of-boundary-only-patch",
+      "type": "ATTEMPTED_FIX_FAILED",
+      "to": "bug_pattern:naive-as-of-tz-typeerror",
+      "truth": "agent_claim",
+      "confidence": 0.95,
+      "evidence": "github:potpie-ai/potpie#1012",
+      "note": "Boundary-only 3-line patch; RankingService.rank still accepts a naive clock from every other caller. Do not repeat."
+    },
+    {
+      "from": "fix:edge-first-claim-reads",
+      "type": "RESOLVED",
+      "to": "bug_pattern:falkordb-node-id-zero-claim-invisibility",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "Edge By Index Scan plan shape pinned by an EXPLAIN regression test."
+    },
+    {
+      "from": "fix:falkordb-sentinel-node-preallocation",
+      "type": "ATTEMPTED_FIX_FAILED",
+      "to": "bug_pattern:falkordb-node-id-zero-claim-invisibility",
+      "truth": "agent_claim",
+      "confidence": 0.95,
+      "evidence": null,
+      "note": "Only helped brand-new pots, left the silent embedding-attach miss, and depended on undocumented id allocation order. Do not repeat."
+    },
+    {
+      "from": "fix:loud-embedding-attach-and-verify",
+      "type": "RESOLVED",
+      "to": "bug_pattern:vector-query-silent-empty-results",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "Vector failures now warn and name the repair command; commit --verify reports unembedded_claim_keys."
+    },
+    {
+      "from": "fix:edge-first-claim-reads",
+      "type": "RESOLVED",
+      "to": "bug_pattern:vector-query-silent-empty-results",
+      "truth": "agent_claim",
+      "confidence": 0.85,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "fact_query became lexical membership with a vector score overlay, so broken embeddings cost rank, not visibility."
+    },
+    {
+      "from": "fix:semantic-index-repair-reembed",
+      "type": "RESOLVED",
+      "to": "bug_pattern:embedder-vector-dimension-mismatch",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "graph repair --semantic-index re-embeds and rebuilds the index on a dimension change."
+    },
+    {
+      "from": "fix:falkordb-writer-dimension-only-patch",
+      "type": "ATTEMPTED_FIX_FAILED",
+      "to": "bug_pattern:embedder-vector-dimension-mismatch",
+      "truth": "agent_claim",
+      "confidence": 0.95,
+      "evidence": "github:potpie-ai/potpie#909",
+      "note": "Relocated the mismatch onto neo4j_writer and cypher.ensure_canonical_indexes; no migration for existing indexes. Do not repeat."
+    },
+    {
+      "from": "fix:sentence-transformers-default-embedder",
+      "type": "RESOLVED",
+      "to": "bug_pattern:hashing-embedder-silent-default",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "build_embedder() default local -> auto, with the active embedder surfaced in graph status."
+    },
+    {
+      "from": "fix:detect-context-intent-and-report-source",
+      "type": "RESOLVED",
+      "to": "bug_pattern:resolve-intent-silent-feature-default",
+      "truth": "agent_claim",
+      "confidence": 0.85,
+      "evidence": "github:potpie-ai/potpie#1006",
+      "note": "PR open and unmerged, so the fix is described but unverified."
+    },
+    {
+      "from": "fix:infra-topology-semantic-similarity",
+      "type": "RESOLVED",
+      "to": "bug_pattern:infra-topology-flat-similarity-ranking",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#999",
+      "note": "Merged 2026-07-13; similarity stamped after discovery so traversal stays query-free."
+    },
+    {
+      "from": "fix:resolve-mode-validation-and-honesty",
+      "type": "RESOLVED",
+      "to": "bug_pattern:resolve-mode-inert-flag",
+      "truth": "agent_claim",
+      "confidence": 0.8,
+      "evidence": "github:potpie-ai/potpie#1007",
+      "note": "Issue open; fix direction is to validate the value and stop echoing it as honored."
+    },
+    {
+      "from": "fix:graph-read-flag-application-and-feedback",
+      "type": "RESOLVED",
+      "to": "bug_pattern:graph-read-flags-accepted-but-ignored",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#994",
+      "note": "Issue closed 2026-07-14."
+    },
+    {
+      "from": "fix:cli-json-envelope-and-exit-code-contract",
+      "type": "RESOLVED",
+      "to": "bug_pattern:cli-parse-time-json-envelope-drift",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#963",
+      "note": "--json detection hoisted ahead of Typer parsing; one envelope shape across command groups."
+    },
+    {
+      "from": "fix:cli-json-envelope-and-exit-code-contract",
+      "type": "RESOLVED",
+      "to": "bug_pattern:cli-domain-error-exit-zero",
+      "truth": "agent_claim",
+      "confidence": 0.85,
+      "evidence": "github:potpie-ai/potpie#992",
+      "note": "Same exit-code mapping covers ok:false and not_implemented; #992 is still open so treat as partial."
+    },
+    {
+      "from": "fix:graph-read-missing-scope-nonzero-exit",
+      "type": "RESOLVED",
+      "to": "bug_pattern:graph-read-missing-scope-reports-ok",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#957",
+      "note": "Closed 2026-07-02. Linear POT-1771."
+    },
+    {
+      "from": "fix:service-logs-embedded-backend-guidance",
+      "type": "RESOLVED",
+      "to": "bug_pattern:service-logs-embedded-backend-no-log-file",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#977",
+      "note": "Closed 2026-06-30 with new coverage in test_cli_daemon_service.py."
+    },
+    {
+      "from": "fix:register-repo-source-shared-helper",
+      "type": "RESOLVED",
+      "to": "bug_pattern:pot-create-repo-dot-broken-source",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#973",
+      "note": "Closed 2026-06-29; LocalPotStore.create() no longer registers sources inline."
+    },
+    {
+      "from": "fix:source-add-next-actions-for-empty-pots",
+      "type": "RESOLVED",
+      "to": "bug_pattern:source-add-empty-pot-dead-end",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#978",
+      "note": "Closed 2026-06-30; JSON gains recommended_next_action for zero-claim pots."
+    },
+    {
+      "from": "fix:doctor-cli-install-diagnostics",
+      "type": "RESOLVED",
+      "to": "bug_pattern:doctor-missing-uv-tool-install-facts",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#979",
+      "note": "Closed 2026-06-30; doctor now reports cli_install with diagnostic_commands and pip_show_note."
+    },
+    {
+      "from": "fix:linear-oauth-fixed-callback-ports",
+      "type": "RESOLVED",
+      "to": "bug_pattern:linear-oauth-callback-port-conflict",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#967",
+      "note": "Primary 28757 with fallback 28763, threaded through listener, authorize and token exchange."
+    },
+    {
+      "from": "fix:restore-context-engine-consumer-imports",
+      "type": "RESOLVED",
+      "to": "bug_pattern:legacy-context-engine-import-drift",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#896",
+      "note": "Closed 2026-06-17; import smoke check added so workspace renames are caught in CI."
+    },
+    {
+      "from": "fix:approval-gate-destructive-mutations",
+      "type": "RESOLVED",
+      "to": "bug_pattern:destructive-mutation-approval-bypass",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#902",
+      "note": "Closed 2026-06-19; approval identity must come from the authenticated session, not the request body."
+    },
+    {
+      "from": "fix:input-primitive-token-driven-colors",
+      "type": "RESOLVED",
+      "to": "bug_pattern:potpie-ui-input-greyed-out",
+      "truth": "agent_claim",
+      "confidence": 0.85,
+      "evidence": "github:potpie-ai/potpie-ui#213",
+      "note": "All five issues still open; the primitive fix is the correct direction but unconfirmed."
+    },
+    {
+      "from": "fix:input-per-callsite-text-black-override",
+      "type": "ATTEMPTED_FIX_FAILED",
+      "to": "bug_pattern:potpie-ui-input-greyed-out",
+      "truth": "agent_claim",
+      "confidence": 0.95,
+      "evidence": "github:potpie-ai/potpie-ui#211",
+      "note": "Five duplicate reports over one month is the evidence this approach does not work. Do not repeat."
+    },
+    {
+      "from": "fix:input-per-callsite-text-black-override",
+      "type": "ATTEMPTED_FIX_FAILED",
+      "to": "bug_pattern:potpie-ui-dark-mode-contrast",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie-ui#246",
+      "note": "A hardcoded text-black override reintroduces the dark-mode contrast failure on the same element."
+    },
+    {
+      "from": "fix:safe-redirect-validator",
+      "type": "RESOLVED",
+      "to": "bug_pattern:potpie-ui-auth-open-redirect-token-leak",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie-ui#424",
+      "note": "lib/auth/safe-redirect.ts closes both the open redirect and the token exfiltration path."
+    },
+    {
+      "from": "fix:sidebar-aschild-slot-composition",
+      "type": "RESOLVED",
+      "to": "bug_pattern:potpie-ui-nested-button-hydration",
+      "truth": "agent_claim",
+      "confidence": 0.8,
+      "evidence": "github:potpie-ai/potpie-ui#427",
+      "note": "Issue open; Slot composition is the standard remedy for this nesting."
+    },
+    {
+      "from": "fix:layout-level-sidebar-trigger",
+      "type": "RESOLVED",
+      "to": "bug_pattern:potpie-ui-mobile-sidebar-unreachable",
+      "truth": "agent_claim",
+      "confidence": 0.85,
+      "evidence": "github:potpie-ai/potpie-ui#431",
+      "note": "Reporter verified the approach across four routes; issue still open."
+    },
+    {
+      "from": "fix:theme-token-contrast-pass",
+      "type": "RESOLVED",
+      "to": "bug_pattern:potpie-ui-dark-mode-contrast",
+      "truth": "agent_claim",
+      "confidence": 0.8,
+      "evidence": "github:potpie-ai/potpie-ui#246",
+      "note": "Issue open; covers both the token half and the separator/list-numbering overlap."
+    },
+    {
+      "from": "fix:pnpm-override-websocket-driver",
+      "type": "RESOLVED",
+      "to": "bug_pattern:npm-websocket-driver-transitive-cve",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie-ui#436",
+      "note": "Merged 2026-07-17 in potpie-ui and 2026-07-17 in potpie-vscode-extension."
+    },
+    {
+      "from": "fix:pnpm-override-transitive-cve-batch",
+      "type": "RESOLVED",
+      "to": "bug_pattern:npm-transitive-cve-override-drift",
+      "truth": "agent_claim",
+      "confidence": 0.85,
+      "evidence": "github:potpie-ai/potpie-ui#437",
+      "note": "Recipe applied repeatedly; recurrence means confidence is in the recipe, not in permanence."
+    },
+    {
+      "from": "fix:uv-lock-torch-both-projects",
+      "type": "RESOLVED",
+      "to": "bug_pattern:python-torch-transitive-cve-drift",
+      "truth": "agent_claim",
+      "confidence": 0.9,
+      "evidence": "github:potpie-ai/potpie#1020",
+      "note": "torch 2.13.0 across root and legacy lockfiles, verified with uv lock --check on both projects."
+    },
+    {
+      "from": "person:AdityaPainuli",
+      "type": "VERIFIED",
+      "to": "fix:ensure-utc-in-ranker-and-mcp-boundary",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1009",
+      "note": "Authored and validated: 3 ranking tests, test_mcp_as_of_parsing.py, 2049 passed / 1 skipped."
+    },
+    {
+      "from": "activity:github:potpie-1009",
+      "type": "VERIFIED",
+      "to": "fix:ensure-utc-in-ranker-and-mcp-boundary",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1009",
+      "note": "PR carrying the layered ranker + boundary fix."
+    },
+    {
+      "from": "activity:github:potpie-1012",
+      "type": "VERIFIED",
+      "to": "fix:parse-as-of-boundary-only-patch",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1012",
+      "note": "Competing PR for the same issue; boundary-only and superseded by #1009."
+    },
+    {
+      "from": "person:nndn",
+      "type": "VERIFIED",
+      "to": "fix:edge-first-claim-reads",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "EXPLAIN plan-shape regression pin plus FalkorDB roundtrip integration; 2,102 tests passed."
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "VERIFIED",
+      "to": "fix:edge-first-claim-reads",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "Single PR carrying the query-shape fix and the four hardening changes around it."
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "VERIFIED",
+      "to": "fix:loud-embedding-attach-and-verify",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "Section 2 of the PR."
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "VERIFIED",
+      "to": "fix:semantic-index-repair-reembed",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "Section 3: full recover-and-migrate cycle exercised against a real falkordblite store."
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "VERIFIED",
+      "to": "fix:sentence-transformers-default-embedder",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "Section 4."
+    },
+    {
+      "from": "person:nndn",
+      "type": "VERIFIED",
+      "to": "fix:semantic-index-repair-reembed",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "Verified by stripping an embedding, switching model and dimensions, and confirming repair rebuilt the index."
+    },
+    {
+      "from": "person:yashkrishan",
+      "type": "VERIFIED",
+      "to": "fix:infra-topology-semantic-similarity",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#999",
+      "note": "Authored; test_p9_readers.py, surface-lite e2e, contract suites and FalkorDB roundtrip all green."
+    },
+    {
+      "from": "activity:github:potpie-999",
+      "type": "VERIFIED",
+      "to": "fix:infra-topology-semantic-similarity",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#999",
+      "note": "Merged 2026-07-13 into main."
+    },
+    {
+      "from": "activity:github:potpie-1006",
+      "type": "VERIFIED",
+      "to": "fix:detect-context-intent-and-report-source",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1006",
+      "note": "18 new unit tests, 2063 passed; still unmerged so the fix stays unverified."
+    },
+    {
+      "from": "person:AdityaPainuli",
+      "type": "VERIFIED",
+      "to": "fix:detect-context-intent-and-report-source",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1006",
+      "note": "Authored the deterministic detector and the intent_source provenance."
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "VERIFIED",
+      "to": "fix:service-logs-embedded-backend-guidance",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#977",
+      "note": "Reported and drove the fix, including the new test_cli_daemon_service.py coverage."
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "VERIFIED",
+      "to": "fix:register-repo-source-shared-helper",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#973",
+      "note": "Verified locally with pot create --use --repo ., source list, and pot default show --repo current."
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "VERIFIED",
+      "to": "fix:doctor-cli-install-diagnostics",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#979",
+      "note": "Verified the cli_install block against a make cli-install (uv tool) environment."
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "VERIFIED",
+      "to": "fix:cli-json-envelope-and-exit-code-contract",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#963",
+      "note": "Reported the envelope and exit-code drift with per-command evidence."
+    },
+    {
+      "from": "person:Nih1tGupta",
+      "type": "VERIFIED",
+      "to": "fix:source-add-next-actions-for-empty-pots",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#978",
+      "note": "Confirmed the human next-actions block and JSON recommended_next_action after the fix."
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "VERIFIED",
+      "to": "fix:graph-read-missing-scope-nonzero-exit",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#957",
+      "note": "Reported and confirmed closed 2026-07-02. Linear POT-1771."
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "VERIFIED",
+      "to": "fix:linear-oauth-fixed-callback-ports",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#967",
+      "note": "Specified the primary/fallback ports and the three places the redirect_uri must agree."
+    },
+    {
+      "from": "person:BrhKmr23",
+      "type": "VERIFIED",
+      "to": "fix:graph-read-flag-application-and-feedback",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#994",
+      "note": "Reported the ignored-flag family; issue closed 2026-07-14."
+    },
+    {
+      "from": "person:nndn",
+      "type": "VERIFIED",
+      "to": "fix:approval-gate-destructive-mutations",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#902",
+      "note": "Raised as a security hardening item on the CE domain foundation branch and closed 2026-06-19."
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "VERIFIED",
+      "to": "fix:restore-context-engine-consumer-imports",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#896",
+      "note": "Confirmed import app.main succeeds on a clean clone after the fix."
+    },
+    {
+      "from": "person:ASCE-D",
+      "type": "VERIFIED",
+      "to": "fix:safe-redirect-validator",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#424",
+      "note": "Authored the validator and wired it into the auth layout and both callback paths."
+    },
+    {
+      "from": "activity:github:potpie-ui-424",
+      "type": "VERIFIED",
+      "to": "fix:safe-redirect-validator",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#424",
+      "note": "PR fixing the open redirect and token exfiltration reported as potpie#596."
+    },
+    {
+      "from": "person:LaibaFirdouse",
+      "type": "VERIFIED",
+      "to": "fix:layout-level-sidebar-trigger",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#431",
+      "note": "Reporter tested rendering SidebarTrigger in app/(main)/layout.tsx across New Chat, Integrations, Workflows and Chat."
+    },
+    {
+      "from": "activity:github:potpie-ui-issue-431",
+      "type": "VERIFIED",
+      "to": "fix:layout-level-sidebar-trigger",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#431",
+      "note": "Issue carries the verification evidence and screenshots."
+    },
+    {
+      "from": "person:LaibaFirdouse",
+      "type": "VERIFIED",
+      "to": "fix:sidebar-aschild-slot-composition",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#427",
+      "note": "Reported the nested-button hydration warning with the rendered structure."
+    },
+    {
+      "from": "person:AasheeshLikePanner",
+      "type": "VERIFIED",
+      "to": "fix:theme-token-contrast-pass",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#246",
+      "note": "Reported with screenshots in both themes; still open so verification is pending."
+    },
+    {
+      "from": "person:nndn",
+      "type": "VERIFIED",
+      "to": "fix:input-primitive-token-driven-colors",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#213",
+      "note": "Filed the cluster five times; the primitive fix is the agreed direction but is not yet confirmed landed."
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "VERIFIED",
+      "to": "fix:pnpm-override-websocket-driver",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#436",
+      "note": "pnpm install --frozen-lockfile, pnpm why single version, pnpm audit --prod --audit-level critical clean."
+    },
+    {
+      "from": "activity:github:potpie-ui-436",
+      "type": "VERIFIED",
+      "to": "fix:pnpm-override-websocket-driver",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#436",
+      "note": "Merged 2026-07-17. Linear POT-1966."
+    },
+    {
+      "from": "activity:github:potpie-vscode-31",
+      "type": "VERIFIED",
+      "to": "fix:pnpm-override-websocket-driver",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-vscode-extension#31",
+      "note": "Same override applied in the VS Code extension."
+    },
+    {
+      "from": "activity:github:potpie-ui-437",
+      "type": "VERIFIED",
+      "to": "fix:pnpm-override-transitive-cve-batch",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#437",
+      "note": "js-yaml raised to 4.3.0; pnpm why shows one resolved version; audit clean. Linear POT-1660."
+    },
+    {
+      "from": "activity:github:potpie-ui-435",
+      "type": "VERIFIED",
+      "to": "fix:pnpm-override-transitive-cve-batch",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#435",
+      "note": "form-data, protobufjs and dompurify bumped in the same recipe."
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "VERIFIED",
+      "to": "fix:pnpm-override-transitive-cve-batch",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#435",
+      "note": "Owns the recurring Vanta remediation stream across every repo."
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "VERIFIED",
+      "to": "fix:uv-lock-torch-both-projects",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1020",
+      "note": "uv lock --check and uv lock --check --project legacy both green with torch pinned at 2.13.0."
+    },
+    {
+      "from": "activity:github:potpie-1020",
+      "type": "VERIFIED",
+      "to": "fix:uv-lock-torch-both-projects",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1020",
+      "note": "Merged 2026-07-20. Linear POT-1975."
+    },
+    {
+      "from": "team:core-context-graph",
+      "type": "VERIFIED",
+      "to": "fix:edge-first-claim-reads",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "Owning team for the context-engine read path."
+    },
+    {
+      "from": "team:infra-security",
+      "type": "VERIFIED",
+      "to": "fix:safe-redirect-validator",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#424",
+      "note": "Security remediation ownership."
+    },
+    {
+      "from": "team:infra-security",
+      "type": "VERIFIED",
+      "to": "fix:approval-gate-destructive-mutations",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#902",
+      "note": "Authorization hardening on the semantic write tier."
+    },
+    {
+      "from": "team:frontend",
+      "type": "VERIFIED",
+      "to": "fix:input-primitive-token-driven-colors",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#213",
+      "note": "Owning team for the shared UI primitives."
+    },
+    {
+      "from": "person:nndn",
+      "type": "VERIFIED",
+      "to": "fix:falkordb-sentinel-node-preallocation",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "Evaluated and rejected during the embedded-backend investigation: fresh pots looked healthy, existing pots stayed broken."
+    },
+    {
+      "from": "person:nndn",
+      "type": "VERIFIED",
+      "to": "fix:falkordb-writer-dimension-only-patch",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#909",
+      "note": "Confirmed insufficient: the same 1536 getattr fallback remains in neo4j_writer.py and cypher.ensure_canonical_indexes."
+    },
+    {
+      "from": "team:frontend",
+      "type": "VERIFIED",
+      "to": "fix:input-per-callsite-text-black-override",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie-ui#209",
+      "note": "Confirmed failed by recurrence: five identical reports over one month while call-site overrides accumulated."
+    },
+    {
+      "from": "person:AdityaPainuli",
+      "type": "VERIFIED",
+      "to": "fix:resolve-mode-validation-and-honesty",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1007",
+      "note": "Reported the inert flag across all four advertising surfaces; no implementation has landed yet."
+    },
+    {
+      "from": "person:nndn",
+      "type": "VERIFIED",
+      "to": "fix:loud-embedding-attach-and-verify",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "Verified per-edge attach counts raise on zero matches and commit --verify escalates to watch with unembedded_claim_keys."
+    },
+    {
+      "from": "person:nndn",
+      "type": "VERIFIED",
+      "to": "fix:sentence-transformers-default-embedder",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1002",
+      "note": "Verified graph status now reports the active embedder name and dimensions beside match_mode."
+    },
+    {
+      "from": "person:AdityaPainuli",
+      "type": "VERIFIED",
+      "to": "fix:parse-as-of-boundary-only-patch",
+      "truth": "timeline_event",
+      "confidence": null,
+      "evidence": "github:potpie-ai/potpie#1009",
+      "note": "Reviewed the competing boundary-only patch and superseded it with the layered ranker fix in #1009."
+    }
+  ]
+}

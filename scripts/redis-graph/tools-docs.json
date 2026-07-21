@@ -1,0 +1,236 @@
+{
+  "subsystem": "tools-docs",
+  "components": [
+    {
+      "slug": "cli-internals",
+      "name": "redis-cli Internals",
+      "paths": ["src/redis-cli.c", "src/cli_common.c", "src/cli_commands.c", "src/cli_commands.h"],
+      "summary": "Interactive REPL, cluster manager, and diagnostic modes of the redis-cli binary",
+      "description": "Implements every redis-cli mode in one 11.5k-line file: the linenoise-driven repl() with completionCallback/hintsCallback built from commands.def metadata (cli_commands.c), cliConnect/cliSendCommand/cliFormatReply* output formatters (TTY/raw/CSV/JSON), and special modes latencyMode, latencyDistMode, slaveMode (replica-protocol RDB+stream receiver), getRDB (--rdb), pipeMode (--pipe mass insert), statMode, scanMode, findBigKeys/getKeySizes/getKeyFreqs (--bigkeys/--memkeys/--keystats/--hotkeys), lru_test_mode, evalMode with the LDB Lua debugger, vsetRecallMode, and clusterManagerMode implementing 'redis-cli --cluster create|check|fix|reshard|rebalance|add-node|del-node|import|backup' (clusterManagerCommands table; ASM-based CLUSTER MIGRATION requires server >= 8.4.0 per CLUSTER_MANAGER_ASM_MIN_VERSION). cli_common.c supplies cliSecureConnection (OpenSSL SSL_CTX wiring for --tls/--cacert/--insecure) shared with redis-benchmark. Searchable as 'redis-cli hangs', 'cluster fix slot coverage', 'REDISCLI_AUTH', 'REDISCLI_HISTFILE', '--pipe timeout', 'bigkeys sampling'; env vars REDISCLI_AUTH, REDISCLI_HISTFILE, REDISCLI_RCFILE, REDISCLI_CLUSTER_YES control auth/history/rc behavior.",
+      "part_of": "service:redis-cli",
+      "depends_on": ["command-table", "cluster-core", "resp-protocol"],
+      "uses_deps": ["hiredis", "linenoise", "hdr_histogram"],
+      "loc": 11533
+    },
+    {
+      "slug": "benchmark-internals",
+      "name": "redis-benchmark Internals",
+      "paths": ["src/redis-benchmark.c"],
+      "summary": "Multithreaded load generator with HDR-histogram latency reporting and cluster-aware key routing",
+      "description": "redis-benchmark.c drives up to MAX_THREADS(500) benchmarkThread workers, each with its own aeEventLoop (CLIENT_GET_EVENTLOOP), pipelining requests (-P) against numclients connections; benchmark()/createMissingClients/showLatencyReport run each named test and print percentiles from hdr_histogram latency_histogram + current_sec_latency_histogram (10us..3s range, --precision). Cluster mode (--cluster) uses fetchClusterConfiguration/fetchClusterSlotsConfiguration and crc16_slottable to hash-tag keys per node (setClusterKeyHashTag), and randomizeClientKey implements -r keyspacelen key randomization; supports --threads, -x stdin payload, --csv, idle mode, TLS via cliSecureConnection from cli_common. Searchable as 'benchmark throughput drop', 'requests per second', 'p50 p99 latency percentiles', 'pipeline benchmark', 'MOVED error benchmark cluster'.",
+      "part_of": "service:redis-benchmark",
+      "depends_on": ["event-loop", "checksums"],
+      "uses_deps": ["hiredis", "hdr_histogram"],
+      "loc": 2043
+    },
+    {
+      "slug": "test-suite",
+      "name": "Tcl Test Suite",
+      "paths": ["tests/", "runtest", "runtest-cluster", "runtest-sentinel", "runtest-moduleapi"],
+      "summary": "Tcl-based test harness: unit/integration suites, multi-instance cluster/sentinel runners, module API tests",
+      "description": "tests/test_helper.tcl (launched by ./runtest, needs tclsh 8.5+) globs suites from tests/unit, tests/unit/type, tests/unit/moduleapi, tests/unit/cluster and tests/integration, spawning redis-server instances from baseport 21111 via tests/support/server.tcl (start_server proc) with helpers in support/util.tcl, support/redis.tcl, support/aofmanifest.tcl and background load generators in tests/helpers (gen_write_load.tcl, bg_complex_data.tcl). Separate runners: ./runtest-cluster and ./runtest-sentinel use the tests/instances.tcl multi-instance framework via tests/cluster/run.tcl and tests/sentinel/run.tcl; ./runtest-moduleapi first builds C test modules in tests/modules (aclcheck.c, blockonkeys.c, atomicslotmigration.c, ...) then runs unit/moduleapi suites. Supports --tls/--tls-module, --valgrind, --tsan, --durable, --accurate, external-server mode (--host/--port with external:skip tags), and tag filtering per tests/README.md; unit/cluster covers atomic-slot-migration, slot-stats, sharded-pubsub; unit/type covers array.tcl, stream-cgroups.tcl, hash-field-expire.tcl. Searchable as 'flaky tcl test', 'start_server timeout', 'wait_for_condition', 'runtest --single', 'test port collision'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["cli-internals", "benchmark-internals", "module-system", "sentinel-core", "cluster-core"],
+      "loc": 902
+    },
+    {
+      "slug": "build-system",
+      "name": "Build System",
+      "paths": ["Makefile", "src/Makefile", "deps/Makefile", "scripts/", "modules/manifest.mk"],
+      "summary": "Make-based build: src/Makefile core rules, deps vendoring, plus fork-local module orchestration scripts",
+      "description": "src/Makefile builds redis-server, redis-sentinel, redis-cli, redis-benchmark, redis-check-rdb and redis-check-aof from REDIS_SERVER_OBJ, pulling DEPENDENCY_TARGETS 'hiredis linenoise lua hdr_histogram fpconv xxhash tre' (plus jemalloc when MALLOC=jemalloc, the Linux default; libc elsewhere) via deps/Makefile; key knobs are BUILD_TLS=yes|module (OpenSSL, redis-tls.so), BUILD_COMPRESSION=yes (libzstd replication compression, -DUSE_COMPRESSION=1), SANITIZER=address|memory|undefined, OPTIMIZATION=-O3 and PROG_SUFFIX. This fork's top-level Makefile is heavily customized: default goal routes through scripts/build.sh with a modules.yaml manifest (modules/manifest.mk) and adds build/test/deploy/run/tarball/sync-redis-conf orchestration goals for bundled modules. Version status: 00-RELEASENOTES is the 'unstable branch' placeholder (no release notes; src/version.h REDIS_VERSION=255.255.255), and cli code pinning CLUSTER MIGRATION to >=8.4.0 places this tree in the Redis 8.4-era development line. Searchable as 'make BUILD_TLS', 'jemalloc build failure', 'make distclean deps', 'zmalloc.h:USE_JEMALLOC', 'cross compile AR'.",
+      "part_of": "service:redis-server",
+      "uses_deps": ["jemalloc", "lua", "hiredis", "linenoise", "hdr_histogram", "fpconv", "fast_float", "tre", "xxhash", "zstd"],
+      "loc": 583
+    }
+  ],
+  "dependencies": [
+    {
+      "slug": "jemalloc",
+      "name": "jemalloc",
+      "summary": "Default malloc replacement on Linux, patched with defrag hints for active defragmentation",
+      "description": "Vendored as a git subtree at deps/jemalloc (5.3.0), configured with --with-lg-quantum=3 (8-byte size classes for Redis struct density), --with-jemalloc-prefix=je_ and --disable-cache-oblivious; Redis-specific patch adds JEMALLOC_FRAG_HINT and je_get_defrag_hint() which activedefrag depends on. Selected when MALLOC=jemalloc (Linux default); searchable as 'mem_allocator', 'mem_fragmentation_ratio', 'active defrag not working', 'USE_JEMALLOC'.",
+      "used_by": ["zmalloc-layer", "defrag", "build-system"]
+    },
+    {
+      "slug": "lua",
+      "name": "Lua 5.1",
+      "summary": "Pinned Lua 5.1 interpreter for EVAL scripts and Functions, with bytecode-loading disabled",
+      "description": "deps/lua is Lua 5.1 with deliberate freezes and patches per deps/README.md: no upgrade planned (avoids breaking existing scripts), linked cjson/struct/cmsgpack/bit libraries (lua_cjson.o, lua_struct.o, lua_cmsgpack.o, lua_bit.o), and a security fix in ldo.c line 498 removing the LUA_SIGNATURE[0] check so precompiled bytecode cannot be executed. Built with -DLUA_ANSI -DENABLE_CJSON_GLOBAL; searchable as 'EVAL sandbox', 'lua bytecode blocked', 'cjson', 'script timeout'.",
+      "used_by": ["eval-scripts", "functions-engine"]
+    },
+    {
+      "slug": "hiredis",
+      "name": "hiredis",
+      "summary": "Official C client library used by redis-cli, redis-benchmark, and Sentinel",
+      "description": "Vendored git subtree at deps/hiredis; provides redisContext/redisCommand/redisReply and the async API. Its SDS identifiers are prefixed 'hi' (sdscompat.h maps sds calls to hi_ variants) so it can coexist with the server's own sds in one binary; built with USE_SSL=1 (libhiredis_ssl.a) when BUILD_TLS is enabled. Searchable as 'redisConnect', 'redisReply leak', 'hiredis_ssl'.",
+      "used_by": ["cli-internals", "benchmark-internals", "sentinel-core"]
+    },
+    {
+      "slug": "linenoise",
+      "name": "linenoise",
+      "summary": "Minimal readline replacement powering the redis-cli interactive prompt",
+      "description": "deps/linenoise (same-author side project, vendored unmodified) gives redis-cli line editing, multi-line mode, history (linenoiseHistoryLoad/Save to ~/.rediscli_history) and the completion/hints machinery (linenoiseSetCompletionCallback, linenoiseSetHintsCallback) that renders command-argument hints from commands.def docs. Searchable as 'cli history file', 'tab completion redis-cli'.",
+      "used_by": ["cli-internals"]
+    },
+    {
+      "slug": "hdr_histogram",
+      "name": "HdrHistogram (C)",
+      "summary": "High-dynamic-range histograms for per-command and benchmark latency percentile tracking",
+      "description": "deps/hdr_histogram is a customized copy of HdrHistogram_c (based on upstream master commit e4448cf6d1cd) per deps/README.md; the server uses it for per-command latency tracking (latencystats, latency-tracking-info-percentiles config), redis-benchmark for its p50/p99 latency report, and redis-cli for --latency-dist style output. Searchable as 'latency percentiles', 'hdr_record_value', 'LATENCY HISTOGRAM'.",
+      "used_by": ["latency-monitor", "benchmark-internals", "cli-internals"]
+    },
+    {
+      "slug": "fpconv",
+      "name": "fpconv (Grisu2 dtoa)",
+      "summary": "Fast float-to-string conversion (fpconv_dtoa) for RESP replies, RDB, and Lua bridging",
+      "description": "deps/fpconv builds libfpconv.a exposing fpconv_dtoa (Grisu2 shortest-representation double formatting); consumed via util.c (d2string paths) by networking.c reply building, rdb.c/rio.c persistence encoding, and script_lua.c number conversion. Searchable as 'double formatting precision', 'dtoa', 'float reply representation'.",
+      "used_by": ["networking", "rdb-persistence", "rio-layer", "eval-scripts"]
+    },
+    {
+      "slug": "fast_float",
+      "name": "fast_float strtod",
+      "summary": "SIMD-era fast string-to-double parsing wrapped as fast_float_strtod",
+      "description": "deps/fast_float provides libfast_float.a wrapped by src/fast_float_strtod.c/h (C shim over the C++ fast_float library); used on hot parsing paths in util.c, resp_parser.c (RESP double parsing), t_zset.c score parsing, and sort.c BY-numeric comparisons. Searchable as 'strtod slow', 'ZADD score parse', 'string2d'.",
+      "used_by": ["resp-protocol", "zset-type", "sort-engine"]
+    },
+    {
+      "slug": "tre",
+      "name": "TRE regex",
+      "summary": "POSIX-compatible regex library with linear-time matching, used by Array ARGREP predicates",
+      "description": "deps/tre builds libtre.a (approximate/fuzzy-capable POSIX regexp engine with O(M^2N) worst case per its README); linked into redis-server and consumed by t_array.c which calls tre_regncompb/tre_regexec/tre_regfree to compile RE predicates for ARGREP over sparse arrays (regex_t in the predicate plan struct). Searchable as 'ARGREP regex', 'tre_regncompb', 'array regex predicate'.",
+      "used_by": ["sparse-array"]
+    },
+    {
+      "slug": "xxhash",
+      "name": "xxHash",
+      "summary": "XXH3 non-cryptographic hashing used by streams, Top-K sketch, and string hashing paths",
+      "description": "deps/xxhash builds libxxhash.a (v0.8.3); XXH3 is used from t_stream.c/stream.h, chk.c (the Count-Min/Top-K style sketch behind hotkeys tracking), and t_string.c. Built with -fPIC so modules can link it. Searchable as 'XXH3_64bits', 'hash function sketch', 'xxhash'.",
+      "used_by": ["streams-core", "topk-sketch", "string-type"]
+    },
+    {
+      "slug": "zstd",
+      "name": "libzstd",
+      "summary": "System zstd library, opt-in at build time for replication stream compression",
+      "description": "Not vendored under deps/ — resolved from the system via pkg-config libzstd (fallback -lzstd) only when make BUILD_COMPRESSION=yes, which defines USE_COMPRESSION=1 and enables client_comp.c replication-stream compression; without the flag the compression code compiles to no-ops and libzstd is not required (src/Makefile comment). Searchable as 'replication compression', 'BUILD_COMPRESSION', 'libzstd link error'.",
+      "used_by": ["repl-compression", "build-system"]
+    }
+  ],
+  "features": [
+    {
+      "slug": "cli-cluster-manager",
+      "name": "redis-cli Cluster Manager",
+      "summary": "redis-cli --cluster subcommands for creating, checking, fixing, and resharding clusters",
+      "description": "The clusterManagerCommands table in redis-cli.c implements create/check/info/fix/reshard/rebalance/add-node/del-node/call/set-timeout/import/backup/help against live clusters (clusterManagerCommandCreate etc.), with fix-owner logic, weight-based rebalance (CLUSTER_MANAGER_REBALANCE_THRESHOLD 2), MIGRATE pipelining, and atomic-slot-migration support gated on server >= 8.4.0 (CLUSTER_MANAGER_ASM_MIN_VERSION, 60-minute ASM migrate timeout). Successor to the old ruby redis-trib tooling; searchable as 'redis-cli --cluster fix', 'slots not covered', 'reshard'.",
+      "lifecycle": "active",
+      "implemented_in": ["cli-internals"],
+      "provided_by": "service:redis-cli"
+    },
+    {
+      "slug": "cli-key-analytics",
+      "name": "CLI Key Analytics Modes",
+      "summary": "SCAN-driven sampling modes: --bigkeys, --memkeys, --keystats, --hotkeys",
+      "description": "findBigKeys/getKeySizes/getKeyFreqs iterate the keyspace with SCAN (honoring --pattern and --count, -i interval throttling) to report largest keys per type, MEMORY USAGE-based memory hogs (--memkeys-samples), combined size+length stats (--keystats), and OBJECT FREQ hot keys (requires maxmemory-policy lfu). Searchable as 'find big keys', 'memory hotspot key', 'hotkeys lfu'.",
+      "lifecycle": "active",
+      "implemented_in": ["cli-internals"],
+      "provided_by": "service:redis-cli"
+    }
+  ],
+  "decisions": [
+    {
+      "slug": "vendor-deps-in-tree",
+      "title": "Vendor all non-libc dependencies under deps/",
+      "statement": "Every third-party dependency except libc is vendored in the repo under deps/, with jemalloc and hiredis maintained as git subtrees and upgraded manually as needed.",
+      "rationale": "Guarantees reproducible builds and lets Redis carry local patches (jemalloc defrag hints, hiredis hi_-prefixed SDS, Lua security fixes) without waiting on upstreams.",
+      "description": "deps/README.md documents the policy and per-dependency upgrade procedures: 'git subtree pull --prefix deps/jemalloc ...' and 'git subtree pull --prefix deps/hiredis ...', manual copy for linenoise, diff-based upgrades for the customized hdr_histogram. libzstd is the deliberate exception, taken from the system only when BUILD_COMPRESSION=yes.",
+      "affects": ["build-system"],
+      "evidence": "deps/README.md ('This directory contains all Redis dependencies, except for the libc...', subtree upgrade instructions)"
+    },
+    {
+      "slug": "lua-pinned-5-1",
+      "title": "Pin Lua at 5.1 and disable bytecode execution",
+      "statement": "The scripting engine stays on Lua 5.1 indefinitely, with a patch removing the LUA_SIGNATURE bytecode check so only source scripts can run.",
+      "rationale": "Newer Lua would break existing user scripts for little gain; blocking precompiled bytecode closes a sandbox-escape vector.",
+      "description": "deps/README.md states 'We use Lua 5.1 and no upgrade is planned currently, since we don't want to break Lua scripts for new Lua features' and lists the ldo.c line 498 security fix removing the LUA_SIGNATURE[0] check 'in order to avoid direct bytecode execution'.",
+      "affects": ["eval-scripts", "functions-engine"],
+      "evidence": "deps/README.md Lua section (lines ~80-96)"
+    },
+    {
+      "slug": "jemalloc-defrag-contract",
+      "title": "Patch jemalloc for active defragmentation instead of using it stock",
+      "statement": "Redis ships a patched jemalloc exposing je_get_defrag_hint()/JEMALLOC_FRAG_HINT and configures it with --with-lg-quantum=3, and the server detects at build time whether the allocator supports defrag.",
+      "rationale": "lg-quantum=3 yields size classes that better fit Redis data structures for memory efficiency; the frag-hint API is required by defrag.c but kept optional so stock jemalloc still builds.",
+      "description": "deps/README.md details the upgrade procedure preserving JEMALLOC_FRAG_HINT and je_get_defrag_hint(); deps/Makefile invokes configure with --with-lg-quantum=3 --disable-cache-oblivious --with-jemalloc-prefix=je_ --with-version=5.3.0-0-g0.",
+      "affects": ["defrag", "zmalloc-layer", "build-system"],
+      "evidence": "deps/README.md jemalloc section; deps/Makefile jemalloc target (configure flags)"
+    },
+    {
+      "slug": "zstd-optin-noop-fallback",
+      "title": "Replication compression is opt-in so libzstd is never a hard build dependency",
+      "statement": "libzstd is linked only under make BUILD_COMPRESSION=yes; otherwise the client_comp.c compression code compiles to no-ops.",
+      "rationale": "Keeps the default build dependency-free on platforms without zstd while allowing bandwidth-sensitive deployments to enable replica-link compression.",
+      "description": "src/Makefile comment: 'Replication compression (opt-in via BUILD_COMPRESSION=yes). When enabled the replication stream can be compressed with libzstd; when disabled libzstd is not required to build Redis and the compression code compiles to no-ops.' Detection prefers pkg-config libzstd, falls back to -lzstd.",
+      "affects": ["repl-compression", "build-system"],
+      "evidence": "src/Makefile lines ~156-171 (BUILD_COMPRESSION block)"
+    },
+    {
+      "slug": "fork-module-build-orchestration",
+      "title": "Fork-local top-level Makefile delegates builds to scripts/ with a modules.yaml manifest",
+      "statement": "In this tree the default `make` goal runs scripts/build.sh, which builds src/ plus any modules cloned under modules/* per modules.yaml, instead of upstream's plain recursion into src/.",
+      "rationale": "Keeps per-module build/test/deploy logic in POSIX-sh scripts (busybox/dash-compatible for CI containers) and out of Make, while `make distclean`-style goals still recurse into src/ to match upstream.",
+      "description": "Top-level Makefile comments explain the routing ('make / make build route through scripts/build.sh... which decides per-module inclusion from what's actually cloned under modules/*/src'), positional-arg goal capture (GOALS_WITH_ARGS), the exported $(MAKE) workaround for Apple's make 3.81, and companion goals bootstrap/deploy/run/test/tarball/sync-redis-conf backed by scripts/.",
+      "affects": ["build-system"],
+      "evidence": "Makefile header comments and GOALS_WITH_ARGS block; scripts/build.sh header ('must stay POSIX-sh clean')"
+    }
+  ],
+  "documents": [
+    {
+      "slug": "readme",
+      "title": "README.md",
+      "path": "README.md",
+      "summary": "Quick start plus exhaustive per-distro build-from-source instructions",
+      "description": "Covers what Redis is, key use cases, then detailed build recipes for Ubuntu 20.04-26.04, Debian 12/13, AlmaLinux/Rocky 8-10, Alpine 3.23+, and macOS 14-26, a prebuilt Docker build-environment image, build flags (BUILD_TLS, MALLOC, allocator/monotonic-clock notes), and TLS run instructions. Primary reference for 'how do I build redis with all data structures'.",
+      "documents": ["build-system"]
+    },
+    {
+      "slug": "manifesto",
+      "title": "Redis Manifesto",
+      "path": "MANIFESTO",
+      "summary": "Design philosophy: DSL for abstract data types, memory-first storage, code efficiency",
+      "description": "The original author's statement of principles: Redis as a DSL over abstract data types with explicit complexity guarantees, memory storage as priority #1, fundamental data structures driving the API, code efficiency and scaling down to small ARM devices. Useful context for why the codebase favors simple C and bespoke data structures.",
+      "documents": ["build-system"]
+    },
+    {
+      "slug": "tls-doc",
+      "title": "TLS.md",
+      "path": "TLS.md",
+      "summary": "How to build (BUILD_TLS=yes|module), test (runtest --tls), and run Redis with TLS",
+      "description": "Documents building TLS as built-in or as the redis-tls.so module (Sentinel does not support module mode), generating test certs with utils/gen-test-certs.sh, running the suite with ./runtest --tls / --tls-module, and manual server + redis-cli --tls invocations with tls-port/tls-cert-file/tls-key-file/tls-ca-cert-file flags.",
+      "documents": ["build-system", "test-suite", "cli-internals"]
+    },
+    {
+      "slug": "redis-conf-reference",
+      "title": "redis.conf (annotated example)",
+      "path": "redis.conf",
+      "summary": "2.6k-line annotated operational reference for every server configuration directive",
+      "description": "The self-documenting example config, organized in banner sections: INCLUDES, MODULES, NETWORK, TLS/SSL, GENERAL, SNAPSHOTTING, REPLICATION, KEYS TRACKING, SECURITY/ACL, CLIENTS, MEMORY MANAGEMENT, LAZY FREEING, THREADED I/O, KERNEL OOM, APPEND ONLY MODE, BACKUP/RESTORE, SHUTDOWN, REDIS CLUSTER, SLOW LOG, LATENCY MONITOR/TRACKING, EVENT NOTIFICATION, ADVANCED CONFIG, ACTIVE DEFRAGMENTATION. Each directive's comments carry defaults and operational guidance (memory units, maxmemory policies, appendfsync tradeoffs), making it the de facto ops manual.",
+      "documents": ["config-engine"]
+    },
+    {
+      "slug": "deps-readme",
+      "title": "deps/README.md",
+      "path": "deps/README.md",
+      "summary": "Dependency vendoring policy and per-library upgrade procedures",
+      "description": "Explains what each vendored dependency is for (jemalloc allocator, hiredis client, linenoise readline, Lua 5.1, hdr_histogram) and the exact upgrade workflow: git subtree pulls for jemalloc/hiredis, wholesale replacement for linenoise, manual diffing for Lua and the customized hdr_histogram (upstream commit e4448cf pinned). Records the jemalloc defrag-hint patch requirements.",
+      "documents": ["build-system"]
+    },
+    {
+      "slug": "tests-readme",
+      "title": "tests/README.md",
+      "path": "tests/README.md",
+      "summary": "Test suite run modes, external-server options, and the tag taxonomy",
+      "description": "Documents normal local-instance execution vs external-server mode (--host/--port), compatibility options (--singledb, --ignore-encoding, --ignore-digest, --cluster-mode, --large-memory) and the tag system (external:skip, cluster:skip, large-memory, ...) applied at start_server/tags/test level to gate which tests run where.",
+      "documents": ["test-suite"]
+    }
+  ]
+}

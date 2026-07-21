@@ -139,6 +139,69 @@
   z-index: 50;
 }
 
+/* ---------------------------------------------------------------------------
+ * Pots workspace theme
+ * Scoped token override for everything under /pots. Replaces the warm cream
+ * canvas with a crisp neutral surface (faint pine undertone) so the pots
+ * screens read as one calm workspace. Apply `pot-theme` + `bg-background`
+ * on the screen root; all shadcn tokens inside inherit these values.
+ * ------------------------------------------------------------------------- */
+.pot-theme {
+  --background: 160 18% 98.5%;
+  --foreground: 176 45% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 176 45% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 176 45% 10%;
+  --muted: 162 14% 95%;
+  --muted-foreground: 170 7% 42%;
+  --secondary: 162 14% 95%;
+  --secondary-foreground: 176 45% 10%;
+  --border: 164 11% 89%;
+  --input: 164 11% 85%;
+  --ring: 161 33% 30%;
+  --radius: 0.625rem;
+}
+
+.dark .pot-theme {
+  --background: 182 30% 6.5%;
+  --foreground: 160 24% 96%;
+  --card: 181 26% 9%;
+  --card-foreground: 160 24% 96%;
+  --popover: 181 26% 9%;
+  --popover-foreground: 160 24% 96%;
+  --muted: 180 20% 12%;
+  --muted-foreground: 166 9% 62%;
+  --secondary: 180 20% 12%;
+  --secondary-foreground: 160 24% 96%;
+  --border: 178 16% 17%;
+  --input: 178 16% 20%;
+  --ring: 72 58% 53%;
+}
+
+/* Subtle dot-grid canvas texture for hero/empty areas inside pots. */
+.pot-dots {
+  background-image: radial-gradient(
+    hsl(var(--foreground) / 0.06) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+}
+
+/* Soft edge fade so the dot grid dissolves into the page background. */
+.pot-dots-fade {
+  -webkit-mask-image: radial-gradient(
+    ellipse 70% 70% at 50% 40%,
+    black 30%,
+    transparent 75%
+  );
+  mask-image: radial-gradient(
+    ellipse 70% 70% at 50% 40%,
+    black 30%,
+    transparent 75%
+  );
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }

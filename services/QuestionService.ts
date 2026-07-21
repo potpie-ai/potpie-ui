@@ -6,6 +6,12 @@ import {
   getDemoQuestionsResponse,
   isDemoRecipeId,
 } from "@/lib/mock/demoBuildFlow";
+import {
+  connectVectorDemoQuestionsStream,
+  getVectorDemoQuestionsResponse,
+  isVectorDemoRecipeId,
+  VECTOR_DEMO_QUESTION_RUN_ID,
+} from "@/lib/mock/demoVectorSearchFlow";
 
 /** Normalized option for UI (supports both string and {label, description} formats) */
 export interface MCQOption {
@@ -272,6 +278,9 @@ export default class QuestionService {
     if (isDemoRecipeId(recipeId)) {
       return getDemoQuestionsResponse();
     }
+    if (isVectorDemoRecipeId(recipeId)) {
+      return getVectorDemoQuestionsResponse();
+    }
     if (!recipeId?.trim()) {
       throw new Error("Recipe ID is required");
     }
@@ -309,6 +318,12 @@ export default class QuestionService {
         connectDemoQuestionsStream(options);
       }
       return { runId: initial.run_id || "demo-question-run" };
+    }
+    if (isVectorDemoRecipeId(recipeId)) {
+      if (options.consumeStream !== false && options.onEvent) {
+        connectVectorDemoQuestionsStream(options);
+      }
+      return { runId: VECTOR_DEMO_QUESTION_RUN_ID };
     }
     const headers = await getHeaders();
     const url = `${this.RECIPES_URL}/${recipeId}/questions/generate-stream${options.streamTokens ? "?stream_tokens=true" : ""}`;
@@ -393,6 +408,10 @@ export default class QuestionService {
   ): void {
     if (isDemoRecipeId(recipeId)) {
       connectDemoQuestionsStream(options);
+      return;
+    }
+    if (isVectorDemoRecipeId(recipeId)) {
+      connectVectorDemoQuestionsStream(options);
       return;
     }
     const url = `${this.RECIPES_URL}/${recipeId}/questions/stream?run_id=${encodeURIComponent(runId)}${options.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`;

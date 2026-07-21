@@ -32,6 +32,17 @@ import {
   startDemoSpecGeneration,
   submitDemoAnswers,
 } from "@/lib/mock/demoBuildFlow";
+import {
+  connectVectorDemoSpecStream,
+  getVectorDemoQuestionsResponse,
+  getVectorDemoRecipeDetails,
+  getVectorDemoSpecChatResponse,
+  getVectorDemoSpecStatus,
+  isVectorDemoRecipeId,
+  startVectorDemoSpecGeneration,
+  submitVectorDemoAnswers,
+  VECTOR_DEMO_SPEC_RUN_ID,
+} from "@/lib/mock/demoVectorSearchFlow";
 
 export default class SpecService {
   private static readonly BASE_URL = process.env.NEXT_PUBLIC_WORKFLOWS_URL;
@@ -179,6 +190,9 @@ export default class SpecService {
     if (isDemoRecipeId(recipeId)) {
       return getDemoQuestionsResponse();
     }
+    if (isVectorDemoRecipeId(recipeId)) {
+      return getVectorDemoQuestionsResponse();
+    }
     try {
       const headers = await getHeaders();
       const response = await axios.get<RecipeQuestionsResponse>(
@@ -207,6 +221,9 @@ export default class SpecService {
   ): Promise<SubmitRecipeAnswersResponse> {
     if (isDemoRecipeId(recipeId)) {
       return submitDemoAnswers();
+    }
+    if (isVectorDemoRecipeId(recipeId)) {
+      return submitVectorDemoAnswers();
     }
     try {
       console.log("[SpecService] Submitting answers for recipe:", recipeId);
@@ -283,6 +300,9 @@ export default class SpecService {
     if (isDemoRecipeId(recipeId)) {
       return startDemoSpecGeneration();
     }
+    if (isVectorDemoRecipeId(recipeId)) {
+      return startVectorDemoSpecGeneration();
+    }
     try {
       console.log("[SpecService] Triggering spec generation for recipe:", recipeId);
       const headers = await getHeaders();
@@ -309,6 +329,9 @@ export default class SpecService {
   static async regenerateSpec(recipeId: string): Promise<TriggerSpecGenerationResponse> {
     if (isDemoRecipeId(recipeId)) {
       return startDemoSpecGeneration();
+    }
+    if (isVectorDemoRecipeId(recipeId)) {
+      return startVectorDemoSpecGeneration();
     }
     try {
       console.log("[SpecService] Regenerating spec for recipe:", recipeId);
@@ -341,6 +364,9 @@ export default class SpecService {
   ): Promise<SpecStatusResponse> {
     if (isDemoRecipeId(recipeId)) {
       return getDemoSpecStatus();
+    }
+    if (isVectorDemoRecipeId(recipeId)) {
+      return getVectorDemoSpecStatus();
     }
     try {
       const headers = await getHeaders();
@@ -378,6 +404,12 @@ export default class SpecService {
         connectDemoSpecStream(options);
       }
       return { runId: DEMO_SPEC_RUN_ID };
+    }
+    if (isVectorDemoRecipeId(recipeId)) {
+      if (options.consumeStream !== false && options.onEvent) {
+        connectVectorDemoSpecStream(options);
+      }
+      return { runId: VECTOR_DEMO_SPEC_RUN_ID };
     }
     const headers = await getHeaders();
     const url = `${this.API_BASE}/${recipeId}/spec/generate-stream${options.streamTokens ? "?stream_tokens=true" : ""}`;
@@ -491,6 +523,10 @@ export default class SpecService {
       connectDemoSpecStream(options);
       return;
     }
+    if (isVectorDemoRecipeId(recipeId)) {
+      connectVectorDemoSpecStream(options);
+      return;
+    }
     const url = `${this.API_BASE}/${recipeId}/spec/stream?run_id=${encodeURIComponent(runId)}${options.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`;
     getHeaders()
       .then((headers) => {
@@ -565,6 +601,9 @@ export default class SpecService {
     if (isDemoRecipeId(recipeId)) {
       return getDemoSpecChatResponse(request.message);
     }
+    if (isVectorDemoRecipeId(recipeId)) {
+      return getVectorDemoSpecChatResponse(request.message);
+    }
     try {
       const headers = await getHeaders();
       const response = await axios.post<{
@@ -609,6 +648,9 @@ export default class SpecService {
   ): Promise<RecipeDetailsResponse> {
     if (isDemoRecipeId(recipeId)) {
       return getDemoRecipeDetails();
+    }
+    if (isVectorDemoRecipeId(recipeId)) {
+      return getVectorDemoRecipeDetails();
     }
     try {
       const headers = await getHeaders();

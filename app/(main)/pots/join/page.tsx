@@ -2,10 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
 import { CheckCircle2, XCircle, UserPlus } from "lucide-react";
 import PotService from "@/services/PotService";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 type State =
   | { kind: "idle" }
@@ -53,69 +55,99 @@ export default function JoinPotPage() {
   }, [token]);
 
   return (
-    <div className="flex min-h-[60vh] items-center justify-center px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Accept pot invitation</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {state.kind === "loading" || state.kind === "idle" ? (
-            <p className="text-sm text-muted-foreground">
-              Accepting invitation…
-            </p>
-          ) : state.kind === "success" ? (
-            <>
-              <div className="flex items-center gap-2 text-green-600">
-                <CheckCircle2 className="h-5 w-5" />
-                <p className="text-sm font-medium">You&apos;re in.</p>
-              </div>
-              <Button className="w-full" onClick={() => router.push(`/pots`)}>
-                Open pots
-              </Button>
-            </>
-          ) : state.kind === "needsSignup" ? (
-            <>
-              <div className="flex items-center gap-2 text-foreground">
-                <UserPlus className="h-5 w-5 text-primary" />
-                <p className="text-sm font-medium">
-                  Create your account to join this pot.
-                </p>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Sign up with the same email this invitation was sent to —
-                we&apos;ll bring you right back here to finish joining.
-              </p>
-              <Button
-                className="w-full"
-                onClick={() => router.push(signUpHref)}
-              >
-                Sign up to continue
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => router.push(signInHref)}
-              >
-                I already have an account
-              </Button>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center gap-2 text-destructive">
-                <XCircle className="h-5 w-5" />
-                <p className="text-sm font-medium">{state.message}</p>
-              </div>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => router.push("/pots")}
-              >
-                Back to pots
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
+    <div className="pot-theme flex min-h-svh flex-1 items-center justify-center bg-background px-6 text-foreground">
+      <div className="pot-dots pot-dots-fade flex w-full max-w-md flex-col items-center px-6 py-20 text-center">
+        {state.kind === "loading" || state.kind === "idle" ? (
+          <>
+            <Skeleton className="h-11 w-11 rounded-full bg-muted" />
+            <Skeleton className="mt-5 h-4 w-44 bg-muted" />
+            <Skeleton className="mt-2.5 h-3 w-56 bg-muted" />
+          </>
+        ) : state.kind === "success" ? (
+          <JoinStatus
+            icon={CheckCircle2}
+            iconClassName="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+            title="You're in"
+            description="Invitation accepted — this pot is now in your list."
+          >
+            <Button className="w-full" onClick={() => router.push(`/pots`)}>
+              Open pots
+            </Button>
+          </JoinStatus>
+        ) : state.kind === "needsSignup" ? (
+          <JoinStatus
+            icon={UserPlus}
+            iconClassName="bg-primary/10 text-primary"
+            title="Create your account to join"
+            description="Sign up with the same email this invitation was sent to — we'll bring you right back here to finish joining."
+          >
+            <Button className="w-full" onClick={() => router.push(signUpHref)}>
+              Sign up to continue
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => router.push(signInHref)}
+            >
+              I already have an account
+            </Button>
+          </JoinStatus>
+        ) : (
+          <JoinStatus
+            icon={XCircle}
+            iconClassName="bg-rose-500/10 text-rose-600 dark:text-rose-400"
+            title="Couldn't accept the invitation"
+            description={state.message}
+          >
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => router.push("/pots")}
+            >
+              Back to pots
+            </Button>
+          </JoinStatus>
+        )}
+      </div>
     </div>
+  );
+}
+
+/** Centered status stack: tinted icon, title, description, stacked actions. */
+function JoinStatus({
+  icon: Icon,
+  iconClassName,
+  title,
+  description,
+  children,
+}: {
+  icon: LucideIcon;
+  iconClassName?: string;
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <>
+      <div
+        className={cn(
+          "flex h-11 w-11 items-center justify-center rounded-full",
+          iconClassName,
+        )}
+      >
+        <Icon className="h-5 w-5" strokeWidth={1.75} />
+      </div>
+      <h1 className="mt-4 text-base font-semibold">{title}</h1>
+      {description ? (
+        <p className="mt-1.5 max-w-sm text-[13px] leading-relaxed text-muted-foreground">
+          {description}
+        </p>
+      ) : null}
+      {children ? (
+        <div className="mt-6 flex w-full max-w-[260px] flex-col gap-2">
+          {children}
+        </div>
+      ) : null}
+    </>
   );
 }

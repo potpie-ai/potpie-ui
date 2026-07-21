@@ -46,3 +46,5 @@ package-lock.json
 thoughts/
 .claude/
 .pnpm-store/
+
+.tmp

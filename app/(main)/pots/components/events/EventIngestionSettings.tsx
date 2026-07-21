@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -69,25 +70,28 @@ export function EventIngestionSettings({ potId }: Props) {
         <Button
           size="sm"
           variant="ghost"
-          className="h-7 w-7 p-0"
+          className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground"
           aria-label="Ingestion settings"
           title="Ingestion settings"
         >
-          <Settings2 className="h-3.5 w-3.5" />
+          <Settings2 className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="pot-theme max-w-md bg-background text-foreground">
         <DialogHeader>
           <DialogTitle>Ingestion settings</DialogTitle>
           <DialogDescription>
             Choose how events are batched before the agent processes them.
-            You can force the open batch to run at any time using the
-            “Queued” button on the list.
+            You can run the open batch at any time with “Process now” on the
+            events screen.
           </DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <div className="space-y-2.5 pt-2">
+            <Skeleton className="h-9 w-full rounded-md bg-muted" />
+            <Skeleton className="h-3 w-2/3 rounded bg-muted" />
+          </div>
         ) : (
           <div className="space-y-3 pt-2">
             <div className="space-y-1.5">
@@ -99,7 +103,7 @@ export function EventIngestionSettings({ potId }: Props) {
                 <SelectTrigger className="h-9 text-sm">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="pot-theme">
                   <SelectItem value="windowed">
                     Windowed — collect events into batches
                   </SelectItem>

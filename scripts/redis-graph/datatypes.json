@@ -1,0 +1,257 @@
+{
+  "subsystem": "datatypes",
+  "components": [
+    {
+      "slug": "object-system",
+      "name": "Object System (robj/kvobj)",
+      "paths": ["src/object.c", "src/object.h"],
+      "summary": "robj/kvobj value containers: type+encoding tags, refcounting, LRU/LFU bits, embedded keys and metadata",
+      "description": "Core value container: struct redisObject (robj) carries 4-bit type (OBJ_STRING..OBJ_STREAM, plus fork-specific OBJ_ARRAY and OBJ_GCRA) and 4-bit encoding (OBJ_ENCODING_RAW/INT/EMBSTR/HT/INTSET/SKIPLIST/QUICKLIST/LISTPACK/LISTPACK_EX/TMPL_LP/TMPL_ARRAY); kvobj is a robj with iskvobj=1 that embeds the key sds inline and prepends up to 8 8-byte metadata slots selected by metabits (slot 0 = expiry). Key functions: createObject, createStringObject, createEmbeddedStringObject (embstr for strings <= 44 bytes, OBJ_ENCODING_EMBSTR_SIZE_LIMIT), kvobjSet/kvobjCreate, kvobjMetaRef, incrRefCount/decrRefCount (OBJ_SHARED_REFCOUNT for immortal shared integers), dismissStringObject/dismissListObject (madvise-based COW relief), objectCommand (OBJECT ENCODING/FREQ/IDLETIME/REFCOUNT). Searchable as 'object encoding', 'embstr vs raw', 'refcount', 'shared objects', 'kvobj embedded key'; wrong-encoding symptoms show up as WRONGTYPE errors or unexpected OBJECT ENCODING output.",
+      "part_of": "service:redis-server",
+      "depends_on": ["sds", "dict", "listpack", "quicklist", "intset", "key-metadata"],
+      "loc": 1992
+    },
+    {
+      "slug": "keyspace",
+      "name": "Keyspace (db.c)",
+      "paths": ["src/db.c"],
+      "summary": "Per-database key lookup/add/delete over kvstore, lazy expiration on access, SCAN, FLUSH, RENAME/COPY",
+      "description": "C-level DB API on redisDb: kvstore-backed db->keys and db->expires plus estore db->subexpires for hash-field TTLs; lookupKey/lookupKeyRead/lookupKeyWrite apply expireIfNeeded (flags EXPIRE_FORCE_DELETE_EXPIRED / EXPIRE_ALLOW_ACCESS_EXPIRED) so expired keys are deleted lazily on access; dbAdd/dbAddByLink/dbAddRDBLoad, setKey, dbGenericDelete (sync or lazyfree async), setExpire/removeExpire, scanGenericCommand+scanCallback (SCAN cursor semantics), flushallCommand/flushdbCommand with async flush blocking, renameGenericCommand, COPY/MOVE/RANDOMKEY/DBSIZE/TYPE, and per-type keysizes histograms (kvstoreMetadata). Searchable as 'keyspace lookup', 'lazy expiration on access', 'db->keys kvstore', 'SCAN guarantees', 'keyspace hit miss'; symptoms: keyspace_misses spikes, FLUSHALL latency, 'DEL vs UNLINK' behavior.",
+      "part_of": "service:redis-server",
+      "depends_on": ["kvstore", "dict", "object-system", "expiration-store", "key-metadata", "lazyfree", "keyspace-notifications", "cluster-core"],
+      "loc": 4009
+    },
+    {
+      "slug": "string-type",
+      "name": "String Type",
+      "paths": ["src/t_string.c"],
+      "summary": "SET/GET family, INCR/DECR, ranges, APPEND, LCS, plus conditional SET (IFEQ/IFNE/IFDEQ/IFDNE) and DIGEST",
+      "description": "String commands over sds-backed robj values: setGenericCommand implements SET/SETEX/PSETEX/SETNX/GETSET with NX/XX/GET/KEEPTTL and fork-specific conditional flags IFEQ/IFNE (compare value) and IFDEQ/IFDNE (compare XXH3 digest); also GETEX/GETDEL, SETRANGE/GETRANGE, MGET/MSET/MSETNX/MSETEX, INCR/DECR/INCRBY/INCRBYFLOAT/INCREX, APPEND, STRLEN, LCS, and digestCommand producing a 16-hex-char XXH3 value digest. Encodings: OBJ_ENCODING_INT for integers, EMBSTR <= 44 bytes, RAW otherwise; checkStringLength enforces proto-max-bulk-len (default 512MB). Searchable as 'string commands', 'SET NX XX', 'compare-and-set IFEQ', 'INCR overflow', 'string exceeds maximum allowed size'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["object-system", "keyspace", "sds"],
+      "uses_deps": ["xxhash"],
+      "config_vars": ["proto-max-bulk-len"],
+      "loc": 1683
+    },
+    {
+      "slug": "list-type",
+      "name": "List Type",
+      "paths": ["src/t_list.c"],
+      "summary": "LPUSH/RPUSH/LMOVE/LMPOP lists with listpack-to-quicklist encoding conversion",
+      "description": "List commands (LPUSH/RPUSH/LPUSHX/LINSERT/LRANGE/LREM/LPOS/LMOVE/RPOPLPUSH/LMPOP and blocking BLPOP/BRPOP/BLMPOP/BLMOVE) over two encodings: OBJ_ENCODING_LISTPACK for small lists and OBJ_ENCODING_QUICKLIST (linked list of listpacks) for large ones. listTypeTryConversionRaw/listTypeTryConvertListpack decide conversions in both directions (LIST_CONV_GROWING/SHRINKING) using quicklistNodeExceedsLimit against list-max-listpack-size (default -2 = 8KB per node); list-compress-depth enables LZF compression of interior quicklist nodes. Searchable as 'list encoding conversion', 'quicklist listpack threshold', 'blocking list pop'; symptoms: memory jump when a list converts to quicklist, OBJECT ENCODING listpack vs quicklist.",
+      "part_of": "service:redis-server",
+      "depends_on": ["listpack", "quicklist", "object-system", "keyspace", "blocked-clients"],
+      "config_vars": ["list-max-listpack-size", "list-compress-depth"],
+      "loc": 1754
+    },
+    {
+      "slug": "set-type",
+      "name": "Set Type",
+      "paths": ["src/t_set.c"],
+      "summary": "SADD/SINTER/SUNION/SDIFF sets with intset/listpack/hashtable encodings and size-based conversion",
+      "description": "Unordered set commands (SADD/SREM/SMOVE/SISMEMBER/SMISMEMBER/SPOP/SRANDMEMBER/SINTER/SINTERCARD/SUNION/SDIFF plus fork-specific SUNIONCARD/SDIFFCARD, SSCAN) over three encodings: OBJ_ENCODING_INTSET for all-integer sets up to set-max-intset-entries (512), OBJ_ENCODING_LISTPACK up to set-max-listpack-entries (128) with values <= set-max-listpack-value (64 bytes), otherwise OBJ_ENCODING_HT. setTypeMaybeConvert/setTypeConvertAndExpand perform upward conversion with size hints; intset shrinks back to listpack when small enough. sunionDiffGenericCommand/sinterGenericCommand implement the algebra. Searchable as 'set encoding intset listpack hashtable', 'SPOP with count', 'SRANDMEMBER negative count', 'set conversion threshold'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["intset", "listpack", "dict", "object-system", "keyspace"],
+      "config_vars": ["set-max-intset-entries", "set-max-listpack-entries", "set-max-listpack-value"],
+      "loc": 2047
+    },
+    {
+      "slug": "hash-type",
+      "name": "Hash Type",
+      "paths": ["src/t_hash.c"],
+      "summary": "HSET/HGET hashes with listpack/dict encodings, field TTLs (HFE via ebuckets), and shared hash templates",
+      "description": "Largest type file (6.5k lines): hash commands (HSET/HGET/HDEL/HRANDFIELD/HSCAN/HINCRBY) over encodings OBJ_ENCODING_LISTPACK, LISTPACK_EX (listpackEx struct: listpack of key-value-ttl tuples ordered by TTL plus ExpireMeta), OBJ_ENCODING_HT (dict of Entry objects), and template encodings TMPL_LP/TMPL_ARRAY where many hashes share one immutable hashTemplate holding the field names once (hashTemplateRegistry, hashTemplateGetOrCreateWithHash, HIMPORT PREPARE/SET bulk-load commands). Hash Field Expiration (HFE): HEXPIRE/HPEXPIRE/HTTL/HPERSIST/HGETEX/HGETDEL/HSETEX attach per-field TTLs stored in a per-hash private ebuckets (dictType entryHashDictTypeWithHFE, onFieldExpire callback), and each HFE hash registers its minimum next-expiry in the global db->subexpires estore for active expiration. Conversion thresholds: hash-max-listpack-entries (512), hash-max-listpack-value (64); template use gated by hash-min/max-template-entries. Searchable as 'hash field TTL', 'HEXPIRE', 'hash encoding listpackex', 'hash templates shared field names', 'HFE active expiration'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["listpack", "dict", "ebuckets", "key-metadata", "expiration-store", "object-system", "keyspace", "keyspace-notifications"],
+      "config_vars": ["hash-max-listpack-entries", "hash-max-listpack-value", "hash-min-template-entries", "hash-max-template-entries"],
+      "loc": 6578
+    },
+    {
+      "slug": "zset-type",
+      "name": "Sorted Set Type",
+      "paths": ["src/t_zset.c"],
+      "summary": "ZADD/ZRANGE sorted sets on dual dict+skiplist (Pugh skiplist) or listpack for small sets",
+      "description": "Sorted sets keep every element in two structures simultaneously: a dict (zsetDictType maps sds -> zskiplistNode*) for O(1) score lookup and a zskiplist (William Pugh skiplist with backward pointers and duplicate-score support; zslInsert/zslDelete/zslGetElementByRank, element sds embedded in the node via zskiplistNodeInfo/sdsoffset) for ordered range queries. Small zsets use OBJ_ENCODING_LISTPACK until zset-max-listpack-entries (128) or zset-max-listpack-value (64 bytes) is exceeded; zsetTypeMaybeConvert/zsetConvertAndExpand switch to OBJ_ENCODING_SKIPLIST. Commands: zaddGenericCommand (NX/XX/GT/LT/INCR/CH), zrangeGenericCommand (ZRANGE/ZRANGEBYSCORE/ZRANGEBYLEX/REV/STORE), ZRANK, ZPOPMIN/ZPOPMAX, ZMPOP/BZPOPMIN, ZINCRBY, ZUNIONSTORE/ZINTERSTORE/ZDIFF, ZRANDMEMBER, ZSCAN. Searchable as 'skiplist', 'zset dual data structure', 'ZRANGEBYSCORE slow', 'zset listpack conversion'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["listpack", "dict", "intset", "object-system", "keyspace", "blocked-clients"],
+      "uses_deps": ["fast_float"],
+      "config_vars": ["zset-max-listpack-entries", "zset-max-listpack-value"],
+      "loc": 5033
+    },
+    {
+      "slug": "bitops",
+      "name": "Bit Operations",
+      "paths": ["src/bitops.c"],
+      "summary": "SETBIT/GETBIT/BITCOUNT/BITPOS/BITOP/BITFIELD over string values with AVX2/AVX512/NEON SIMD paths",
+      "description": "Bit-level operations on string keys: setbitCommand/getbitCommand, bitcountCommand (redisPopcount with 28-byte-per-loop scalar unrolling plus AVX2/AVX512-VPOPCNTDQ and AArch64 NEON accelerated variants selected via __builtin_cpu_supports), bitposCommand, bitopCommand (AND/OR/XOR/NOT with bitopCommandAVX/bitopCommandAVX512 vectorized kernels), and bitfieldCommand/bitfieldroCommand implementing BITFIELD GET/SET/INCRBY with WRAP/SAT/FAIL overflow policies. lookupStringForBitCommand grows/creates the underlying sds; max addressable bit bounded by proto-max-bulk-len. Searchable as 'bitmap commands', 'popcount SIMD', 'BITFIELD overflow', 'bit offset out of range'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["string-type", "object-system", "sds", "keyspace"],
+      "config_vars": ["proto-max-bulk-len"],
+      "loc": 2201
+    },
+    {
+      "slug": "hyperloglog",
+      "name": "HyperLogLog",
+      "paths": ["src/hyperloglog.c"],
+      "summary": "PFADD/PFCOUNT/PFMERGE probabilistic cardinality: 16384 6-bit registers, dense/sparse encodings on strings",
+      "description": "HyperLogLog cardinality estimator (Flajolet + Heule et al. 64-bit-hash variant) stored as a plain OBJ_STRING with 'HYLL' magic header, so no new type is introduced and HLLs survive GET/SET/RDB as strings. Two representations: HLL_DENSE (HLL_P=14 -> HLL_REGISTERS=16384 6-bit registers, ~12KB per key) and HLL_SPARSE (run-length encoded, promoted by hllSparseToDense once it exceeds hll-sparse-max-bytes, default 3000). Key functions: hllDenseAdd/hllSparseAdd, hllCount with cached cardinality in the header, PFADD/PFCOUNT/PFMERGE/PFDEBUG/PFSELFTEST commands; SIMD (AVX2/NEON) register-histogram paths. Searchable as 'HLL sparse dense', 'INVALIDHLL / WRONGTYPE Key is not a valid HyperLogLog', 'PFCOUNT accuracy 0.81%'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["string-type", "sds", "object-system", "keyspace"],
+      "config_vars": ["hll-sparse-max-bytes"],
+      "loc": 2128
+    },
+    {
+      "slug": "geo-index",
+      "name": "Geo Index",
+      "paths": ["src/geo.c", "src/geohash.c", "src/geohash_helper.c"],
+      "summary": "GEOADD/GEOSEARCH/GEORADIUS: 52-bit interleaved geohash scores stored in a sorted set",
+      "description": "Geospatial commands built entirely on zsets: geoaddCommand encodes longitude/latitude with geohashEncodeWGS84 (26-step interleaved geohash -> 52-bit score) and stores members via ZADD semantics; georadiusCommand/geosearchCommand/geosearchstoreCommand compute candidate boxes with geohashEstimateStepsByRadius and geohashGetAreasByRadiusWGS84 (9-cell neighbor search), then filter with Haversine distance into a geoArray sorted by pqsort. Also GEOPOS/GEODIST/GEOHASH (11-char base32 output). Uses zzlFirstInRange/zslValueLteMax exported from t_zset.c for direct zset introspection. Searchable as 'geohash encoding', 'GEORADIUS deprecated vs GEOSEARCH', 'geo distance wrong near poles', 'FROMMEMBER BYBOX'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["zset-type", "object-system", "keyspace"],
+      "loc": 1006
+    },
+    {
+      "slug": "sort-engine",
+      "name": "SORT Engine",
+      "paths": ["src/sort.c"],
+      "summary": "SORT/SORT_RO for lists/sets/zsets with BY/GET patterns, LIMIT via partial qsort",
+      "description": "sortCommandGeneric implements SORT and read-only SORT_RO over lists, sets and sorted sets: numeric or ALPHA comparison (sortCompare), BY pattern external-key sorting and GET pattern projection through lookupKeyByPattern which substitutes '*' in key patterns and supports 'key->field' hash-field dereferencing and '#' self-reference; LIMIT offset/count uses pqsort (partial quicksort) instead of full qsort; STORE writes the result as a list and BY nosort skips sorting for pure pagination. In cluster mode BY/GET are restricted unless keys hash to one slot. Searchable as 'SORT BY GET pattern', 'One or more scores can't be converted into double', 'SORT ALPHA', 'pqsort partial sorting'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["list-type", "set-type", "zset-type", "keyspace", "cluster-core"],
+      "uses_deps": ["fast_float"],
+      "loc": 660
+    },
+    {
+      "slug": "expire-cycle",
+      "name": "Active Expire Cycle",
+      "paths": ["src/expire.c"],
+      "summary": "Adaptive fast/slow active expiration of TTL keys plus HFE sub-expiry sweep; EXPIRE/TTL/PERSIST commands",
+      "description": "activeExpireCycle incrementally deletes expired keys that were never touched: ACTIVE_EXPIRE_CYCLE_FAST (<=1000us, run from beforeSleep) and ACTIVE_EXPIRE_CYCLE_SLOW (serverCron at hz, capped at ACTIVE_EXPIRE_CYCLE_SLOW_TIME_PERC=25% CPU), sampling ACTIVE_EXPIRE_CYCLE_KEYS_PER_LOOP=20 keys per db and repeating while >10% sampled were stale (ACTIVE_EXPIRE_CYCLE_ACCEPTABLE_STALE); effort scaled by active-expire-effort (1-10); maintains db->avg_ttl via avg_ttl_factor decay. activeExpireCycleTryExpire deletes and propagates DEL/UNLINK (lazyfree-lazy-expire); a parallel activeSubexpires pass walks db->subexpires via estoreActiveExpire/estoreGetNextNonEmptyBucket to expire hash fields (HFE). Also implements EXPIRE/PEXPIRE/EXPIREAT (NX/XX/GT/LT flags), TTL/PTTL, EXPIRETIME, PERSIST, TOUCH. Searchable as 'active expiration', 'expired keys not freed', 'stat_expiredkeys', 'expire cycle CPU'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["keyspace", "expiration-store", "hash-type", "lazyfree", "server-core"],
+      "config_vars": ["active-expire-effort", "lazyfree-lazy-expire"],
+      "loc": 934
+    },
+    {
+      "slug": "expiration-store",
+      "name": "Expiration Store (estore)",
+      "paths": ["src/estore.c", "src/estore.h"],
+      "summary": "ebuckets-based per-slot store of items with ExpireMeta; currently indexes hashes with field TTLs",
+      "description": "estore is to ebuckets what kvstore is to dict: struct _estore holds an ebArray of ebuckets (one per cluster slot with CLUSTER_SLOT_MASK_BITS buckets, or a single bucket standalone) plus a fenwickTree (fwtree) of cumulative bucket sizes for O(log n) first/next-non-empty-bucket iteration. Items must embed ExpireMeta; API: estoreCreate/estoreAdd/estoreRemove/estoreActiveExpire/estoreGetFirstNonEmptyBucket/estoreMoveEbuckets (used by atomic slot migration). Currently backs db->subexpires only: each hash with hash-field expiration registers with its earliest field expiry so the active cycle can find it. Searchable as 'estore', 'subexpires', 'HFE global registration', 'per-slot expiration buckets'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["ebuckets", "fenwick-tree", "atomic-slot-migration"],
+      "loc": 498
+    },
+    {
+      "slug": "key-metadata",
+      "name": "Key Metadata Framework + Hash Entry",
+      "paths": ["src/keymeta.c", "src/keymeta.h", "src/entry.c", "src/entry.h"],
+      "summary": "8-class per-key metadata slots on kvobj (class 0 = expire, others module-registered); Entry field-value objects",
+      "description": "keymeta.c: framework attaching up to 8 independent 8-byte metadata values to a kvobj, indexed by the robj metabits bitmap; KEY_META_ID_EXPIRE=0 is reserved for TTL, IDs 1-7 are registered by modules (KeyMetaClass with 4-char names encoded like module type IDs, 'META-xxxx' entities, 32-bit class spec for RDB/DUMP) with lifecycle callbacks KeyMetaLoadFunc/SaveFunc/CopyFunc/RenameFunc/UnlinkFunc/FreeFunc/DefragFunc so copy, rename, RDB persistence and defrag stay consistent. entry.c: Entry is the compact hash field-value pair object used by OBJ_ENCODING_HT hashes — field stored as embedded sds with aux bits FIELD_SDS_AUX_BIT_ENTRY_HAS_EXPIRY / HAS_VALUE_PTR, value either embedded inline or via pointer, optional TTL metadata; setEntryWriteInfo/entryWrite compute single-allocation layouts. Searchable as 'key metadata class', 'metabits', 'module per-key metadata', 'hash entry embedded value'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["object-system", "sds", "module-system"],
+      "loc": 1348
+    }
+  ],
+  "config_vars": [
+    {"name": "list-max-listpack-size", "summary": "Listpack-to-quicklist conversion limit for lists", "description": "Per-node size/count limit before a list converts from OBJ_ENCODING_LISTPACK to quicklist (and the per-node limit inside quicklist). Negative values mean size classes (-2 = 8KB). Checked by listTypeTryConvertListpack via quicklistNodeExceedsLimit. Alias: list-max-ziplist-size.", "configures": "list-type", "default": "-2"},
+    {"name": "list-compress-depth", "summary": "Quicklist interior-node LZF compression depth", "description": "Number of quicklist nodes at each end of the list to leave uncompressed; 0 disables compression. Passed to quicklistNew by listTypeTryConvertListpack.", "configures": "list-type", "default": "0"},
+    {"name": "set-max-intset-entries", "summary": "Max entries for intset-encoded sets", "description": "All-integer sets stay OBJ_ENCODING_INTSET up to this many entries, then convert (to listpack or hashtable) via setTypeMaybeConvert/maybeConvertIntset.", "configures": "set-type", "default": "512"},
+    {"name": "set-max-listpack-entries", "summary": "Max entries for listpack-encoded sets", "description": "Sets stay OBJ_ENCODING_LISTPACK up to this count; beyond it setTypeConvertAndExpand switches to OBJ_ENCODING_HT.", "configures": "set-type", "default": "128"},
+    {"name": "set-max-listpack-value", "summary": "Max element size for listpack-encoded sets", "description": "Any set member longer than this many bytes forces conversion to hashtable encoding.", "configures": "set-type", "default": "64"},
+    {"name": "hash-max-listpack-entries", "summary": "Max fields for listpack-encoded hashes", "description": "Hashes stay listpack/listpackEx up to this field count, then hashTypeConvert switches to dict-of-Entry (OBJ_ENCODING_HT). Alias: hash-max-ziplist-entries.", "configures": "hash-type", "default": "512"},
+    {"name": "hash-max-listpack-value", "summary": "Max field/value size for listpack-encoded hashes", "description": "A hash field or value longer than this many bytes forces conversion to hashtable encoding. Alias: hash-max-ziplist-value.", "configures": "hash-type", "default": "64"},
+    {"name": "hash-min-template-entries", "summary": "Min field count to use shared hash templates", "description": "Lower bound of field count for a hash to adopt a shared hashTemplate (TMPL_LP/TMPL_ARRAY encodings); 0 disables. Related: hash-max-template-entries, hash-rdb-load-min/max-template-entries, hash-rdb-load-template-disassembly-threshold.", "configures": "hash-type", "default": "0"},
+    {"name": "hash-max-template-entries", "summary": "Max field count to use shared hash templates", "description": "Upper bound of field count for template-encoded hashes; 0 disables template adoption.", "configures": "hash-type", "default": "0"},
+    {"name": "zset-max-listpack-entries", "summary": "Max entries for listpack-encoded sorted sets", "description": "Zsets stay OBJ_ENCODING_LISTPACK up to this count, then zsetConvertAndExpand builds the dict+skiplist representation. Alias: zset-max-ziplist-entries.", "configures": "zset-type", "default": "128"},
+    {"name": "zset-max-listpack-value", "summary": "Max element size for listpack-encoded sorted sets", "description": "A zset member longer than this many bytes forces skiplist encoding. Alias: zset-max-ziplist-value.", "configures": "zset-type", "default": "64"},
+    {"name": "hll-sparse-max-bytes", "summary": "Sparse HLL size before promotion to dense", "description": "A sparse HyperLogLog exceeding this many bytes is converted by hllSparseToDense to the fixed ~12KB dense representation; values over ~3000 trade memory for slower sparse ops.", "configures": "hyperloglog", "default": "3000"},
+    {"name": "active-expire-effort", "summary": "Aggressiveness of the active expire cycle (1-10)", "description": "Scales keys-per-loop, fast-cycle duration, CPU percentage and acceptable-stale tolerance inside activeExpireCycle; higher values free expired keys sooner at more CPU cost.", "configures": "expire-cycle", "default": "1"},
+    {"name": "lazyfree-lazy-expire", "summary": "Free expired keys asynchronously", "description": "When yes, keys deleted by expiration are unlinked and reclaimed in the lazyfree background thread instead of blocking the main thread.", "configures": "expire-cycle", "default": "no"}
+  ],
+  "features": [
+    {
+      "slug": "hash-field-ttl",
+      "name": "Hash Field Expiration (HFE)",
+      "summary": "Per-field TTLs on hashes: HEXPIRE/HTTL/HPERSIST/HGETEX with ebuckets-backed active expiration",
+      "description": "Fields of a hash can carry individual TTLs: HEXPIRE/HPEXPIRE/HEXPIREAT (NX/XX/GT/LT), HTTL/HPTTL, HEXPIRETIME, HPERSIST, HGETEX/HGETDEL/HSETEX. TTLs live in a per-hash private ebuckets (dict encoding) or TTL-ordered listpackEx; each HFE hash registers its minimum next-expiry in the global db->subexpires estore so activeSubexpires can expire fields across hashes without scanning. Expired fields propagate HDEL to replicas/AOF (propagateHashFieldDeletion).",
+      "lifecycle": "active",
+      "implemented_in": ["hash-type", "expiration-store", "expire-cycle", "keyspace"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "hash-templates",
+      "name": "Shared Hash Templates",
+      "summary": "Many hashes with identical field sets share one immutable field-name template (TMPL_LP/TMPL_ARRAY)",
+      "description": "Memory optimization for large populations of schema-like hashes: field names are stored once in an immutable hashTemplate (registry keyed by field set and by fields-listpack blob for O(1) RESTORE resolution) and each hash stores only its values, either inline in a listpack ([template_id][v0]..[vN-1], OBJ_ENCODING_TMPL_LP) or as an sds array (OBJ_ENCODING_TMPL_ARRAY). HSET/HDEL that change the field set switch templates rather than editing one. HIMPORT PREPARE/SET/DISCARD bulk-loads template hashes; gated by hash-min/max-template-entries.",
+      "lifecycle": "active",
+      "implemented_in": ["hash-type"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "conditional-set",
+      "name": "Conditional SET (IFEQ/IFNE/IFDEQ/IFDNE) and DIGEST",
+      "summary": "Compare-and-set on strings by value or XXH3 digest, plus a DIGEST command",
+      "description": "setGenericCommand supports IFEQ/IFNE (set only if current value equals/differs from a supplied match value) and IFDEQ/IFDNE (compare against a 16-hex-char XXH3 64-bit digest of the current value), enabling optimistic concurrency on plain strings without WATCH/MULTI; digestCommand returns the value digest for later conditional writes.",
+      "lifecycle": "active",
+      "implemented_in": ["string-type"],
+      "provided_by": "service:redis-server"
+    }
+  ],
+  "decisions": [
+    {
+      "slug": "zset-dual-structure",
+      "title": "Sorted sets use a dict and a skiplist over the same elements",
+      "statement": "Large zsets keep every element in both a hash table (member -> node) and a skiplist (score-ordered) sharing one sds allocation.",
+      "rationale": "O(1) score lookup plus O(log N) ordered insert/remove/range in one type; the sds is owned by the skiplist node (freed only in zslFreeNode) and the dict stores zskiplistNode* with no destructors, saving one string copy per element.",
+      "description": "Documented in the t_zset.c header: a Pugh skiplist modified to allow repeated scores, compare by member as satellite data, and carry level-1 backward pointers for ZREVRANGE; the dict (zsetDictType) resolves members to nodes via zslGetNodeElementForDict.",
+      "affects": ["zset-type"],
+      "evidence": "src/t_zset.c top-of-file comment ('ZSETs are ordered sets using two data structures...') and zsetDictType comment 'skiplist owns the node memory'"
+    },
+    {
+      "slug": "hll-as-string",
+      "title": "HyperLogLog is stored as a plain string, not a new type",
+      "statement": "HLLs are OBJ_STRING values with a 16-byte 'HYLL' header, cached cardinality, and dense/sparse encodings.",
+      "rationale": "Reusing the string type means HLLs work with GET/SET, RDB, replication and DUMP for free; the header caches the last computed cardinality so PFCOUNT is O(1) when unmodified, and sparse run-length encoding keeps small-cardinality keys tiny until hll-sparse-max-bytes forces dense promotion.",
+      "description": "The hyperloglog.c design comment lists 'The use of the Redis string data type. No new type is introduced.' as an explicit implementation idea, alongside 16384 6-bit registers (~12KB) from a 64-bit hash.",
+      "affects": ["hyperloglog", "string-type"],
+      "evidence": "src/hyperloglog.c header comment: 'The use of the Redis string data type. No new type is introduced.'"
+    },
+    {
+      "slug": "kvobj-embedded-key-metadata",
+      "title": "Keys and metadata are embedded in the value object (kvobj)",
+      "statement": "The dict entry stores a single kvobj allocation containing metadata slots (prepended, selected by metabits), the robj, the key sds, and for small strings the value itself.",
+      "rationale": "One allocation per key-value removes a pointer and a separate key sds, improving memory footprint and locality; class-0 metadata is the expire time, so TTLs need no separate expires-dict payload, and keys with large embedded keys pre-reserve expire space (KEY_SIZE_TO_INCLUDE_EXPIRE_THRESHOLD=128) to avoid reallocating when EXPIRE is set later.",
+      "description": "object.h documents the exact layouts ('Expiry Time | serverObject | key-hdr-size | sdshdr5 mykey') with up to 8 8-byte metadata classes placed before the struct in reverse class order; kvobjMetaRef popcounts metabits to locate a slot.",
+      "affects": ["object-system", "key-metadata", "keyspace"],
+      "evidence": "src/object.h 'kvobj (key-value object)' and 'kvobj with metadata (+expiration)' header comment; src/object.c KEY_SIZE_TO_INCLUDE_EXPIRE_THRESHOLD comment"
+    },
+    {
+      "slug": "hfe-two-level-expiry",
+      "title": "Hash field TTLs use per-hash ebuckets plus a global subexpires estore",
+      "statement": "Each HFE hash tracks its own field TTLs privately, and registers only its minimum next-expiry in the per-db estore (db->subexpires) for the active cycle.",
+      "rationale": "Active expiration across many hashes only needs the earliest deadline per hash; keeping full TTL ordering local (ebuckets or TTL-ordered listpackEx) avoids a giant global index, and HASH_NEW_EXPIRE_DIFF_THRESHOLD avoids re-registering the global entry for small TTL changes.",
+      "description": "t_hash.c documents that hashes with HFE 'will be also registered in a global ebuckets DS with expiration time value that reflects their next minimum time to expire (db->subexpires)'; estore.h states estore currently manages subexpiry only for HFE, using a Fenwick tree for non-empty-bucket iteration in cluster mode.",
+      "affects": ["hash-type", "expiration-store", "expire-cycle", "hash-field-ttl"],
+      "evidence": "src/t_hash.c 'Hash Field Expiration (HFE) Feature' comment (lines ~114-122); src/estore.h 'USAGE IN REDIS' section"
+    },
+    {
+      "slug": "adaptive-expire-cycle",
+      "title": "Active expiration runs adaptive fast and slow cycles",
+      "statement": "Expired-key collection samples 20 keys per db per loop and repeats only while more than 10% were stale, with a 1ms fast cycle every event loop and a 25%-CPU-capped slow cycle at server.hz.",
+      "rationale": "Keeps CPU cost near zero when few keys expire while bounding stale-key memory to roughly ACTIVE_EXPIRE_CYCLE_ACCEPTABLE_STALE (10%) of expiring keys under load; active-expire-effort rescales all bounds for latency-vs-memory tuning.",
+      "description": "expire.c's long design comment defines ACTIVE_EXPIRE_CYCLE_FAST_DURATION=1000us, ACTIVE_EXPIRE_CYCLE_SLOW_TIME_PERC=25, ACTIVE_EXPIRE_CYCLE_KEYS_PER_LOOP=20 and the acceptable-stale termination rule; lazy on-access expiry in db.c covers accessed keys, the cycle covers never-touched ones.",
+      "affects": ["expire-cycle", "keyspace"],
+      "evidence": "src/expire.c comment above activeExpireCycle and the ACTIVE_EXPIRE_CYCLE_* defines"
+    },
+    {
+      "slug": "immutable-hash-templates",
+      "title": "Hash templates are immutable and identified by their exact field set",
+      "statement": "A hashTemplate is never edited after creation; HSET/HDEL that change the field set atomically switch the hash to another (possibly new) template.",
+      "rationale": "Immutability lets thousands of hashes share one template safely (refcounted via key_refcount/hold_refcount) with a precomputed order-independent field-set hash for O(1) registry lookup, at the cost of making field-set churn expensive — the feature targets stable schemas.",
+      "description": "The 'Hash template registry internals' comment in t_hash.c spells this out, including sorted field names with binary-search lookup (hashTemplateFieldIndex) and a lazily-built fields_lp blob so DUMP/RESTORE resolves templates with a single O(1) lookup.",
+      "affects": ["hash-type", "hash-templates"],
+      "evidence": "src/t_hash.c 'Hash template registry internals' comment (~line 270) and hashTemplate struct docs in src/server.h"
+    }
+  ]
+}

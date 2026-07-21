@@ -16,7 +16,7 @@ describe("cli-success helpers", () => {
   it("builds success path and copy", () => {
     expect(cliSuccessPath("potpie")).toBe("/cli-success?provider=potpie");
     expect(cliSuccessPath("github")).toBe("/cli-success?provider=github");
-    expect(cliSuccessCopy("potpie").body).toContain("return to your CLI");
+    expect(cliSuccessCopy("potpie").body).toContain("return to your terminal");
     expect(cliSuccessCopy("github").title).toBe("GitHub connected");
   });
 });

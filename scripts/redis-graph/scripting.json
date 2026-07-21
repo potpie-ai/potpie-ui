@@ -1,0 +1,211 @@
+{
+  "subsystem": "scripting",
+  "components": [
+    {
+      "slug": "eval-scripts",
+      "name": "EVAL Lua Scripting",
+      "paths": ["src/eval.c", "src/script.c", "src/script_lua.c", "src/script.h", "src/script_lua.h"],
+      "summary": "EVAL/EVALSHA Lua script execution: SHA1 script cache, run-context guards, Lua<->RESP conversion, LDB debugger",
+      "description": "Implements EVAL/EVALSHA/EVAL_RO/SCRIPT via a single shared lua_State (struct luaCtx lctx) holding a SHA1->luaScript dict plus an LRU list (luaScriptsLRUAdd); evalGenericCommand/luaCreateFunction compile bodies named by sha1hex, and evalExtractShebangFlags parses '#!lua flags=' shebangs (no-writes, allow-oom, allow-stale, no-cluster, allow-cross-slot-keys). script.c is the engine-agnostic run layer: scriptPrepareForRun/scriptCall/scriptResetRun enforce ACL, OOM, cluster-state, and write/replica checks per command (scriptVerifyACL, scriptVerifyOOM, scriptVerifyClusterState), and scriptInterrupt + busy-reply-threshold (alias lua-time-limit) drive BUSY replies and SCRIPT KILL/UNKILLABLE handling. script_lua.c bridges Lua and RESP (luaRedisGenericCommand for redis.call/pcall, redisProtocolToLuaType_* and luaReplyToRedisReply, sandboxed globals allow-lists for cjson/cmsgpack/bit/struct), and eval.c also hosts the LDB Lua debugger (struct ldbState, ldbEval, forked debugging sessions). Searchable as 'BUSY Redis is busy running a script', 'NOSCRIPT No matching script', 'script timeout', 'EVALSHA cache miss', 'redis.call error', 'Lua sandbox'. Under jemalloc the Lua VM gets a dedicated arena/tcache (createLuaState/luaAlloc) so Lua allocations do not block the defragger.",
+      "part_of": "service:redis-server",
+      "depends_on": ["server-core", "command-table", "resp-protocol", "acl-engine", "replication-core", "cluster-core", "dict", "sds"],
+      "uses_deps": ["lua", "fpconv"],
+      "config_vars": ["busy-reply-threshold", "lua-time-limit"],
+      "loc": 4240
+    },
+    {
+      "slug": "functions-engine",
+      "name": "Redis Functions Engine",
+      "paths": ["src/functions.c", "src/function_lua.c", "src/functions.h"],
+      "summary": "FUNCTION LOAD/FCALL server-side function libraries with pluggable engines; Lua engine in function_lua.c",
+      "description": "functions.c implements the FUNCTION command family (functionLoadCommand, fcallCommand/fcallroCommand, functionDumpCommand/functionRestoreCommand, functionListCommand, functionStatsCommand, functionFlushCommand, functionKillCommand) around functionsLibCtx, a library-name->functionLibInfo and function-name->functionInfo registry with per-engine stats; functionExtractLibMetaData parses the '#!lua name=libname' shebang and functionsRegisterEngine allows pluggable engines. function_lua.c is the LUA engine implementation: luaEngineCreate compiles a library blob, luaRegisterFunction implements redis.register_function (named or positional args, flags like no-writes), luaEngineCall invokes registered callbacks, and luaEngineLoadHook cancels FUNCTION LOAD after a 500ms timeout (LOAD_TIMEOUT_MS). Unlike EVAL scripts, libraries are part of the dataset: persisted to RDB, replicated, and dump/restorable with FLUSH/APPEND/REPLACE policies (restorePolicy). Runs on the shared script.c run layer (scriptPrepareForRun/scriptCall) so ACL/OOM/cluster checks and SCRIPT-style timeouts apply. Searchable as 'FUNCTION LOAD failed', 'missing library metadata', 'FCALL vs EVAL', 'redis.register_function', 'wrong number of arguments', 'library name conflict'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["eval-scripts", "server-core", "rdb-persistence", "replication-core", "dict", "rio-layer"],
+      "uses_deps": ["lua"],
+      "uses_datastores": ["rdb-snapshot"],
+      "loc": 1651
+    },
+    {
+      "slug": "module-system",
+      "name": "Redis Module System",
+      "paths": ["src/module.c", "src/redismodule.h"],
+      "summary": "RedisModule_* dynamic-module host: commands, data types, keyspace/server events, blocking clients, RM_Call",
+      "description": "16k-line host for dynamically loaded modules (moduleLoad via dlopen, MODULE LOAD/LOADEX/UNLOAD/LIST guarded by enable-module-command): RM_CreateCommand registers module commands into the command table, RM_CreateDataType/RM_LoadDataTypeFromStringEncver register moduleType data types with RDB/AOF/defrag callbacks, RM_Call executes Redis commands from module code returning lazy RedisModuleCallReply objects (call_reply.c), and RM_Replicate/RM_ReplicateVerbatim control propagation. Event surface: RM_SubscribeToKeyspaceEvents(WithSubkeys) and RM_NotifyKeyspaceEvent hook keyspace notifications, while RM_SubscribeToServerEvent/moduleFireServerEvent deliver RedisModuleEvent_* server events (ReplicationRoleChanged, Persistence, FlushDB, Shutdown, CronLoop, ClusterSlotMigration, and ClusterTopologyChange — debounced to once per event-loop iteration with change_flags for SLOT/ROLE/STATE/NODE reasons). Also provides blocking clients (RM_BlockClient/RM_BlockClientOnKeys/RM_UnblockClient), thread-safe contexts (RM_GetThreadSafeContext + GIL), timers (RM_CreateTimer), command filters (RM_RegisterCommandFilter), module ACL checks (RM_ACLCheckCommandPermissions/RM_ACLCheckKeyPermissions), shared inter-module APIs (RedisModuleSharedAPI), and module INFO/config registration. Searchable as 'RedisModule API', 'module blocked client', 'MODULE LOAD error', 'thread safe context lock', 'module data type encver', 'keyspace notification callback'. RM_-prefixed doc comments in module.c generate the official Modules API docs.",
+      "part_of": "service:redis-server",
+      "depends_on": ["server-core", "command-table", "keyspace", "object-system", "keyspace-notifications", "blocked-clients", "acl-engine", "rdb-persistence", "aof-persistence", "replication-core", "cluster-core", "atomic-slot-migration", "resp-protocol", "slowlog", "defrag"],
+      "uses_deps": ["hdr_histogram"],
+      "exposes_interfaces": ["module-api"],
+      "config_vars": ["loadmodule", "enable-module-command"],
+      "loc": 16077
+    },
+    {
+      "slug": "vector-sets-module",
+      "name": "Vector Sets Module",
+      "paths": ["modules/vector-sets/vset.c", "modules/vector-sets/hnsw.c", "modules/vector-sets/expr.c", "modules/vector-sets/vset_config.c", "modules/vector-sets/README.md"],
+      "summary": "Bundled VADD/VSIM vector-similarity data type built on a custom HNSW index with int8/binary quantization",
+      "description": "In-tree module (bundled into the Redis 8+ binary, buildable as vset.so for older servers) adding the vector set data type: VADD inserts elements with FP32/VALUES vectors (REDUCE random projection, NOQUANT/Q8/BIN quantization, M/EF HNSW tuning, CAS threaded insert), VSIM returns nearest elements (WITHSCORES/WITHATTRIBS/COUNT/EPSILON/EF/TRUTH/NOTHREAD), plus VREM/VCARD/VDIM/VEMB/VLINKS/VINFO/VSETATTR/VGETATTR and FILTER expressions (expr.c evaluates '.year > 1950'-style scalar filters over JSON attributes, FILTER-EF caps effort). hnsw.c is a from-scratch HNSW (Malkov & Yashunin) with bidirectional-only links, on-insert normalization (cosine==dot), per-vector int8 quantization, true deletion with orphan relinking, and AVX2/AVX512 runtime dispatch. Threading model: VSIM runs in a spawned thread and VADD CAS collects neighbors in background; a per-object in_use rwlock plus vectorSetWaitAllBackgroundClients() fences deletes/attr updates — registered through RedisModule_CreateCommand and the blocked-client API. Searchable as 'vector similarity search', 'HNSW recall', 'embedding search redis', 'VSIM slow', 'binary quantization'; vset-force-single-threaded-execution (vset_config.c) forces main-thread execution.",
+      "part_of": "service:redis-server",
+      "depends_on": ["module-system", "blocked-clients"],
+      "config_vars": ["vset-force-single-threaded-execution"],
+      "loc": 6907
+    }
+  ],
+  "interfaces": [
+    {
+      "slug": "module-api",
+      "name": "RedisModule API (redismodule.h)",
+      "summary": "C ABI for loadable modules: RM_* functions resolved at load time via RedisModule_Init",
+      "description": "Versioned C function-pointer surface exported by module.c and consumed through redismodule.h: command registration (RM_CreateCommand/RM_SetCommandInfo), data types (RM_CreateDataType with rdb_load/rdb_save/aof_rewrite/free/defrag callbacks and encver versioning), RM_Call with RESP3-aware CallReply accessors, keyspace-event and server-event subscriptions, blocking clients, timers, ACL checks, and module configs. Doc comments above each RM_ function in module.c are the canonical API reference (generated via src/modules/gendoc.rb). Searchable as 'redismodule.h', 'RedisModule_Init', 'module ABI compatibility', 'REDISMODULE_OK/ERR'. Bundled vector-sets and external modules (redisbloom, redisearch, redisjson, redistimeseries per modules/modules.yaml) all bind to this interface.",
+      "exposed_by": "service:redis-server",
+      "implemented_by": ["module-system"]
+    }
+  ],
+  "config_vars": [
+    {
+      "name": "busy-reply-threshold",
+      "summary": "Milliseconds before a running script/function makes Redis answer BUSY to other clients",
+      "description": "createLongLongConfig in config.c, default 5000ms, modifiable at runtime; alias of the legacy lua-time-limit name. Once exceeded, scriptInterrupt puts the run context into timedout mode (enterScriptTimedoutMode in script.c): other clients get -BUSY and only SCRIPT KILL / FUNCTION KILL / SHUTDOWN NOSAVE are allowed. Setting 0 means scripts still yield event-loop processing but the threshold is immediate.",
+      "configures": "eval-scripts",
+      "default": "5000"
+    },
+    {
+      "name": "lua-time-limit",
+      "summary": "Legacy alias of busy-reply-threshold",
+      "description": "Historic name kept as a config alias (config.c registers 'busy-reply-threshold' with alias 'lua-time-limit'); same semantics, milliseconds before BUSY replies while a script runs.",
+      "configures": "eval-scripts",
+      "default": "5000"
+    },
+    {
+      "name": "loadmodule",
+      "summary": "Load a module .so at startup with optional args",
+      "description": "Parsed in config.c (loadServerConfigFromString) and applied via moduleLoad(); repeatable directive, rewritten on CONFIG REWRITE. Also available as --loadmodule on the command line; the repo's modules build system generates loadmodule lines into redis-full.conf from modules/modules.yaml.",
+      "configures": "module-system",
+      "default": "(none)"
+    },
+    {
+      "name": "enable-module-command",
+      "summary": "Gate for the runtime MODULE LOAD/UNLOAD command (protected action)",
+      "description": "Immutable enum config (config.c, protected_action_enum, default no): controls whether MODULE LOAD/LOADEX/UNLOAD can be invoked at runtime, since arbitrary .so loading is a code-execution vector. 'local' permits it only for loopback connections.",
+      "configures": "module-system",
+      "default": "no"
+    },
+    {
+      "name": "vset-force-single-threaded-execution",
+      "summary": "Force vector-sets VSIM/VADD-CAS to run in the main thread",
+      "description": "Bool module config registered by vset_config.c via RedisModule_RegisterBoolConfig (default 0). When set, disables the background-thread execution model of VSIM and VADD CAS, useful for benchmarking or debugging locking issues at the cost of blocking the server during searches.",
+      "configures": "vector-sets-module",
+      "default": "no"
+    }
+  ],
+  "features": [
+    {
+      "slug": "lua-scripting",
+      "name": "Lua Scripting (EVAL)",
+      "summary": "EVAL/EVALSHA server-side Lua with SHA1 script cache, script flags, effects replication, and LDB debugger",
+      "description": "Client-supplied Lua executed atomically inside the server via a single sandboxed lua_State; EVALSHA avoids resending bodies through the SHA1 cache (SCRIPT LOAD/EXISTS/FLUSH), shebang flags declare no-writes/allow-oom/allow-stale behavior, EVAL_RO/EVALSHA_RO enforce read-only, and script effects (not the script text) are propagated to replicas and AOF. Includes the interactive LDB debugger (redis-cli --ldb) and BUSY/SCRIPT KILL timeout handling.",
+      "lifecycle": "active",
+      "implemented_in": ["eval-scripts"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "redis-functions",
+      "name": "Redis Functions",
+      "summary": "FUNCTION LOAD libraries with named callable functions (FCALL), persisted and replicated as part of the dataset",
+      "description": "Successor to raw EVAL for managed server-side logic: libraries declared with '#!lua name=lib' register named functions via redis.register_function and are invoked with FCALL/FCALL_RO by name; libraries survive restarts (RDB), replicate to replicas, and are portable via FUNCTION DUMP/RESTORE with flush/append/replace policies. Engine layer is pluggable (functionsRegisterEngine); LUA is the bundled engine (function_lua.c).",
+      "lifecycle": "active",
+      "implemented_in": ["functions-engine", "eval-scripts"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "vector-sets",
+      "name": "Vector Sets",
+      "summary": "Native vector-similarity data type (VADD/VSIM) with HNSW index, quantization, and filtered search",
+      "description": "New-in-Redis-8 data type pairing string elements with embedding vectors: VADD builds an HNSW graph with optional dimensionality reduction (REDUCE) and int8/binary quantization, VSIM answers approximate nearest-neighbor queries with optional scalar FILTER expressions over per-element JSON attributes, and TRUTH provides exact linear-scan ground truth for recall measurement. Reads execute in background threads to keep the event loop responsive.",
+      "lifecycle": "active",
+      "implemented_in": ["vector-sets-module"],
+      "provided_by": "service:redis-server"
+    }
+  ],
+  "decisions": [
+    {
+      "slug": "script-effects-replication-only",
+      "title": "Scripts replicate effects, not script bodies",
+      "statement": "EVAL propagation is always effects-based: the write commands a script performs are replicated to replicas/AOF instead of the script text; redis.replicate_commands() is a deprecated no-op returning true.",
+      "rationale": "Whole-script replication required scripts to be deterministic and re-executed on every replica; effects replication removes that constraint and makes AOF loading of long-running scripts safe. The luaRedisReplicateCommandsCommand comment marks the old toggle DEPRECATED, and evalGenericCommand notes newly generated AOF files 'propagate effects rather than scripts'.",
+      "description": "Encoded in script.c where scriptRunCtx defaults repl_flags to PROPAGATE_AOF|PROPAGATE_REPL per command and preventCommandPropagation suppresses verbatim EVAL propagation; scriptSetRepl still lets scripts narrow AOF/REPL targets via redis.set_repl.",
+      "affects": ["eval-scripts", "lua-scripting"],
+      "evidence": "src/eval.c luaRedisReplicateCommandsCommand comment ('DEPRECATED: Now do nothing and always return true') and comment at end of evalGenericCommand ('newly generated AOF files, in which scripts propagate effects rather than scripts'); src/script.c scriptPrepareForRun sets repl_flags = PROPAGATE_AOF | PROPAGATE_REPL."
+    },
+    {
+      "slug": "lua-dedicated-jemalloc-arena",
+      "title": "Lua VM gets its own jemalloc arena and tcache",
+      "statement": "Under USE_JEMALLOC, each lua_State is created with a private tcache and a dedicated arena (server.lua_arena) via a custom luaAlloc allocator instead of the default allocator.",
+      "rationale": "Isolating Lua allocations in their own arena prevents Lua's churny memory from interleaving with keyspace allocations and, per the code comment, avoids blocking the active defragger.",
+      "description": "createLuaState calls je_mallctl('tcache.create') and lua_newstate(luaAlloc, tcache); luaAlloc routes through zrealloc_with_flags with MALLOCX_ARENA(server.lua_arena)|MALLOCX_TCACHE. Applies to both the EVAL interpreter and the Functions LUA engine.",
+      "affects": ["eval-scripts", "functions-engine"],
+      "evidence": "src/script.c comments 'Create a lua interpreter, and use jemalloc as lua memory allocator' and 'Under jemalloc we need to create a new arena for lua to avoid blocking defragger' (luaEnvInit/createLuaState)."
+    },
+    {
+      "slug": "function-load-timeout",
+      "title": "FUNCTION LOAD is bounded by a 500ms Lua hook timeout",
+      "statement": "Library loading installs a Lua debug hook (luaEngineLoadHook) that aborts execution if registration takes longer than LOAD_TIMEOUT_MS (500ms).",
+      "rationale": "FUNCTION LOAD should only register functions, not run workloads; the hook keeps a malicious or buggy library from stalling the server during load, per the comment 'This execution should be fast and should only register functions so 500ms should be more than enough.'",
+      "description": "loadCtx carries start_time and timeout; the hook fires periodically during luaEngineCreate and errors out the load. RDB loading passes timeout=0 to disable the limit.",
+      "affects": ["functions-engine", "redis-functions"],
+      "evidence": "src/functions.c '#define LOAD_TIMEOUT_MS 500' and src/function_lua.c luaEngineLoadHook comment ('Hook for FUNCTION LOAD execution. Used to cancel the execution in case of a timeout (500ms)')."
+    },
+    {
+      "slug": "vector-sets-bundled-in-tree",
+      "title": "vector-sets ships in-tree and is compiled into the Redis binary",
+      "statement": "Unlike redisbloom/redisearch/redisjson/redistimeseries (source-pinned externals in modules.yaml), vector-sets lives under modules/vector-sets/ with no manifest entry and its commands are part of the default Redis 8 build.",
+      "rationale": "Makes the vector data type a first-class built-in for Redis >= 8.0 while keeping the code a normal RedisModule API consumer, so it can still be built as vset.so for older servers.",
+      "description": "modules.yaml explicitly notes 'vector-sets is intentionally absent — it lives in-tree under modules/vector-sets/ and is not cloned', and the README states 'this is a merged module, it's part of the Redis binary now'.",
+      "affects": ["vector-sets-module", "module-system"],
+      "evidence": "modules/vector-sets/README.md ('this is a merged module, it's part of the Redis binary now'); modules/modules.yaml notes section; MODULES.md §1 ('In-tree modules (e.g. vector-sets) are intentionally absent from the manifest')."
+    },
+    {
+      "slug": "vsim-threaded-reads-main-thread-writes",
+      "title": "Vector-sets threading: background reads, main-thread writes",
+      "statement": "VSIM (and neighbor collection for VADD CAS) run in spawned threads, while all mutations happen on the main Redis thread, coordinated by a per-object in_use read-write lock and vectorSetWaitAllBackgroundClients().",
+      "rationale": "HNSW search is CPU-heavy; offloading it keeps the event loop responsive, and confining writes to the main thread bounds the locking model — deletes/attr updates fence by acquiring the rwlock in write mode to drain background readers.",
+      "description": "Documented in the vset.c 'Understand threading model' header: VADD CAS collects candidates in a thread but inserts in VADD_CASReply on the main thread; hnsw_search read slots protect per-node visited metadata; NOTHREAD and the vset-force-single-threaded-execution config opt out.",
+      "affects": ["vector-sets-module", "vector-sets"],
+      "evidence": "modules/vector-sets/vset.c top-of-file '======== Understand threading model ========' comment block describing in_use rwlock and vectorSetWaitAllBackgroundClients()."
+    },
+    {
+      "slug": "cluster-topology-change-debounced-event",
+      "title": "ClusterTopologyChange module event is debounced per event-loop iteration",
+      "statement": "RedisModuleEvent_ClusterTopologyChange notifies modules of slot/role/state/node changes with a change_flags bitmask, coalescing all changes in one event-loop iteration into a single fire.",
+      "rationale": "Modules that route to other shards need a poll-free way to refresh their cached cluster view; debouncing prevents a resharding touching many slots from generating an event storm.",
+      "description": "Documented above RM_SubscribeToServerEvent in module.c; data pointer casts to RedisModuleClusterTopologyChangeInfo with REDISMODULE_CLUSTER_TOPOLOGY_CHANGE_FLAG_{SLOT,ROLE,STATE,NODE} bits, delivered via moduleFireServerEvent.",
+      "affects": ["module-system"],
+      "evidence": "src/module.c doc block for RedisModuleEvent_ClusterTopologyChange (~line 12957): 'Fires are debounced to at most one per event loop iteration'."
+    }
+  ],
+  "documents": [
+    {
+      "slug": "vector-sets-readme",
+      "title": "Vector Sets README",
+      "path": "modules/vector-sets/README.md",
+      "summary": "Full command reference for VADD/VSIM/VREM/VEMB etc., quantization options, filtered-search expression language, and HNSW tuning",
+      "description": "Authoritative user/ops doc for the bundled vector-sets module: explains REDUCE random projection, Q8/BIN/NOQUANT quantization trade-offs, M/EF recall tuning, EPSILON similarity cutoffs, TRUTH linear-scan recall measurement, WITHSCORES/WITHATTRIBS RESP2 vs RESP3 reply shapes, and the FILTER expression syntax over element JSON attributes.",
+      "documents": ["vector-sets-module", "vector-sets"]
+    },
+    {
+      "slug": "modules-build-doc",
+      "title": "External Modules build/run/test guide (MODULES.md)",
+      "path": "modules/MODULES.md",
+      "summary": "How external modules are pinned (modules.yaml), cloned, built against this tree, loaded, and tested from the repo root",
+      "description": "Describes the source-pinned module pipeline: modules.yaml as single source of truth (repo/ref/target_module/loadmodule per module), make modules-update/bootstrap/build/run/test targets, redis-full.conf generation via sync-redis-conf, private config blocks, and reproducible release tarballs baking module config into redis.conf. Explains why vector-sets is absent from the manifest (in-tree).",
+      "documents": ["module-system", "vector-sets-module", "build-system"]
+    },
+    {
+      "slug": "modules-manifest",
+      "title": "modules.yaml pin manifest",
+      "path": "modules/modules.yaml",
+      "summary": "Pin manifest for bundled external modules: redisbloom, redisearch, redisjson, redistimeseries at v8.9.9x refs",
+      "description": "Machine-consumed manifest listing each bundled external module's upstream repo, pinned ref (tag>branch>commit resolution via git ls-remote), build artifact path (target_module, e.g. redisjson builds rejson.so), loadmodule path emitted into redis-full.conf, and optional build_env overrides (redisearch sets LTO=1 and INLINE_LSE_ATOMICS=0 to avoid SIGILL on pre-Armv8.1-a ARM cores).",
+      "documents": ["module-system"]
+    }
+  ]
+}

@@ -1,0 +1,1759 @@
+{
+  "decisions": [
+    {
+      "slug": "local-first-cli-pivot",
+      "name": "Deprecate the hosted server; the product is a local-first CLI + daemon",
+      "statement": "Stop treating the hosted FastAPI server as the primary product surface. The context graph ships as a local-first `potpie` CLI backed by a long-lived local daemon and an embedded graph store, with the hosted API demoted to an optional backend rather than a prerequisite.",
+      "rationale": "Grounded in commit dbc92c23 'Deprecate the server and related components' (2026-06-04) and the follow-on server-deprecation-cli-first discussion. Requiring a hosted server made first run depend on accounts, network and infrastructure for a tool whose whole value is being present in the developer's loop; every coding harness that wanted project memory had to authenticate against a service before it could read a single claim. Running in-process behind the CLI, with falkordb_lite embedded over a local file, makes `potpie` installable as a wheel and usable offline, and it lets the daemon amortize cold start across invocations instead of paying it per command.",
+      "alternatives_rejected": "Keep the hosted server as the only surface and ship a thin HTTP client CLI — rejected because it makes offline and air-gapped use impossible and puts a network hop in the agent's hot path; Run everything in-process per CLI invocation with no daemon — rejected because model and graph cold-start cost dominated short commands; Ship the CLI but keep hosted storage mandatory — rejected because it preserves the account requirement that blocked the OSS adoption story.",
+      "decided_at": "2026-06-04T00:00:00Z",
+      "lifecycle": "accepted",
+      "summary": "The hosted server stops being the product; a local-first CLI plus daemon with an embedded graph becomes the primary surface.",
+      "description": "The pivot that explains why `potpie` works with no account, no Docker and no Neo4j, and why the hosted API is now one backend among several rather than the system of record. It is the parent decision behind falkordb-lite-embedded-zero-setup-default (the embedded store that makes local-first viable), cli-owned-by-root-product-distribution (the root wheel owning the executable) and remove-mcp-from-daemon-and-product (trimming the daemon's surface back to /health, /rpc and /attach). Search terms: local-first, server deprecated, why is there no hosted API, offline potpie, daemon architecture, CLI-first pivot, dbc92c2."
+    },
+    {
+      "slug": "activity-single-timeline-entity",
+      "name": "Activity is the single timeline collapse point",
+      "statement": "Pull requests, commits, issues, incidents, deployments, alerts, reviews, releases and discussions all mint as one `Activity` entity distinguished by an `activity_type` property, instead of getting distinct entity labels.",
+      "rationale": "ontology.md states it as the headline rule: 'Activity is the single timeline collapse point. PRs, commits, issues, incidents, and deployments do not get distinct entity types — they all mint as one Activity entity (key prefix `activity`).' One label keeps the timeline query surface small: `recent_changes.timeline` and every windowed read sort a single `valid_at`/`occurred_at` axis rather than unioning six labels, and the `@Activity` endpoint sentinel lets TOUCHED/PERFORMED/AUTHORED/IN_PERIOD/MENTIONS each be declared once.",
+      "alternatives_rejected": "Distinct `PullRequest`, `Commit`, `Issue`, `Incident`, `Deployment`, `Alert`, `Runbook`, `Conversation` and `Episode` labels (the original demo vocabulary) — rejected because every timeline predicate would need to enumerate all of them in `allowed_pairs`, and cross-source correlation (a deploy that followed a PR) would need per-label queries.",
+      "decided_at": "2025-12-04",
+      "lifecycle": "accepted",
+      "summary": "One Activity label for every timestamped event; type lives in `activity_type`, not in the label.",
+      "description": "Why does Potpie have no PullRequest, Issue, Commit, Incident, Deployment or Alert node type? Because everything that 'happened' collapses into a single `Activity` entity keyed `activity:<source>:<id>` and carrying `activity_type` ∈ pull_request|commit|issue|deployment|incident|alert|discussion|review|release plus a `verb_class` like `pr_merged` or `deploy_succeeded`. Declared in ENTITY_TYPES with `is_activity=True` in potpie_context_core/ontology.py and enforced by the `@Activity` endpoint sentinel in `_endpoint_matches`. Any doc, skill or fixture that names PullRequest/Issue/Commit as a label is stale and will be rejected by the ontology validator."
+    },
+    {
+      "slug": "canonical-relates-to-storage-edge",
+      "name": "One canonical :RELATES_TO storage edge; the predicate lives in a name property",
+      "statement": "Every one of the 26 predicate keys is physically stored as the same `(:Entity)-[:RELATES_TO]->(:Entity)` relationship type, with the predicate name carried in the edge's `name` property (the 'Position-B' canonical claim model).",
+      "rationale": "architecture.md documents `cypher.py` as 'the Position-B canonical write engine shared by BOTH the Neo4j and FalkorDB writers': claims store as `:RELATES_TO {group_id, name, subject_key, object_key, source_ref, valid_at, invalid_at, created_at}`. One relationship type means adding a predicate is one row in `EDGE_TYPES` and zero schema migrations, one MERGE statement serves every predicate, and the identical Cypher runs unchanged on both Neo4j and FalkorDB — a Phase-0 spike proved that.",
+      "alternatives_rejected": "Position-A: one native relationship type per predicate (`-[:DEPENDS_ON]->`, `-[:OWNED_BY]->`, …). Rejected because it forks the write engine per backend, makes 'all claims about X regardless of predicate' a 26-way union, and turns every new predicate into a storage migration.",
+      "decided_at": "2025-12-09",
+      "lifecycle": "accepted",
+      "summary": "Single physical relationship type `:RELATES_TO`; the logical predicate is a property, not a Neo4j/Falkor relationship type.",
+      "description": "Explains why a Cypher dump of a Potpie pot shows only `:RELATES_TO` edges and never `:DEPENDS_ON` or `:OWNED_BY` relationship types. The predicate name rides in the edge's `name` property; the MERGE key deliberately includes `source_ref` so corroborating writes from different sources do not collide. Implemented in adapters/outbound/graph/cypher.py and shared verbatim by Neo4jGraphWriter and FalkorDBGraphWriter. Search terms: Position-B, canonical claim edge, one relationship type, predicate-as-property, RELATES_TO name property."
+    },
+    {
+      "slug": "bitemporal-validity-soft-delete-only",
+      "name": "Bitemporal valid_at/invalid_at with soft-delete only — never hard-delete a claim",
+      "statement": "Claims carry bitemporal stamps (`valid_at`/`invalid_at` = event time, `created_at` = system time) and are retired by stamping `invalid_at`, retracting, superseding or merging — a fact is never physically deleted.",
+      "rationale": "The `potpie-graph` skill teaches it as an absolute: 'Never hard-delete — use validity / retraction / supersession / merge.' History is the product: an agent asking 'what did we believe about this service in March' must still be answerable, and supersession (`_supersede_singleton_predecessors` stamping `invalid_at` on prior disagreeing live singleton claims) needs the predecessor row to survive. `SUPERSEDES` is emitted as a system edge on that path rather than exposed as an agent predicate.",
+      "alternatives_rejected": "DELETE-on-update (a correction removes the prior row) — rejected because it destroys the audit trail and makes 'why did this change' unanswerable. Also rejected: a separate append-only history table, which would fork the read path into live-vs-historical queries.",
+      "decided_at": "2025-12-11",
+      "lifecycle": "accepted",
+      "summary": "Facts are retired by stamping invalid_at, never removed; the timeline is reconstructible.",
+      "description": "Answers 'why does my old fact still show up in the raw graph after I corrected it' and 'how do I delete a claim'. You do not delete: `end_relation_validity`, `retract_claim`, `supersede_claim` and `merge_duplicate_entities` all stamp `invalid_at` and keep the row. Only `pot reset` (a `MATCH (n {group_id:$gid}) DETACH DELETE n`) removes data, and it removes the whole pot. Search terms: soft delete, bitemporal, valid_at invalid_at, retraction, supersession, audit trail, never hard-delete."
+    },
+    {
+      "slug": "owned-by-sole-singleton-predicate",
+      "name": "OWNED_BY is the only singleton predicate",
+      "statement": "`OWNED_BY` is the single `singleton=True` edge in the catalog — each subject may hold exactly one live OWNED_BY claim — and every other predicate is free to be multi-valued.",
+      "rationale": "ontology.md: the live singleton registry is 'exactly `{OWNED_BY}`'; `_DEFAULT_SINGLETONS` lists legacy names but they are overwritten at import via `replace_singletons(SINGLETON_EDGE_TYPES)`. Ownership is the one relation where ambiguity is actively harmful — an on-call or escalation read must return one answer — while topology genuinely is many-to-many (a service depends on many services, uses many datastores). Making more predicates singleton would silently invalidate legitimate corroborating claims.",
+      "alternatives_rejected": "Making `DEFINED_IN`, `DEPLOYED_TO` or `HOSTED_ON` singleton too — rejected because a service can legitimately deploy to several environments and a monorepo service can be anchored in more than one place; auto-supersession would then delete true facts. Also rejected: no singletons at all, which leaves 'who owns this' returning three conflicting people.",
+      "decided_at": "2025-12-12",
+      "lifecycle": "accepted",
+      "summary": "Exactly one singleton edge in the whole ontology: OWNED_BY. Everything else is multi-valued.",
+      "description": "Explains why writing a second owner for a service silently invalidates the first, while writing a second DEPENDS_ON does not. The singleton registry lives in potpie_context_core/singleton_predicates.py and is synced at import from `SINGLETON_EDGE_TYPES` derived off EDGE_TYPES rows; supersession keys derive from the `(subject, predicate, object[, environment])` identity tuple. Search terms: singleton predicate, one owner per service, OWNED_BY supersede, why did my ownership claim disappear, ownership conflict."
+    },
+    {
+      "slug": "truth-class-taxonomy-evidence-gating",
+      "name": "Seven truth classes per claim, with evidence required for objective ones",
+      "statement": "Every claim asserts one of seven truth classes (`authoritative_fact`, `source_observation`, `agent_claim`, `user_decision`, `preference`, `timeline_event`, `quality_finding`), and the two objective classes are gated: `authoritative_fact` and `source_observation` cannot be written without an evidence source ref.",
+      "rationale": "graph_contract.py defines `EVIDENCE_REQUIRED_TRUTH_CLASSES = {authoritative_fact, source_observation}` — 'objective facts must cite a strong authority' — and `LOW_AUTHORITY_TRUTH_CLASSES = {agent_claim, quality_finding}` which are explicitly soft and need none. The taxonomy is not decoration: `TRUTH_TO_EVIDENCE_STRENGTH` maps it onto the ranker's `strength` factor (weight 1.2, deterministic 1.0 → speculative 0.2), so an honest truth class is what makes a good fact outrank a guess at read time.",
+      "alternatives_rejected": "A single numeric confidence score per claim — rejected because it is not comparable across sources and gives the writer no gate to enforce. Also rejected: requiring evidence on every class, which would make cheap agent inference impossible and push agents to fabricate source refs.",
+      "decided_at": "2025-12-18",
+      "lifecycle": "accepted",
+      "summary": "Truth class is per-claim, feeds the ranker, and hard-gates evidence on the two objective classes.",
+      "description": "Answers 'why was my claim rejected for missing evidence' and 'what truth class should I use'. Use `authoritative_fact` for code-derived topology, `source_observation` for GitHub-derived facts, `timeline_event` for PERFORMED/AUTHORED/IN_PERIOD, `user_decision` for OWNED_BY and Decision edges, `preference` for POLICY_APPLIES_TO, `agent_claim` (the default) for inference. Note the per-claim `TruthClass` is distinct from the per-entity `source_of_truth`. Search terms: truth class, evidence required, EVIDENCE_REQUIRED_TRUTH_CLASSES, evidence strength, ranker strength factor, agent_claim default."
+    },
+    {
+      "slug": "import-time-coherence-guards-fail-startup",
+      "name": "Ontology coherence is enforced at import time and fails startup loud",
+      "statement": "`coherence.py` runs invariant checks at module import — identity labels ⊆ ENTITY_TYPES, record anchors and emitted predicates ⊆ the catalogs, every reader-include advertised, every payload schema has a builder, every view's `v1_include` valid — and raises `OntologyCoherenceError` rather than degrading.",
+      "rationale": "The module docstring names the failure mode exactly: 'When any two of these drift, the symptoms are quiet: unsupported includes, silently dropped record types, predicates that never land claims.' Quiet drift in a memory system is worse than a crash, because the user only discovers it months later as missing recall. The docstring also fixes the remediation policy verbatim: 'The expected fix is always: align the declaration, don't relax the check.'",
+      "alternatives_rejected": "A CI-only lint or a test-suite assertion — rejected because a downstream consumer importing the library at a bad version would still boot into a silently broken vocabulary. Also rejected: warning-and-continue on drift, which is exactly the quiet failure the guard exists to prevent.",
+      "decided_at": "2026-01-08",
+      "lifecycle": "accepted",
+      "summary": "Vocabulary drift crashes the process at import; the fix is to align the declaration, never to loosen the guard.",
+      "description": "Explains an `OntologyCoherenceError` raised at startup or on `import potpie_context_core`. Five vocabularies must agree: ENTITY_TYPES, EDGE_TYPES, RECORD_TYPES, the identity registry view, and the read orchestrator's reader routing table (the last checked at runtime via `assert_runtime_coherence` once readers are constructed). This is ontology-vocabulary coherence, not per-write transactional integrity. Search terms: OntologyCoherenceError, import-time check, fail loud, align the declaration don't relax the check, reader include not advertised, coherence guard."
+    },
+    {
+      "slug": "entity-exists-only-as-edge-endpoint",
+      "name": "An entity exists only if an edge needs it as an endpoint",
+      "statement": "No node is minted unless some claim requires it as a subject or object; if nothing connects to it and no query traverses it, it stays a property rather than becoming a node.",
+      "rationale": "Design pillar 1 in the ontology module docstring, verbatim: 'An entity exists only if an edge needs it as an endpoint. No aspirational nodes; if nothing connects to it and no query traverses it, it is a property, not a node.' This is the rule that keeps the 24-label catalog from sprawling and keeps retrieval precise — orphan entities dilute semantic search and show up as noise in `graph quality orphan-entities`.",
+      "alternatives_rejected": "Modeling every noun found in a repo (every version string, every branch, every label) as a node — rejected as 'aspirational nodes' that inflate the graph, degrade embedding recall, and never get traversed.",
+      "decided_at": "2026-01-08",
+      "lifecycle": "accepted",
+      "summary": "No aspirational nodes: if no edge needs it and no query traverses it, it is a property.",
+      "description": "The rule that answers 'should this be a node or a property?'. Paired with pillar 2, identity-only required fields — a node needs only its `entity_key` and a label, everything else is optional enrichment, so there are no required-property downgrade traps. Violations surface in `potpie graph quality orphan-entities`. Search terms: orphan entity, aspirational node, node vs property, entity minting rule, design pillar, why is my entity not in the graph."
+    },
+    {
+      "slug": "classifier-abstains-when-ambiguous",
+      "name": "The ontology classifier returns nothing rather than guessing a label",
+      "statement": "When edge-endpoint inference, property signatures and text patterns do not uniquely pick one canonical label, `ontology_classifier` returns no label at all instead of choosing the best-scoring candidate.",
+      "rationale": "The classifier docstring states the tradeoff outright: 'When the signals do not uniquely pick a label, the classifier returns nothing rather than guessing — a missing label is cheaper than a wrong one.' A missing label leaves the node generic and re-classifiable later; a wrong label routes the node into the wrong subgraph, the wrong reader, and the wrong `allowed_pairs`, and it is invisible to whoever wrote it.",
+      "alternatives_rejected": "Highest-score-wins label assignment, and LLM-assisted classification on this path — both rejected: the classifier is deliberately deterministic and idempotent, reading its rule tables from the entity specs (`text_patterns` / `property_signatures`) rather than hardcoding labels or calling a model.",
+      "decided_at": "2026-01-14",
+      "lifecycle": "accepted",
+      "summary": "Deterministic label inference that abstains on ambiguity — a missing label is cheaper than a wrong one.",
+      "description": "Explains why an ingested entity sometimes comes back with no canonical label and lands as `Document`/`Observation` instead. Signals come from three spec-derived sources: EDGE_ENDPOINT_INFERRED_LABELS (built off edge specs' source/target_inferred_labels), ENTITY_PROPERTY_SIGNATURES, and ENTITY_TEXT_CLASSIFIERS compiled regexes. To teach the classifier a new entity you add patterns to the entity spec, never to the classifier. Search terms: ontology_classifier, label inference, abstain, missing label, unclassified entity, deterministic classifier, no LLM in classification."
+    },
+    {
+      "slug": "no-stored-temporal-or-causal-edges",
+      "name": "No stored temporal or causal edges — the timeline is a read-time query",
+      "statement": "The catalog deliberately omits `TRIGGERED_BY`, `PRECEDED_BY`, `HOTSPOT`, `FIXES`, `CAUSED`, `AFFECTED_BY` and `HAS_ROOT_CAUSE`; ordering, windowing and correlation are computed at read time over `valid_at` (= `occurred_at`) instead of being materialized as edges.",
+      "rationale": "ontology.md: 'The timeline is read-time, not stored. There are deliberately no TRIGGERED_BY / PRECEDED_BY / HOTSPOT edges; ordering, windowing, and correlation are queries over valid_at, not stored temporal edges.' A stored `PRECEDED_BY` chain is wrong the moment a backfilled event lands out of order, and causal edges assert a judgement the graph cannot verify. Keeping them out means late-arriving history repairs itself.",
+      "alternatives_rejected": "Materialized `PRECEDED_BY` chains for fast timeline reads, and causal `CAUSED`/`TRIGGERED_BY` edges for incident analysis — rejected because backfill corrupts the chain and because causality is an inference the reader should make over ranked evidence, not a fact the writer should freeze. Bug/fix lifecycle uses the memory predicates REPRODUCES / RESOLVED / ATTEMPTED_FIX_FAILED / VERIFIED instead.",
+      "decided_at": "2026-01-15",
+      "lifecycle": "accepted",
+      "summary": "Ordering and causality are queries over valid_at, not edges; backfill can never corrupt a stored chain.",
+      "description": "Answers 'which predicate links a fix to the PR that caused it' — none does. Use `REPRODUCES` / `RESOLVED` / `ATTEMPTED_FIX_FAILED` / `VERIFIED` for the bug lifecycle, and read `recent_changes.timeline` for ordering. Predicate names like FIXES, CAUSED, IMPLEMENTS, CALLS, PART_OF, DOCUMENTS, RESOLVES, DELIVERS, WATCHES, INVESTIGATES and DEPLOYS appear in older docs and do not exist. Search terms: no causal edges, PRECEDED_BY missing, TRIGGERED_BY does not exist, read-time timeline, backfill out of order, valid_at ordering."
+    },
+    {
+      "slug": "potpie-mints-keys-agent-proposes-names",
+      "name": "The LLM proposes a name; Potpie computes the entity key",
+      "statement": "Agents never author `entity_key` directly — they supply a name plus a type, and `identity.mint_entity_key` derives the key under one of three identity classes (SLUG_ALIAS, EXTERNAL_ID, CONTENT_HASH) with an exact, underscore-canonical prefix per label.",
+      "rationale": "identity.py encodes it as the rule 'The LLM proposes a name; Potpie computes the key.' Model-authored keys fragment the graph — `service:payments` versus `service:local:payments-api` are two entities that will never join, and the `potpie-graph` skill calls that out as the top identity failure. Deterministic minting plus `graph search-entities` before writing is what keeps repeated ingests idempotent.",
+      "alternatives_rejected": "Free-form agent-authored keys (fast but fragmenting) and pure content-hash identity for all types (stable but unreadable and unmergeable across sources). Cross-source slug convergence is instead handled by `ALIAS_OF` claims, and merges create merge-record edges rather than hard-deleting a duplicate.",
+      "decided_at": "2026-01-16",
+      "lifecycle": "accepted",
+      "summary": "Keys are computed, not authored; resolve identity with search-entities before every write.",
+      "description": "Explains duplicate-entity fragmentation and why `graph search-entities \"<name>\" --type … --source-ref …` must precede any write. Prefixes are exact and underscore-canonical (`bug_pattern:`, `api_contract:`), hyphenated prefixes are not accepted as aliases, and hyphens stay legal inside the body (`service:payments-api`). Decision keys are CONTENT_HASH; Activity keys are `activity:<source>:<id>`. Search terms: mint_entity_key, duplicate entities, near-duplicate service key, identity resolution, ALIAS_OF, entity key prefix rules."
+    },
+    {
+      "slug": "propose-commit-canonical-write-door",
+      "name": "propose → commit --verify is the canonical write door",
+      "statement": "All durable writes go through two phases — `potpie graph propose` validates, lowers and persists a plan with no graph write, then `potpie graph commit <plan_id> --verify` re-checks the conflict guard, enforces approval by risk, applies through the single backend door, and reads the committed claims back.",
+      "rationale": "architecture.md and writing.md both name it: 'The canonical write door is propose → commit --verify.' Splitting validation from application gives a reviewable artifact (a server-created `plan_id`) before anything mutates, lets medium/high `MutationRisk` operations demand `--allow-review-required --approved-by`, and makes `--verify` read-back the thing that catches silent write failures — which is exactly the class of bug PR #1002 found on falkordb_lite.",
+      "alternatives_rejected": "Immediate single-shot apply as the primary door (kept only as Spine B, reachable via `record`/`context_record`), and letting `graph mutate` stay canonical. Also rejected: an op-level review partition — `REVIEW_REQUIRED_OPS` and `DEFERRED_OPS` are deliberately empty tuples and review is a runtime risk decision instead.",
+      "decided_at": "2026-02-10",
+      "lifecycle": "accepted",
+      "summary": "Two-phase write: propose persists a validated plan, commit --verify applies it and reads it back.",
+      "description": "The write path every skill teaches. `graph mutation-template --kind <…>` yields a schema-only skeleton; `graph propose --file mutation.json` returns a plan_id; `graph commit <plan_id> --verify` applies and reads back. Optimistic concurrency here is coarse — the only tracked version is `{\"_global\": <total pot claim count>}`, so a conflict fires only if the pot's total claim count changed between propose and commit. Search terms: propose commit verify, plan_id, write door, MutationRisk, review_required, allow-review-required, graph mutate legacy."
+    },
+    {
+      "slug": "graph-mutate-as-primary-write-command",
+      "name": "graph mutate as the primary single-shot write command",
+      "statement": "Agents write durable facts with a single `potpie graph mutate` call that validates, lowers and applies a semantic mutation batch in one step.",
+      "rationale": "The original workbench shipped one write verb because a single command is the smallest thing to teach a harness, and early pots were small enough that a bad write was cheap to correct by hand.",
+      "alternatives_rejected": "A two-phase propose/commit protocol was considered too heavy for a local single-user CLI at the time.",
+      "decided_at": "2025-11-26",
+      "lifecycle": "superseded",
+      "summary": "Superseded: single-shot mutate is now a legacy wrapper over propose+commit.",
+      "description": "Historical decision retained to explain why `potpie graph mutate` still exists and why old skill files and blog posts teach it. It now internally calls propose then commit and emits a legacy steering warning from potpie/cli/commands/graph.py; the `potpie-graph` skill v5 teaches propose/commit only. A globally-installed skill that still teaches `graph mutate` predates v5 and is what the skills drift nudge points at. Search terms: graph mutate deprecated, legacy write wrapper, legacy warning, stale skill teaches mutate."
+    },
+    {
+      "slug": "reads-return-ranked-evidence-not-answers",
+      "name": "Reads return ranked evidence; there is no server-side answer synthesis",
+      "statement": "Every read surface returns an `AgentEnvelope` of ranked, source-referenced claims and the calling agent reasons over it — the daemon never composes a natural-language answer.",
+      "rationale": "vision.md and architecture.md both state it: 'reads return ranked evidence (an AgentEnvelope) — there is no server-side answer synthesis, the agent reasons over the evidence.' This is the read-side half of the harness-owns-the-reasoning anti-goal: synthesizing server-side would put a Potpie-owned model on the critical path, burn the user's key instead of their harness subscription, and throw away the source refs the agent needs to cite.",
+      "alternatives_rejected": "A `potpie ask \"<question>\"` endpoint that runs retrieval plus generation server-side — rejected because it makes Potpie an LLM product with an API-key dependency and hides provenance. Also rejected: a per-claim confidence trust score on reads; the envelope carries only an `overall_confidence` coverage rollup.",
+      "decided_at": "2026-02-12",
+      "lifecycle": "accepted",
+      "summary": "The graph returns evidence with source refs; the harness does the reasoning.",
+      "description": "Explains why there is no `potpie ask` and why `graph read` output looks like ranked claims rather than prose. The ranker combines six factors as a weighted arithmetic mean — semantic_similarity 1.3, strength 1.2, scope_overlap 1.1, recency 1.0, corroboration 0.8, coverage_quality 0.5 — each preserved in a per-factor breakdown. Always inspect `coverage` / `freshness` / `quality` before relying on results. Search terms: AgentEnvelope, no answer synthesis, ranked evidence, overall_confidence, ranking factors, why no natural language answer."
+    },
+    {
+      "slug": "four-tool-mcp-agent-surface",
+      "name": "The MCP agent surface stays at exactly four tools",
+      "statement": "Agents reach Potpie over MCP through exactly four tools — `context_resolve`, `context_search`, `context_record`, `context_status` — with `context_record` the only write, while the richer `potpie graph …` workbench stays CLI-only.",
+      "rationale": "vision.md: 'the MCP/agent surface stays at exactly four tools'. A small MCP surface keeps tool-schema tokens out of every agent turn and avoids a second long-term agent API drifting from the CLI; the four tools are compatibility adapters over the same graph internals, not a second engine.",
+      "alternatives_rejected": "Exposing the full workbench (catalog/read/propose/commit/inbox/quality) as MCP tools — rejected as a second agent surface to maintain and a large per-turn schema cost.",
+      "decided_at": "2025-12-01",
+      "lifecycle": "superseded",
+      "summary": "Superseded: the MCP integration was removed from the product entirely.",
+      "description": "Historical decision explaining the `context_resolve` / `context_search` / `context_record` / `context_status` vocabulary that still appears in skill fallback recipes and in stored actor/source values. The executable MCP integration has since been removed; the historical `mcp` actor/source vocabulary remains accepted for stored-data and API-filter compatibility. Search terms: four MCP tools, context_resolve, context_record, MCP fallback recipe, Graph Surface Lite CLI-only, potpie-mcp entry point."
+    },
+    {
+      "slug": "remove-mcp-from-daemon-and-product",
+      "name": "Remove the MCP server from the daemon and from the product distribution",
+      "statement": "Drop the `potpie-mcp` console script, the Context Engine MCP inbound adapter, the MCP-specific tests and the `mcp` dependency, and remove shipped MCP fallback guidance from the CLI templates — the CLI plus skills becomes the single agent surface.",
+      "rationale": "PR #1019 (Dsantra92) lands this as the next process-ownership slice after #1013: the daemon moves into `potpie/daemon` and the MCP payload leaves the Context Engine wheel entirely. Maintaining a second agent surface cost schema tokens and drift for a path the skills-driven CLI already covered better, and static characterization locks now assert the MCP removal cannot regress.",
+      "alternatives_rejected": "Keeping MCP as a thin compatibility shim — rejected because the shim still pulls the MCP SDK into the dependency set and still needs its own tests. Deleting the `mcp` actor/source vocabulary from stored data was also rejected: only the executable integration is removed, the historical vocabulary stays accepted for stored-data and API-filter compatibility.",
+      "decided_at": "2026-07-16",
+      "lifecycle": "accepted",
+      "summary": "MCP integration deleted; daemon routes (/health, /rpc, /attr) and behavior are unchanged.",
+      "description": "Grounded in potpie-ai/potpie PR #1019 'refactor(daemon): move daemon into root package and remove MCP'. Verification: root suite 963 passed, Context Engine suite 1,237 passed, focused daemon suite 100 passed; an isolated wheel install confirmed exactly the `potpie` and `potpie-daemon` entrypoints and no daemon/MCP process payload in the Context Engine wheel. Four temporary Context Engine imports of `potpie.daemon` remain explicit and test-bounded. Search terms: remove MCP, potpie-mcp entrypoint gone, daemon boundary lock, PR 1019, ModuleNotFoundError mcp."
+    },
+    {
+      "slug": "three-layer-product-engine-core-split",
+      "name": "Split Potpie into product, engine and core distributions with a strictly downward dependency arrow",
+      "statement": "Restructure the repo into three stacked distributions — `potpie` (product: cli, daemon, mcp, services) imports `potpie-context-engine` (adapters, connectors, ingestion, readers, graph_service impl) imports `potpie-context-core` (ontology, workbench, records/mutations, graph ports, transforms) — with a characterization test locking that the engine never imports the `potpie` namespace.",
+      "rationale": "PR #1018 (nndn) states the invariant directly: 'The dependency arrow points strictly downward; a characterization test locks the invariant that the engine never imports the potpie namespace.' The core is pydantic-plus-stdlib only, verified dependency-closed by AST import closure and pinned by a subprocess isolation gate, so a downstream consumer can depend on the ontology and mutation vocabulary without pulling FastAPI, Typer, FalkorDBLite or Sentry.",
+      "alternatives_rejected": "A single monolithic distribution with optional extras only — rejected because every consumer still installed every delivery surface and the layering existed only by convention. Also rejected inside core: mirroring the app's `domain`/`application` layering into the library; core is deliberately library-shaped with modules at the package root and a single `ports/` subpackage.",
+      "decided_at": "2026-07-18",
+      "lifecycle": "accepted",
+      "summary": "Three stacked wheels, dependency arrow strictly downward, locked by a characterization test.",
+      "description": "Grounded in potpie-ai/potpie PR #1018 'Split Potpie into product, engine, and core distributions', stacked on #1016 and superseding the pre-namespace #1013 layout. `potpie_context_core` ships 51 modules with `potpie_context_core.api` as the supported import path; the engine's `api.py` becomes a re-export shim so existing consumers keep their import path. Verification: core 315 passed, engine 870 passed / 32 skipped, root 1035 passed / 4 skipped (2,220 total). Deliberately deferred: `reconciliation_flags` still reads env at import, and `GraphBackend.provision(SetupPlan)` still drags setup lifecycle VOs into core. Search terms: three-layer split, potpie-context-core, potpie-context-engine, dependency arrow downward, import boundary test, PR 1018."
+    },
+    {
+      "slug": "context-engine-namespace-no-compat-shims",
+      "name": "Move the context engine under potpie_context_engine with no top-level compatibility shims",
+      "statement": "The six generic top-level packages (`domain`, `application`, `adapters`, `bootstrap`, `benchmarks`, `host`) move under `potpie/context-engine/src/potpie_context_engine/`, and no top-level compatibility shims are kept.",
+      "rationale": "PR #1016 (nndn) argues the names were never API: 'Generic package names are collision-prone in any downstream environment, and the current import paths were never a declared API — freezing them by letting external consumers import the engine as-is would lock in accidents.' Shipping shims would ratify exactly the accidental surface the move exists to retire. `potpie_context_engine/api.py` pins the supported consumer surface instead (`GraphBackend`, `GraphPlanStorePort`, `GraphInboxStorePort`, `GraphService`).",
+      "alternatives_rejected": "Deprecation shims re-exporting `domain.*`/`application.*` for a release — rejected per the plan decision that those names were never public API. Rewriting the RPC/telemetry capability vocabulary (`host.pots.use_managed`, `host.daemon.stop`, setup-step owner labels) was also explicitly rejected: those are wire/analytics names that only textually resemble module paths.",
+      "decided_at": "2026-07-14",
+      "lifecycle": "accepted",
+      "summary": "Namespaced packages, no shims; the supported surface is api.py, not internal layer paths.",
+      "description": "Grounded in potpie-ai/potpie PR #1016, 'PR 1 of 3 of the context-engine modularization plan (packaging → graph definition/injection → runtime factory)' and deliberately semantics-free — no behavior, vocabulary or service-wiring changes. All production/test/script imports and module-path strings were rewritten, including `mock.patch` targets, `importlib` references, `python -m` invocations, the uvicorn app target, and the daemon RPC class-module allowlist (previously the prefix `\"domain.\"`). Heads-up in the PR: any open branch touching context-engine will conflict with the move and should rebase rather than merge across it. Search terms: potpie_context_engine namespace, ImportError domain module, no compatibility shims, wheel ships only the namespace, PR 1016."
+    },
+    {
+      "slug": "per-adapter-family-dependency-extras",
+      "name": "Base dependencies shrink to pydantic; every delivery surface moves behind an extra",
+      "statement": "The engine's base `Requires-Dist` shrinks to what the public graph API actually imports (pydantic), and Typer/Rich/FastAPI/Uvicorn/MCP/FalkorDB/Neo4j/SQLAlchemy/OpenTelemetry/Sentry each move behind a per-adapter-family extra, with `all` as a self-referential union.",
+      "rationale": "PR #1016 commit 2: the engine 'installs every delivery surface (FastAPI, Typer, MCP, FalkorDBLite, Sentry, …) for every consumer'. A library whose import pulls a web framework is unusable as a library. A subprocess gate now asserts that importing the public surface loads none of the optional third-party dependencies, so the boundary cannot silently rot.",
+      "alternatives_rejected": "Keeping one fat dependency set for install simplicity — rejected; the root `potpie` distribution keeps its `potpie-context-engine[all]` pin so the local install experience is unaffected anyway. Also rejected: a single `optional` extra, which gives consumers no way to install just the Neo4j driver.",
+      "decided_at": "2026-07-14",
+      "lifecycle": "accepted",
+      "summary": "Per-adapter extras (cli, http, mcp, local, neo4j, postgres, hatchet, observability, all); base is pydantic only.",
+      "description": "Explains a `ModuleNotFoundError` for typer, fastapi, falkordb or neo4j after installing potpie-context-engine bare. Old extras were renamed: `local` absorbs the old `falkordb` extra and `neo4j` replaces the old `graph` extra; `embeddings`, `github`, `reconciliation-agent` and `benchmarks` are unchanged. Each extra has an import smoke test over a representative adapter module in tests/unit/test_extras_smoke.py. Search terms: dependency extras, pip install potpie-context-engine[local], base requires pydantic only, extras smoke test, ModuleNotFoundError falkordb."
+    },
+    {
+      "slug": "cli-owned-by-root-product-distribution",
+      "name": "The user-facing CLI belongs to the root product distribution, not the engine",
+      "statement": "Relocate the CLI from `potpie/context-engine/adapters/inbound/cli` to `potpie/cli` (`host_cli.py` → `main.py`) and make the root `potpie` distribution own the entrypoint, dependencies, templates, assets and test suite, without changing the public command surface.",
+      "rationale": "PR #1013 (Dsantra92, merged 2026-07-17): 'The user-facing CLI belongs to the root Potpie product distribution. This is the CLI slice of the executable-ownership migration.' The engine is a library; shipping the user's executable inside it forced every library consumer to carry Typer, Rich, Pillow and the CLI templates. A package-boundary characterization test rejects legacy CLI imports and bounds the temporary engine-to-CLI seam.",
+      "alternatives_rejected": "Leaving the CLI in the engine and gating it behind the `cli` extra — rejected because the ownership, not just the install size, was wrong; the engine's `[cli]` extra was instead narrowed to `[cli-auth]` (keyring + httpx) for the outbound credential adapters that stay.",
+      "decided_at": "2026-07-17",
+      "lifecycle": "accepted",
+      "summary": "CLI moves to potpie/cli; root wheel owns the executable, engine wheel no longer ships it.",
+      "description": "Grounded in potpie-ai/potpie PR #1013 'refactor(cli): move CLI into root package', merged 2026-07-17. The `potpie` executable and command behavior are unchanged; root wheels now contain the CLI and its resources and Context Engine wheels no longer ship the legacy CLI package. Validation: root suite 861 passed, Context Engine suite 1342 passed, focused package/asset tests 85 passed, both wheels installed into an isolated environment with all three entrypoints verified. A latent packaging leak this PR shared with #1018 — bare directory excludes losing to `.gitignore` negation patterns that hatchling merges into its spec — was fixed with recursive globs. Search terms: potpie/cli main.py, host_cli renamed, CLI ownership migration, package boundary test, PR 1013."
+    },
+    {
+      "slug": "two-composition-roots-kept-separate",
+      "name": "Keep two composition roots: the local agent spine and the ingestion HTTP server",
+      "statement": "`potpie/services/host_wiring.py build_host_shell()` (local spine, default backend `falkordb_lite`) and `bootstrap/ingestion_server.py IngestionServerContainer` (FastAPI ingestion, default backend `neo4j`) remain two separate composition roots with two separate HTTP roots; migrating the async ingestion pipeline onto `HostShell` is explicitly deferred.",
+      "rationale": "architecture.md calls conflating them 'the most common architecture error' and keeps them distinct because they have genuinely different lifetimes and defaults: the local root is a single-user detached daemon over loopback IPC with no cloud dependency, the ingestion root is a multi-tenant server with Postgres, Celery-style batch workers and provider webhooks. Both run the same domain/application code over a swappable `GraphBackend`; they differ only in wiring and default storage.",
+      "alternatives_rejected": "Forcing the ingestion server through `HostShell` now — deferred rather than rejected outright, but doing it early would drag server-only concerns (batching, webhook HMAC, reconciliation flags) into the local single-user shell. Also rejected: giving the local daemon provider credentials, an explicit anti-goal ('no source-provider credentials in the local daemon by default').",
+      "decided_at": "2026-02-20",
+      "lifecycle": "accepted",
+      "summary": "Two roots, two HTTP surfaces, two default backends — same domain code underneath.",
+      "description": "Explains why `potpie graph …` behaves differently from what the HTTP ingestion endpoints do and why backend defaults disagree. The first HTTP root is the daemon's private loopback UDS/TCP IPC transport (adapters/inbound/daemon_http/transport.py); the second is the public FastAPI ingestion app under adapters/inbound/http/. Backend precedence differs too: host/CLI is `CONTEXT_ENGINE_BACKEND` > legacy `GRAPH_DB_BACKEND` > falkordb_lite, while the ingestion server reads `settings.graph_db_backend()` defaulting to neo4j. Search terms: two composition roots, build_host_shell, IngestionServerContainer, which backend am I on, daemon IPC vs ingestion HTTP."
+    },
+    {
+      "slug": "falkordb-lite-embedded-zero-setup-default",
+      "name": "Embedded FalkorDB Lite is the zero-setup default graph backend",
+      "statement": "The OSS CLI and daemon default to the `falkordb_lite` profile — embedded FalkorDBLite via `redislite` over a local file at `.potpie/context_graph/falkordb.db` — so first run needs no Docker, no Neo4j server, no Postgres and no cloud service.",
+      "rationale": "It is a stated product invariant: 'No mandatory Docker, Neo4j, Postgres, or cloud embedding service for OSS' and 'No hidden cloud dependency for local use.' The capability audit also inverted the old assumption — falkordb_lite is 5/6 real capability ports (everything but snapshot) while Neo4j is 4/6 (no inspection, no snapshot), so the zero-setup default is genuinely the more complete backend, not a degraded fallback.",
+      "alternatives_rejected": "Requiring a Neo4j container for local use (kills the one-command `potpie setup --repo .` first run), and defaulting to the JSON-persisted `embedded` profile (works, but rewrites the whole `<home>/graph.json` on every mutation). The old guidance that 'selecting falkordb raises NotImplementedError, use neo4j' is obsolete — there is no such gate anywhere.",
+      "decided_at": "2026-03-05",
+      "lifecycle": "accepted",
+      "summary": "falkordb_lite over redislite is the shipped default; Neo4j becomes an opt-in production target.",
+      "description": "Answers 'what database does Potpie use locally' and 'do I need Docker'. Profiles registered in build_backend: in_memory, embedded, neo4j, falkordb, falkordb_lite, postgres, chroma, hosted; names are normalized (`falkordblite`→`falkordb_lite`, dashes→underscores). Known cross-profile gaps: claim-key `mutation.invalidate` raises on both Neo4j and FalkorDB, snapshot export/import is real only on in_memory/embedded, and inspection is real everywhere except Neo4j. `backend use <profile>` is advisory only — it suggests `CONTEXT_ENGINE_BACKEND`, it does not persist a selection. Search terms: default backend, falkordb_lite, redislite, no Docker required, zero setup, backend capabilities matrix."
+    },
+    {
+      "slug": "neo4j-as-the-production-graph-backend",
+      "name": "Neo4j as the primary graph backend",
+      "statement": "The context graph runs on Neo4j — a clustered server backend with a native relationship vector index — as its primary and default storage profile.",
+      "rationale": "Neo4j was the shape-first production target: mature Cypher, a native relationship vector index for claim embeddings, and an already-running cluster in the potpie-k8s-deployments prod stack (three-server neo4j-cluster plus Neo4j-EE backups) to build against.",
+      "alternatives_rejected": "Embedded/file-backed graph stores were considered too immature to trust for the canonical claim store at the time.",
+      "decided_at": "2025-11-24",
+      "lifecycle": "superseded",
+      "summary": "Superseded for local/OSS by falkordb_lite; Neo4j survives as the ingestion-server default.",
+      "description": "Historical decision explaining why Neo4j URI/credential settings, the three-server neo4j-cluster manifests and the neo4j-helm Jenkins pipeline still exist, and why `bootstrap/ingestion_server.py` still defaults to `settings.graph_db_backend()='neo4j'`. Superseded for the OSS local path because requiring a server contradicted the no-mandatory-Docker invariant, and because the capability audit showed Neo4j implements fewer real ports (4/6, missing inspection and snapshot) than falkordb_lite (5/6). Search terms: neo4j default backend, neo4j-cluster, GRAPH_DB_BACKEND legacy, why is my backend neo4j, ingestion server backend."
+    },
+    {
+      "slug": "sentence-transformers-default-embedder",
+      "name": "sentence-transformers is the default local embedder",
+      "statement": "`build_embedder()`'s unset default flips from `local` to `auto`, so any process that never ran `potpie setup` — a fresh daemon, CI, an MCP host — gets `sentence-transformers/all-MiniLM-L6-v2` at 384 dimensions instead of silently falling back to the 256-dim hashing embedder.",
+      "rationale": "PR #1002 (nndn): 'The shipped potpie wheel already carries sentence-transformers, and setup already selects and persists it — this closes the gap for processes that never ran setup (fresh daemon, MCP, CI), which silently used the 256-dim hashing embedder.' Two quality tiers that look identical in status output is a trap; `graph status` now surfaces the active embedder `{name, dimensions}` beside `match_mode` so hashing-vector and semantic-vector no longer look the same.",
+      "alternatives_rejected": "Requiring an API-key embedding service — rejected outright; retrieval ships a bundled local embedder by default so semantic search needs no API key (disable with `CONTEXT_ENGINE_EMBEDDER=none`). Also rejected: leaving the hashing fallback as the silent default and documenting the footgun.",
+      "decided_at": "2026-06-24",
+      "lifecycle": "accepted",
+      "summary": "384-dim sentence-transformers by default everywhere, not just after setup; existing hashing pots migrate in place.",
+      "description": "Grounded in potpie-ai/potpie PR #1002. Safe for existing pots: `graph repair --semantic-index` (previously a no-op) re-embeds claims whose embeddings are missing, written by a different model, or written at different dimensions, and drops and recreates the vector index on a dimension change; `potpie setup` gained a soft `embeddings.reindex` step so upgraded installs migrate through the standard onboarding command. The test suite pins `CONTEXT_ENGINE_EMBEDDER=local` in conftest for offline determinism. Search terms: default embedder, all-MiniLM-L6-v2, 384 dimensions, hashing embedder 256, CONTEXT_ENGINE_EMBEDDER, graph repair semantic-index, semantic search quality."
+    },
+    {
+      "slug": "hashing-embedder-as-default-vectorizer",
+      "name": "A deterministic hashing embedder as the default vectorizer",
+      "statement": "Semantic search defaults to a dependency-free 256-dimension hashing embedder so that vector search works with no model download and no API key.",
+      "rationale": "A hashing vectorizer is instant, offline, deterministic and adds no install weight — attractive for a CLI that must work on first run behind a corporate proxy.",
+      "alternatives_rejected": "Bundling a real sentence-transformers model was initially judged too heavy for the default wheel.",
+      "decided_at": "2025-12-15",
+      "lifecycle": "superseded",
+      "summary": "Superseded: hashing vectors gave poor recall and were indistinguishable from real embeddings in status output.",
+      "description": "Historical decision explaining why some older pots contain 256-dimension embeddings that today's 384-dimension vector index cannot reach, and why `graph repair --semantic-index` exists. The failure was silent: hashing-vector and semantic-vector mode reported identically in `graph status`, so users got poor recall with no signal. Search terms: hashing embedder, 256 dim embeddings, dimension mismatch, vector index rebuild, poor semantic recall, embedding migration."
+    },
+    {
+      "slug": "edge-first-claim-reads",
+      "name": "Claim reads bind no endpoint nodes — query edge-first and degrade to lexical scoring",
+      "statement": "`FIND_CLAIMS_CYPHER` and both vector queries drop endpoint-node bindings so they compile to a pure `Edge By Index Scan`, and `fact_query` becomes lexical membership with a vector score overlay so a claim with a missing, stale or unreachable embedding degrades to a lexical score instead of disappearing.",
+      "rationale": "PR #1002 found that on the default falkordb_lite backend, claims anchored on a pot's first-created entity (internal node id 0 — always the Repository in the standard flow) 'were invisible to every read surface while commit reported success'. The embedded engine returns zero rows for a source-anchored traversal when the bound source node is id 0. Silent invisibility is the worst failure mode a memory system can have, so the fix pairs the query-shape change with loudness everywhere: count-verified embedding attach that raises on zero matches, and vector-query failures that log a warning naming the repair command instead of returning `[]`.",
+      "alternatives_rejected": "Special-casing node id 0 in the reader — rejected as a backend-specific hack over a query shape that was wrong anyway. Also rejected: leaving vector-query failure silent, which is how the bug survived undetected.",
+      "decided_at": "2026-06-24",
+      "lifecycle": "accepted",
+      "summary": "Unbound endpoints keep labels() filters working, compile to an edge index scan, and never silently return zero rows.",
+      "description": "Grounded in potpie-ai/potpie PR #1002 'Fix embedded-FalkorDB claim read invisibility and default to sentence-transformers'. Symptoms it explains: `commit` reports success but `graph read` returns nothing; claims about the Repository entity are missing from views, search and the explorer UI; `--verify` readback passes while the data is unreachable. The plan shape is pinned by an EXPLAIN-based regression test, and `commit --verify` now reports `unembedded_claim_keys` in vector mode, escalating verification status to `watch` with a repair recommendation. Vector indexes are also created lazily before the first vector write rather than only in setup's provision step. Search terms: claims invisible, node id 0, Edge By Index Scan, FIND_CLAIMS_CYPHER, falkordb_lite read returns nothing, commit succeeded but read empty."
+    },
+    {
+      "slug": "harness-owns-the-reasoning",
+      "name": "The user's harness owns the reasoning — no Potpie-owned LLM as the source of graph intelligence",
+      "statement": "The intelligence that turns a repo, PR, ticket or bug into durable memory lives in the user's coding harness (Claude Code, Codex, Cursor, OpenCode) taught via Potpie skills; Potpie validates, lowers, commits, audits and ranks, but does not infer rich facts from prose or scan a repository for you.",
+      "rationale": "This is the product's central anti-goal, quoted verbatim in skills.md and vision.md: 'No Potpie-owned LLM/reconciliation agent as the canonical source of graph intelligence.' The code honors it — the nudge brain is deterministic with no model on its path, retrieval ships a bundled local embedder so search needs no API key, and the service-side reconciliation agent is an optional extra that is off by default. Commercially it means Potpie never buys tokens: the reasoning runs on the user's existing model subscription.",
+      "alternatives_rejected": "A Potpie-hosted extraction/reconciliation agent as the canonical writer — rejected as an API-key dependency, a quality ceiling set by whichever model Potpie could afford, and a second source of truth competing with harness-authored mutations. Also rejected: skills containing executable code; a skill is pure instruction markdown that adds no new tools.",
+      "decided_at": "2026-04-08",
+      "lifecycle": "accepted",
+      "summary": "Skills teach the harness to use the CLI; Potpie owns validation and ranking, not inference.",
+      "description": "The decision behind 'why doesn't potpie just read my repo for me'. Eight skills ship in the agent bundle (the Claude Code plugin ships seven, everything except `potpie-cli`), sourced from `SKILL.md` files under potpie/cli/templates/agent_bundle/.agents/skills/. `potpie-graph` v5 is the contract skill and teaches propose/commit only. Writes never bypass validation: an ambiguous request becomes an inbox item or a low-authority observation for a skill to process, never an unsafe canonical fact. Search terms: harness-owned intelligence, anti-goal no Potpie LLM, skills are instruction text, why no repo scanner, bring your own model."
+    },
+    {
+      "slug": "deterministic-zero-token-nudge-model",
+      "name": "The nudge model is deterministic and zero-token, and an instruction nudge never auto-writes",
+      "statement": "Lifecycle hooks map harness events to one of six `NudgeEvent` values, each bound to exactly one policy whose direction is either `data` (read named graph views and inject ranked evidence) or `instruction` (return a fixed write-prompt for the agent to decide on) — with no model anywhere on the trigger path and no automatic graph write.",
+      "rationale": "ingestion-nudge.md: 'The whole trigger brain is deterministic — no model on this path; similarity uses the bundled local embedder only.' Nudges exist to get durable memory into an agent's context without spending tokens to ask for it, so putting a model in the trigger would defeat the point. Instruction nudges stop at a prompt because an auto-write would produce facts nobody chose to assert — the agent still picks the truth class, resolves identity, and writes a retrieval-grade description.",
+      "alternatives_rejected": "An LLM classifier deciding when and what to inject (costs tokens on every tool call, non-deterministic), and auto-recording a bug/fix pair when tests go from red to green (writes unreviewed facts). Also rejected: `NudgePolicy.triggers_ingest` — it is dead code; a nudge never ingests, it only reads or instructs.",
+      "decided_at": "2026-05-06",
+      "lifecycle": "accepted",
+      "summary": "Six events, one policy each, deterministic; data nudges inject evidence, instruction nudges only prompt.",
+      "description": "Covers the Claude Code plugin hooks and `potpie graph nudge --event <e> --session <id>`. Event mapping: SessionStart→session_start, PreToolUse(Write|Edit|MultiEdit|NotebookEdit)→pre_edit, PreToolUse(Bash)→pre_deploy on deploy markers, PostToolUse(Bash)→test_failed/test_passed on test markers, Stop→stop; ambiguous input is silent. Dedup survives across the short-lived hook processes within one session via LocalInjectionLedger persisting injected keys to ~/.potpie/nudge_sessions.json. The hook is fail-safe by construction: any error, missing binary or unparseable payload exits 0 with no output so it can never break a session. Search terms: nudge, zero-token context injection, potpie_nudge.py hook, session_start pre_edit test_failed, hookSpecificOutput additionalContext, nudge never writes."
+    },
+    {
+      "slug": "scanners-deleted-harness-led-ingestion",
+      "name": "Delete the in-process scanners; repo and source ingestion becomes harness-led",
+      "statement": "The `adapters/outbound/scanners/` package (codeowners, openapi, kubernetes, dependency-manifest, default registry) is deleted, connectors are trimmed to github and notion and stripped of `propose_plan` so they no longer write claims, and repo/PR/ticket ingestion is done by the `potpie-repo-baseline` and `potpie-source-ingestion` skills authoring semantic mutations.",
+      "rationale": "The direct consequence of harness-owned intelligence: a regex scanner produces low-quality facts with no descriptions, exactly the thin retrieval cards that never resurface, while a harness agent reading the same files can write a real card with symptoms and synonyms. Removed in commit 5af8ea5f, 'mega-removal of dead CE surface', which also deleted the top-level `potpie ingest` command. Jira and Linear hydration moves to the harness's own integration tools rather than a CLI-driven connector queue.",
+      "alternatives_rejected": "Keeping scanners as a fast bootstrap pass before the harness enriches — rejected because the two paths mint competing entity keys and the scanner's thin facts poison recall first. Also rejected: keeping the pot-level CLI Jira/Linear ingest commands (removed in #990).",
+      "decided_at": "2026-05-20",
+      "lifecycle": "accepted",
+      "summary": "No in-process scanners or claim-writing connectors; skills author the baseline through propose/commit.",
+      "description": "Explains why `adapters/outbound/scanners/` contains only stale `__pycache__`, why `connectors/jira/` and `connectors/linear/` are `.pyc` only, and why there is no `potpie ingest` command. Surviving connectors implement `kind / capabilities / list_artifacts / normalize_webhook / fetch` only. The actual Jira/Linear reads live in adapters/outbound/cli_auth/{atlassian_read_client,linear_read_client}.py. `potpie setup --scan` is opt-in and off by default — setup registers the repo as a source but does not scan the working tree. Search terms: scanners deleted, potpie ingest removed, 5af8ea5f mega-removal, connectors no longer write claims, harness-led repo baseline, setup does not scan."
+    },
+    {
+      "slug": "in-process-scanner-library",
+      "name": "In-process scanners build the repo baseline",
+      "statement": "Potpie ships a scanner library (codeowners, openapi, kubernetes manifests, dependency manifests) that walks a registered repo and proposes structural claims directly, so a baseline graph exists immediately after `potpie setup`.",
+      "rationale": "A deterministic scanner gives instant time-to-value: register a repo, get topology and ownership without a model in the loop or any agent involvement.",
+      "alternatives_rejected": "Waiting for an agent session to populate the graph was seen as too slow a first-run experience.",
+      "decided_at": "2025-12-20",
+      "lifecycle": "superseded",
+      "summary": "Superseded by harness-led ingestion; scanners were removed wholesale in 5af8ea5f.",
+      "description": "Historical decision explaining stale scanner `__pycache__` directories, the removed `potpie ingest` command, and connector `propose_plan` references in older docs. The scanners produced structurally correct but semantically thin claims — entity keys with no retrieval-grade descriptions — which then competed with richer harness-authored facts for the same identities. Search terms: scanner library, codeowners scanner, openapi scanner, kubernetes scanner, dependency manifest scanner, propose_plan connector, potpie ingest command gone."
+    },
+    {
+      "slug": "reconciliation-agent-off-by-default",
+      "name": "Service-side LLM reconciliation stays off by default",
+      "statement": "The server-side reconciliation deep agent is opt-in only — `reconciliation_flags.agent_planner_enabled()` returns `False` unless `CONTEXT_ENGINE_AGENT_PLANNER_ENABLED=1` — while the other reconciliation flags (infer-labels, conflict-detect, auto-supersede, causal-expand, strict-extraction, ontology-soft-fail) default on.",
+      "rationale": "The agent exists only on the HTTP ingestion composition root and is parked/non-canonical: canonical writes come from harness-authored semantic mutations and the deterministic `context_record` path. Turning it on by default would contradict the harness-owns-the-reasoning anti-goal and would mean a Potpie-side model quietly authoring facts a user never reviewed. The `factory.py` docstring claiming 'default: on' is wrong and is a known doc bug.",
+      "alternatives_rejected": "Deleting the reconciliation agent entirely — rejected because the server-side event flow needs a path for bulk backfill; keeping it behind a flag preserves the option without making it canonical. It also runs a deliberately separate skill surface (`backfill-enumerate-drain`, `graph-mutation-plan`) that must never be conflated with the user-installed bundle skills.",
+      "decided_at": "2026-05-22",
+      "lifecycle": "accepted",
+      "summary": "The deep reconciliation agent is a flag-gated extra on the ingestion server, never the canonical writer.",
+      "description": "Answers 'is there an LLM writing to my graph' — not unless you set `CONTEXT_ENGINE_AGENT_PLANNER_ENABLED=1`, and never on the local CLI/daemon path at all. The agent lives in adapters/outbound/reconciliation/{factory,pydantic_deep_agent,noop_agent,context_graph_tools}.py and writes through a different tool surface (`apply_graph_mutations`, `mark_event_processed`, `finish_batch`). Search terms: agent_planner_enabled, reconciliation agent off by default, CONTEXT_ENGINE_AGENT_PLANNER_ENABLED, deep agent, server-side reconciliation skills, noop_agent."
+    },
+    {
+      "slug": "pot-id-is-group-id-no-federation",
+      "name": "The pot is the unit of tenancy; pot_id IS the storage group_id and there is no cross-pot federation",
+      "statement": "Every query, source, inbox item, claim, semantic mutation and graph operation is scoped to exactly one pot, the pot id is stamped directly as the Cypher `group_id` on every `:Entity` node and `:RELATES_TO` edge, and reading across pots is an explicit anti-goal.",
+      "rationale": "vision.md: 'A Pot is the unit of isolation and tenancy… The pot id IS the storage group_id' and 'Cross-pot federation is an explicit anti-goal.' Using the tenancy key as the physical partition key means isolation is enforced by the query itself rather than by an application-layer filter someone can forget — `reset_pot` is literally `MATCH (n {group_id:$gid}) DETACH DELETE n`. Federation would reintroduce exactly the leak the design eliminates.",
+      "alternatives_rejected": "A database or graph per pot (expensive, and impossible on the embedded single-keyspace falkordb_lite store), and application-layer tenant filtering (one missed WHERE clause leaks another tenant's facts). Cross-pot read federation for 'org-wide search' was rejected outright as an anti-goal.",
+      "decided_at": "2026-01-22",
+      "lifecycle": "accepted",
+      "summary": "One pot = one group_id partition; isolation is physical, and no query spans pots.",
+      "description": "Explains why a fact recorded in one pot is invisible from another, and why there is no org-wide search across pots. Persistence per profile: in_memory is process-local, embedded uses one multi-pot `<home>/graph.json` rewritten atomically per mutation, falkordb_lite uses a redislite file with a single `context_graph` keyspace, neo4j uses one external DB — all partitioned by `group_id`. A pot can be local or managed and the active pot determines routing; first local setup creates the active local `default` pot. Search terms: pot scope, group_id, tenancy isolation, cross-pot federation anti-goal, pot reset, why can't I see facts from another pot."
+    },
+    {
+      "slug": "celery-and-event-bus-for-async-workflows",
+      "name": "Celery workers plus a Redis event-bus subscriber for asynchronous workflow execution",
+      "statement": "potpie-workflows runs long work off the request path through Celery workers and a separate single-queue event-bus subscriber that listens on Redis and triggers workflows, each started by its own entrypoint (`start_celery_worker.py`, `start_event_bus_worker.py`, `start_celery_insights.py`) under supervisord.",
+      "rationale": "Workflow runs are minutes-long LLM pipelines (spec generation, phased plan generation, research) that cannot occupy an HTTP worker. Splitting the two roles matters: Celery owns retried, tracked task execution while `EventBusSubscriber` owns fan-in from Redis queues to workflow triggers, backed by Postgres stores for workflows, execution logs, events and trigger hashes so a redelivered event is deduped rather than re-run.",
+      "alternatives_rejected": "Running workflows inline in FastAPI request handlers (blocks the event loop and dies with the request), and a single combined worker process (couples task retry semantics to event-subscription lifecycle and makes them impossible to scale independently — they have separate HPAs in the k8s manifests).",
+      "decided_at": "2026-03-18",
+      "lifecycle": "accepted",
+      "summary": "Two worker roles — Celery for task execution, an event-bus subscriber for Redis-driven triggers.",
+      "description": "Grounded in potpie-ai/potpie-workflows: start_celery_worker.py, start_event_bus_worker.py, start_celery_insights.py, celery_monitor.py and supervisord.conf, with src/adapters/event_bus_subscriber_single_queue.py wiring SQLAlchemyWorkflowsStore, SQLAlchemyExecutionLogStore, SQLAlchemyEventStore, SQLAlchemyTriggerHashStore and PotpieAgentExecutor. Symptoms this explains: workflows queued but never executing (event-bus worker down), tasks executing twice (trigger hash store miss). Search terms: celery worker, event bus subscriber, redis queue, workflow trigger, supervisord, start_event_bus_worker, trigger hash dedup."
+    },
+    {
+      "slug": "native-async-over-to-thread-bridges",
+      "name": "Replace blocking libraries with native async equivalents instead of wrapping them in to_thread",
+      "statement": "Migrate the FastAPI hot path to `redis.asyncio` (`AsyncRedisStreamManager`) and SQLAlchemy `AsyncSession`, keeping `asyncio.to_thread` only as a temporary, measured bridge for code that cannot be converted yet.",
+      "rationale": "The async-migration-plan documents the review findings that killed the thread-wrapper approach: thread-safety bugs from DB sessions passed to worker threads, an unbounded queue in the custom stream generator, daemon thread-per-stream with no cap, and thread-pool saturation under load — plus the observation that a `StreamingResponse` with a sync generator already runs in Starlette's thread pool, making the custom thread+queue pure overhead. The plan's discipline is 'Measure every step', with a benchmark script reporting p50/p95/p99, requests/sec and event-loop blocked time before and after.",
+      "alternatives_rejected": "Blanket `asyncio.to_thread` wrappers around every blocking call (the reverted approach), and leaving sync Redis on the event loop. Deliberately kept sync: the `RedisStreamManager` used by Celery tasks and the sync `redis_stream_generator`, since Starlette already runs it in a thread pool.",
+      "decided_at": "2026-03-09",
+      "lifecycle": "accepted",
+      "summary": "Native async libraries on the FastAPI path; to_thread only as a measured, temporary bridge.",
+      "description": "Grounded in docs/async-migration-plan.md. Step 0 reverts the thread-based changes across conversation_routing.py, conversations_router.py, conversation_service.py, redis_streaming.py, api/router.py, tunnel_router.py, tunnel_service.py, socket_service.py and github_service.py, while explicitly keeping two things from the reverted PR: `wait_for_task_start(require_running=True)` (a correctness fix, not a threading change) and the added request timeouts. Step 1 adds AsyncRedisStreamManager, Step 2 moves hot-path DB services to AsyncSession. Search terms: asyncio.to_thread, event loop blocked, thread pool saturation, redis.asyncio, AsyncSession migration, StreamingResponse thread pool, benchmark_redis_async."
+    },
+    {
+      "slug": "asyncio-to-thread-wrappers-for-blocking-calls",
+      "name": "Wrap blocking calls in asyncio.to_thread to unblock the event loop",
+      "statement": "Blocking Redis, DB and HTTP calls reached from FastAPI handlers are wrapped in `asyncio.to_thread`, and streaming uses a custom thread-plus-queue generator, so the event loop is never blocked.",
+      "rationale": "It was the smallest change that removed obvious event-loop blocking without rewriting every service against async libraries.",
+      "alternatives_rejected": "A full native-async migration was judged too large to land at once.",
+      "decided_at": "2026-02-25",
+      "lifecycle": "superseded",
+      "summary": "Superseded after review found thread-safety bugs, unbounded queues, and thread-pool saturation risk.",
+      "description": "Historical decision explaining leftover `asyncio.to_thread` call sites and the reverted `redis_stream_generator_async` / `stop_event` machinery. Code review flagged DB sessions passed to worker threads, an unbounded queue in the custom stream generator, daemon thread-per-stream with no cap, and the fact that Starlette already runs sync generators in its thread pool (~40 tokens), making the custom thread+queue unnecessary overhead. Search terms: to_thread wrapper, thread safety DB session, unbounded queue stream generator, revert thread PR, fix/wait-for-task-start-thread."
+    },
+    {
+      "slug": "self-hosted-postgres-pgbouncer-on-kubernetes",
+      "name": "Run Postgres behind PgBouncer on Kubernetes rather than a managed database",
+      "statement": "The hosted stack runs its own Postgres with a PgBouncer connection-pooling deployment (plus a PodDisruptionBudget) inside the Kubernetes cluster, alongside a self-managed three-server Neo4j cluster, deployed by per-service Jenkins pipelines.",
+      "rationale": "Connection exhaustion is the dominant Postgres failure mode for this workload: horizontally-autoscaled API pods plus Celery workers plus the conversation service each open pools, and every service in potpie-k8s-deployments has its own HPA. PgBouncer in front turns N×pods×pool_size into a bounded server-side connection count. Keeping the datastores in-cluster also keeps them next to the Neo4j cluster and under the same Vault-managed secret flow rather than split across a managed-service boundary.",
+      "alternatives_rejected": "A managed Postgres service (simpler operationally, but adds egress latency to an in-cluster hot path and splits secrets management away from the Vault unsealer cron already running in the cluster). Also rejected: raising `max_connections` on the server instead of pooling, which trades connection errors for memory pressure.",
+      "decided_at": "2026-01-30",
+      "lifecycle": "accepted",
+      "summary": "In-cluster Postgres + PgBouncer + PDB, self-managed Neo4j cluster, Jenkins-deployed per service.",
+      "description": "Grounded in potpie-ai/potpie-k8s-deployments: prod/PgBouncer and stage/PgBouncer (pgbouncer deployment and PDB added in 'add pgbouncer deployment and pdb file to prod'), prod/neo4j-cluster with server-1/2/3 values files and neo4j-secret.yaml, prod/Neo4j-EE-bkp, and per-service Jenkinsfiles under mom-server-microsvc/{celery,convo,mom-api}. Symptoms this explains: `FATAL: sorry, too many clients already`, connection-pool exhaustion during HPA scale-out, and why a database restart takes the whole namespace with it. Search terms: pgbouncer, too many clients, connection pooling, neo4j cluster helm, vault unsealer, Jenkins deploy pipeline, HPA scale out connections."
+    },
+    {
+      "slug": "azure-aks-migration-for-hosted-control-plane",
+      "name": "Migrate the hosted control plane to Azure AKS with Azure-managed ingress and registry",
+      "statement": "Move the hosted Potpie stack onto Azure Kubernetes Service — AKS node pools, Azure Container Registry for images, and cert-manager-issued certificates behind the existing ingress-controller manifests — retiring the current per-service Jenkins-to-cluster deploy path in favour of pipeline-built images promoted stage → prod.",
+      "rationale": "The existing manifests already assume a portable Kubernetes target (the deployment READMEs name AKS among the supported clusters) and the stack is entirely Helm/YAML plus cert-manager, so nothing is cloud-locked today. Consolidating onto one cloud puts the graph datastores, the workflows Celery/event-bus workers and the ingestion server in one network boundary with one identity story, and lets the enterprise 'pie' deployment reuse the same cluster shape.",
+      "alternatives_rejected": "Staying multi-cloud with the current Jenkins-driven cluster (no single identity boundary, and secrets stay split between Vault and per-cloud stores), and moving to fully managed serverless containers (rejected because the self-managed Neo4j cluster and PgBouncer need StatefulSet/PDB semantics that container-apps platforms do not expose).",
+      "decided_at": "2026-07-02",
+      "lifecycle": "proposed",
+      "summary": "Proposed consolidation of the hosted stack onto AKS + ACR, promoting images stage → prod.",
+      "description": "Proposal covering potpie-ai/potpie-k8s-deployments (prod/ and stage/ trees: cert-manager clusterissuers, ingress-controller rules including the workflows route added in 'feat: workflows ingress routing rules', neo4j-cluster, PgBouncer, vault) plus the potpie-workflows k8s/deployment.yaml and service.yaml. Open questions at proposal time: whether the Neo4j Enterprise cluster moves as-is or is replaced by the FalkorDB path, and how the Vault unsealer cron maps onto Azure Key Vault. Status is proposed, not accepted — no manifest in the repo targets AKS yet. Search terms: AKS migration, Azure Container Registry, cluster consolidation, ingress cert-manager, stage to prod promotion, Neo4j on AKS."
+    },
+    {
+      "slug": "nextjs-app-router-with-route-groups",
+      "name": "The frontend uses the Next.js App Router with route groups for auth and main shells",
+      "statement": "potpie-ui is a Next.js App Router application organized feature-first under `app/`, using route groups `(auth)` and `(main)` to give signed-out and signed-in surfaces different layouts without adding path segments, with `reactStrictMode: true` and TypeScript build errors left enabled (`ignoreBuildErrors: false`).",
+      "rationale": "Route groups are what let the sign-in / sign-up / link-github flows share one minimal shell while every product surface under `(main)` — pots, chat, idea, graph, events — shares the app chrome, all without polluting the URL. Keeping `typescript.ignoreBuildErrors` at `false` is a deliberate quality gate: a type error fails the build rather than shipping.",
+      "alternatives_rejected": "The legacy Pages Router (no nested layouts, no server components, no colocated route groups), and disabling type checking during build to unblock deploys — explicitly rejected in next.config.mjs.",
+      "decided_at": "2026-02-04",
+      "lifecycle": "accepted",
+      "summary": "App Router + (auth)/(main) route groups, strict mode on, type errors block the build.",
+      "description": "Grounded in potpie-ai/potpie-ui: app/(auth)/{sign-in,sign-up,link-github}, app/(main)/{pots,newchat,idea}, app/layout.tsx, app/error.tsx, app/loading.tsx and next.config.mjs. Conventions: functional components with TypeScript FC types, `\"use client\"` on client components, PascalCase components and camelCase utilities, Tailwind with the `cn` conditional-class utility. Search terms: Next.js App Router, route groups, (auth) (main), nested layouts, ignoreBuildErrors false, reactStrictMode, feature-based file structure."
+    },
+    {
+      "slug": "redux-toolkit-with-persist-for-global-state",
+      "name": "Redux Toolkit with Redux Persist for global state; React Query for server state",
+      "statement": "potpie-ui keeps cross-cutting client state in Redux Toolkit slices with Redux Persist for rehydration across reloads, uses TanStack React Query for server-state fetching and caching, and keeps everything else in local React hooks.",
+      "rationale": "The two kinds of state have different lifetimes and the split makes that explicit: chat/session/UI selections must survive a reload (Persist), while API data must be invalidated and refetched, not persisted stale (React Query). Collapsing both into one store is what produces the classic bug of a persisted, hours-old server payload rehydrating over fresh data.",
+      "alternatives_rejected": "Context-only state management (re-renders the whole tree and has no devtools or middleware story at this size), and persisting server responses into Redux (stale-on-rehydrate). Lightweight stores such as Zustand were not adopted because Redux Persist and the existing slice/devtools setup were already in place.",
+      "decided_at": "2026-02-06",
+      "lifecycle": "accepted",
+      "summary": "Redux Toolkit + Redux Persist for client state, TanStack Query for server state, hooks for local state.",
+      "description": "Grounded in potpie-ai/potpie-ui package.json (@reduxjs/toolkit, redux-persist, @tanstack/react-query) and lib/state/, with the service layer under services/ (ChatService, PotService, AgentService, EventStreamService, WorkflowService, …) as the axios boundary. Symptoms this explains: a stale value reappearing after refresh (it is persisted), and data not updating until refetch (React Query cache). Search terms: Redux Toolkit slices, redux-persist rehydrate, TanStack React Query, server state vs client state, stale after reload, state management choice."
+    },
+    {
+      "slug": "firebase-auth-as-identity-provider",
+      "name": "Firebase Authentication is the identity provider for the web app and the CLI login callback",
+      "statement": "potpie-ui delegates user identity to Firebase Auth — email/password plus Google and GitHub providers — and the same Firebase session backs the CLI login callback that hands a token back to the local `potpie` binary.",
+      "rationale": "Firebase gives multi-provider sign-in, token refresh and session persistence without Potpie running an auth service, and the GitHub provider doubles as the repo-linking grant (`link-github`), so one consent covers both login and source access. Reusing the same web session for the CLI callback avoids a second, divergent device-auth implementation.",
+      "alternatives_rejected": "A self-hosted auth service with its own user table and password reset flow (real operational burden for no product differentiation), and a CLI-only device-code flow with a separate identity store (would fork identity between the web app and the CLI).",
+      "decided_at": "2026-02-08",
+      "lifecycle": "accepted",
+      "summary": "Firebase Auth for web sign-in, GitHub linking, and the CLI login handoff.",
+      "description": "Grounded in potpie-ai/potpie-ui: app/(auth)/sign-in, app/(auth)/sign-up, app/(auth)/link-github, lib/auth/cli-callback.ts with its cli-callback.test.ts and cli-success flow, lib/sso/unified-auth.ts, app/utils/headers.util.ts and the `firebase` dependency in package.json. Configured through Firebase environment variables from .env.template alongside PostHog; a local development mode exists for working without external dependencies. Symptoms this explains: `potpie login` hanging on the browser callback, and sign-in failing when Firebase env vars are unset. Search terms: Firebase Auth, CLI login callback, link-github, unified-auth, sso, auth env vars, local development mode without Firebase."
+    },
+    {
+      "slug": "sandbox-owns-repo-lifecycle",
+      "name": "Make the sandbox module the single library that materializes repos and runs code",
+      "statement": "Turn `app/src/sandbox` into the one library the rest of Potpie imports to get a workspace on a branch, read/write files, run commands, search, commit and push — retiring `app/modules/repo_manager` and `app/modules/intelligence/tools/code_changes_manager` and the ~20 LangChain StructuredTools wrapped around them.",
+      "rationale": "The sandbox-integration-plan names the duplication precisely: 'The two stacks duplicate concepts: both clone, both manage worktrees, both think about branches.' RepoManager keeps bare repos and worktrees under `.repos/<owner>/<repo>/` with its own auth chain and eviction, while code_changes_manager keeps a Redis-backed per-conversation edit staging area — two answers to 'where is the working tree' that drift. The sandbox module is already hexagonal and runnable with local-git, subprocess, docker and daytona adapters and E2E coverage on all three runtimes, so the consolidation target already exists.",
+      "alternatives_rejected": "Keeping both stacks and syncing them (the status quo, which is the drift being removed), and making parsing keep its own direct worktree walk — the plan instead routes parsing through the sandbox's workspace API so `RepoManager.prepare_for_parsing()` has one owner.",
+      "decided_at": "2026-06-10",
+      "lifecycle": "proposed",
+      "summary": "Proposed: one sandbox library owns repo lifecycle; caller passes (repo, branch, user, project) and gets a workspace.",
+      "description": "Grounded in docs/sandbox-integration-plan.md (which builds on docs/sandbox-core-setup.md and its RepoCache / Workspace / Runtime model). The sandbox today exposes SandboxService with get_or_create_workspace, get_or_create_runtime, exec, hibernate_runtime, destroy_runtime and destroy_workspace — idempotent, locked per workspace, tracking `dirty` after writes — over ports WorkspaceProvider, RuntimeProvider, SandboxStore and LockManager. Explicitly a plan, not a spec: it names the tradeoffs and leaves the call to the implementer. Search terms: sandbox module, repo_manager retirement, code_changes_manager, worktree management, daytona runtime, docker runtime, workspace provider, repo lifecycle ownership."
+    }
+  ],
+  "edges": [
+    { "from": "decision:local-first-cli-pivot", "type": "DECIDED", "to": "repo:potpie-ai/potpie", "truth": "user_decision", "evidence": "git:potpie@dbc92c23" },
+    { "from": "decision:local-first-cli-pivot", "type": "AFFECTS", "to": "service:potpie-cli", "truth": "user_decision", "confidence": 0.95 },
+    { "from": "decision:local-first-cli-pivot", "type": "AFFECTS", "to": "service:potpie-daemon", "truth": "user_decision", "confidence": 0.95 },
+    { "from": "decision:local-first-cli-pivot", "type": "AFFECTS", "to": "service:context-engine", "truth": "user_decision", "confidence": 0.9 },
+    { "from": "decision:local-first-cli-pivot", "type": "AFFECTS", "to": "datastore:falkordb-lite", "truth": "user_decision", "confidence": 0.9 },
+    {
+      "from": "decision:activity-single-timeline-entity",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision",
+      "note": "Ontology catalog decision bound to the potpie repo."
+    },
+    {
+      "from": "decision:activity-single-timeline-entity",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/ontology.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:activity-single-timeline-entity",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/mintlify-docs",
+      "truth": "user_decision",
+      "confidence": 0.9,
+      "note": "Public ontology docs must not name PullRequest/Issue/Commit labels."
+    },
+    {
+      "from": "decision:activity-single-timeline-entity",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "user_decision",
+      "confidence": 0.9,
+      "note": "Graph explorer and events UI render a single Activity label."
+    },
+    {
+      "from": "decision:activity-single-timeline-entity",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:canonical-relates-to-storage-edge",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:canonical-relates-to-storage-edge",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/cypher.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:canonical-relates-to-storage-edge",
+      "type": "AFFECTS",
+      "to": "datastore:neo4j-code-graph",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:canonical-relates-to-storage-edge",
+      "type": "AFFECTS",
+      "to": "datastore:falkordb-lite",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:canonical-relates-to-storage-edge",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:bitemporal-validity-soft-delete-only",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:bitemporal-validity-soft-delete-only",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/cypher.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:bitemporal-validity-soft-delete-only",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/ontology.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:bitemporal-validity-soft-delete-only",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:owned-by-sole-singleton-predicate",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:owned-by-sole-singleton-predicate",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/ontology.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:owned-by-sole-singleton-predicate",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "user_decision",
+      "confidence": 0.9,
+      "note": "Owner column in the graph explorer assumes a single live owner."
+    },
+    {
+      "from": "decision:truth-class-taxonomy-evidence-gating",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:truth-class-taxonomy-evidence-gating",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/graph_contract.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:truth-class-taxonomy-evidence-gating",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:truth-class-taxonomy-evidence-gating",
+      "type": "AFFECTS",
+      "to": "feature:semantic-search-local-embedder",
+      "truth": "user_decision",
+      "confidence": 0.9,
+      "note": "Truth class feeds the ranker's strength factor."
+    },
+    {
+      "from": "decision:import-time-coherence-guards-fail-startup",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:import-time-coherence-guards-fail-startup",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/coherence.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:import-time-coherence-guards-fail-startup",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/ontology.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:import-time-coherence-guards-fail-startup",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:entity-exists-only-as-edge-endpoint",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:entity-exists-only-as-edge-endpoint",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/ontology.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:entity-exists-only-as-edge-endpoint",
+      "type": "AFFECTS",
+      "to": "feature:context-graph-project-memory",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:classifier-abstains-when-ambiguous",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:classifier-abstains-when-ambiguous",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/ontology_classifier.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:classifier-abstains-when-ambiguous",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/ontology.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:classifier-abstains-when-ambiguous",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:no-stored-temporal-or-causal-edges",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:no-stored-temporal-or-causal-edges",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/ontology.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:no-stored-temporal-or-causal-edges",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "user_decision",
+      "confidence": 0.9,
+      "note": "Timeline views compute ordering client-side from occurred_at."
+    },
+    {
+      "from": "decision:no-stored-temporal-or-causal-edges",
+      "type": "AFFECTS",
+      "to": "feature:context-graph-project-memory",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:potpie-mints-keys-agent-proposes-names",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:potpie-mints-keys-agent-proposes-names",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/identity.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:potpie-mints-keys-agent-proposes-names",
+      "type": "AFFECTS",
+      "to": "service:potpie-cli",
+      "truth": "user_decision",
+      "confidence": 0.9,
+      "note": "graph search-entities must precede every write."
+    },
+    {
+      "from": "decision:potpie-mints-keys-agent-proposes-names",
+      "type": "AFFECTS",
+      "to": "feature:context-graph-project-memory",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:propose-commit-canonical-write-door",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:propose-commit-canonical-write-door",
+      "type": "SUPERSEDES",
+      "to": "decision:graph-mutate-as-primary-write-command",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:propose-commit-canonical-write-door",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/workbench_service.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:propose-commit-canonical-write-door",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/cli/main.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:propose-commit-canonical-write-door",
+      "type": "AFFECTS",
+      "to": "service:potpie-cli",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:propose-commit-canonical-write-door",
+      "type": "AFFECTS",
+      "to": "feature:graph-workbench-propose-commit",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:graph-mutate-as-primary-write-command",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:graph-mutate-as-primary-write-command",
+      "type": "AFFECTS",
+      "to": "service:potpie-cli",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:reads-return-ranked-evidence-not-answers",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:reads-return-ranked-evidence-not-answers",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:reads-return-ranked-evidence-not-answers",
+      "type": "AFFECTS",
+      "to": "feature:semantic-search-local-embedder",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:reads-return-ranked-evidence-not-answers",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-vscode-extension",
+      "truth": "user_decision",
+      "confidence": 0.9,
+      "note": "The extension renders evidence, it does not ask the daemon for prose."
+    },
+    {
+      "from": "decision:four-tool-mcp-agent-surface",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:four-tool-mcp-agent-surface",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-vscode-extension",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:four-tool-mcp-agent-surface",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/mintlify-docs",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:remove-mcp-from-daemon-and-product",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:remove-mcp-from-daemon-and-product",
+      "type": "SUPERSEDES",
+      "to": "decision:four-tool-mcp-agent-surface",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:remove-mcp-from-daemon-and-product",
+      "type": "AFFECTS",
+      "to": "service:potpie-daemon",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:remove-mcp-from-daemon-and-product",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:remove-mcp-from-daemon-and-product",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-vscode-extension",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:remove-mcp-from-daemon-and-product",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/mintlify-docs",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-1019",
+      "type": "MENTIONS",
+      "to": "decision:remove-mcp-from-daemon-and-product",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1019"
+    },
+    {
+      "from": "decision:three-layer-product-engine-core-split",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:three-layer-product-engine-core-split",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/ontology.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:three-layer-product-engine-core-split",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/cli/main.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:three-layer-product-engine-core-split",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/services/host_wiring.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:three-layer-product-engine-core-split",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:three-layer-product-engine-core-split",
+      "type": "AFFECTS",
+      "to": "service:potpie-cli",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:three-layer-product-engine-core-split",
+      "type": "AFFECTS",
+      "to": "service:potpie-daemon",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:three-layer-product-engine-core-split",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/pie",
+      "truth": "user_decision",
+      "confidence": 0.9,
+      "note": "Enterprise pie consumes potpie-context-core as a library."
+    },
+    {
+      "from": "activity:github:potpie-1018",
+      "type": "MENTIONS",
+      "to": "decision:three-layer-product-engine-core-split",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1018"
+    },
+    {
+      "from": "decision:context-engine-namespace-no-compat-shims",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:context-engine-namespace-no-compat-shims",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:context-engine-namespace-no-compat-shims",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/services/host_wiring.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:context-engine-namespace-no-compat-shims",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/pie",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-1016",
+      "type": "MENTIONS",
+      "to": "decision:context-engine-namespace-no-compat-shims",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1016"
+    },
+    {
+      "from": "decision:per-adapter-family-dependency-extras",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:per-adapter-family-dependency-extras",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:per-adapter-family-dependency-extras",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-1016",
+      "type": "MENTIONS",
+      "to": "decision:per-adapter-family-dependency-extras",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1016"
+    },
+    {
+      "from": "decision:cli-owned-by-root-product-distribution",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:cli-owned-by-root-product-distribution",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/cli/main.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:cli-owned-by-root-product-distribution",
+      "type": "AFFECTS",
+      "to": "service:potpie-cli",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:cli-owned-by-root-product-distribution",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-1013",
+      "type": "MENTIONS",
+      "to": "decision:cli-owned-by-root-product-distribution",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1013"
+    },
+    {
+      "from": "decision:two-composition-roots-kept-separate",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:two-composition-roots-kept-separate",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/services/host_wiring.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:two-composition-roots-kept-separate",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:two-composition-roots-kept-separate",
+      "type": "AFFECTS",
+      "to": "service:potpie-daemon",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:two-composition-roots-kept-separate",
+      "type": "AFFECTS",
+      "to": "datastore:neo4j-code-graph",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:two-composition-roots-kept-separate",
+      "type": "AFFECTS",
+      "to": "datastore:falkordb-lite",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:falkordb-lite-embedded-zero-setup-default",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:falkordb-lite-embedded-zero-setup-default",
+      "type": "SUPERSEDES",
+      "to": "decision:neo4j-as-the-production-graph-backend",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:falkordb-lite-embedded-zero-setup-default",
+      "type": "AFFECTS",
+      "to": "datastore:falkordb-lite",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:falkordb-lite-embedded-zero-setup-default",
+      "type": "AFFECTS",
+      "to": "datastore:neo4j-code-graph",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:falkordb-lite-embedded-zero-setup-default",
+      "type": "AFFECTS",
+      "to": "service:potpie-daemon",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:falkordb-lite-embedded-zero-setup-default",
+      "type": "AFFECTS",
+      "to": "config:context-engine:GRAPH_DB_BACKEND",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:falkordb-lite-embedded-zero-setup-default",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/mintlify-docs",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:neo4j-as-the-production-graph-backend",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:neo4j-as-the-production-graph-backend",
+      "type": "AFFECTS",
+      "to": "datastore:neo4j-code-graph",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:neo4j-as-the-production-graph-backend",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-k8s-deployments",
+      "truth": "user_decision",
+      "confidence": 0.9,
+      "note": "prod/neo4j-cluster and neo4j-helm manifests exist because of this decision."
+    },
+    {
+      "from": "decision:sentence-transformers-default-embedder",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:sentence-transformers-default-embedder",
+      "type": "SUPERSEDES",
+      "to": "decision:hashing-embedder-as-default-vectorizer",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:sentence-transformers-default-embedder",
+      "type": "AFFECTS",
+      "to": "feature:semantic-search-local-embedder",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:sentence-transformers-default-embedder",
+      "type": "AFFECTS",
+      "to": "config:context-engine:CONTEXT_ENGINE_EMBEDDER",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:sentence-transformers-default-embedder",
+      "type": "AFFECTS",
+      "to": "datastore:falkordb-lite",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:sentence-transformers-default-embedder",
+      "type": "AFFECTS",
+      "to": "service:potpie-daemon",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "MENTIONS",
+      "to": "decision:sentence-transformers-default-embedder",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1002"
+    },
+    {
+      "from": "decision:hashing-embedder-as-default-vectorizer",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:hashing-embedder-as-default-vectorizer",
+      "type": "AFFECTS",
+      "to": "feature:semantic-search-local-embedder",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:edge-first-claim-reads",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:edge-first-claim-reads",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/cypher.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:edge-first-claim-reads",
+      "type": "AFFECTS",
+      "to": "datastore:falkordb-lite",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:edge-first-claim-reads",
+      "type": "AFFECTS",
+      "to": "feature:semantic-search-local-embedder",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:edge-first-claim-reads",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "activity:github:potpie-1002",
+      "type": "MENTIONS",
+      "to": "decision:edge-first-claim-reads",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie#1002"
+    },
+    {
+      "from": "decision:harness-owns-the-reasoning",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:harness-owns-the-reasoning",
+      "type": "AFFECTS",
+      "to": "service:potpie-cli",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:harness-owns-the-reasoning",
+      "type": "AFFECTS",
+      "to": "feature:context-graph-project-memory",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:harness-owns-the-reasoning",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/mintlify-docs",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:harness-owns-the-reasoning",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-vscode-extension",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:harness-owns-the-reasoning",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-slack",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:deterministic-zero-token-nudge-model",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:deterministic-zero-token-nudge-model",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/application/services/nudge_service.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:deterministic-zero-token-nudge-model",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/services/host_wiring.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:deterministic-zero-token-nudge-model",
+      "type": "AFFECTS",
+      "to": "feature:zero-token-nudges",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:deterministic-zero-token-nudge-model",
+      "type": "AFFECTS",
+      "to": "service:potpie-daemon",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:scanners-deleted-harness-led-ingestion",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:scanners-deleted-harness-led-ingestion",
+      "type": "SUPERSEDES",
+      "to": "decision:in-process-scanner-library",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:scanners-deleted-harness-led-ingestion",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:scanners-deleted-harness-led-ingestion",
+      "type": "AFFECTS",
+      "to": "service:potpie-cli",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:scanners-deleted-harness-led-ingestion",
+      "type": "AFFECTS",
+      "to": "feature:context-graph-project-memory",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:scanners-deleted-harness-led-ingestion",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/mintlify-docs",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:in-process-scanner-library",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:in-process-scanner-library",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:reconciliation-agent-off-by-default",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:reconciliation-agent-off-by-default",
+      "type": "AFFECTS",
+      "to": "service:context-engine",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:reconciliation-agent-off-by-default",
+      "type": "AFFECTS",
+      "to": "config:context-engine:CONTEXT_ENGINE_AGENT_PLANNER_ENABLED",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:reconciliation-agent-off-by-default",
+      "type": "AFFECTS",
+      "to": "feature:context-graph-project-memory",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:pot-id-is-group-id-no-federation",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:pot-id-is-group-id-no-federation",
+      "type": "AFFECTS",
+      "to": "code:potpie:potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/cypher.py",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:pot-id-is-group-id-no-federation",
+      "type": "AFFECTS",
+      "to": "datastore:falkordb-lite",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:pot-id-is-group-id-no-federation",
+      "type": "AFFECTS",
+      "to": "datastore:neo4j-code-graph",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:pot-id-is-group-id-no-federation",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "user_decision",
+      "confidence": 0.9,
+      "note": "Every pot screen scopes reads to one pot id."
+    },
+    {
+      "from": "decision:pot-id-is-group-id-no-federation",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/pie",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:celery-and-event-bus-for-async-workflows",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:celery-and-event-bus-for-async-workflows",
+      "type": "AFFECTS",
+      "to": "datastore:redis-broker",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:celery-and-event-bus-for-async-workflows",
+      "type": "AFFECTS",
+      "to": "datastore:postgres-potpiedb",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:celery-and-event-bus-for-async-workflows",
+      "type": "AFFECTS",
+      "to": "service:workflows-celery-worker",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:celery-and-event-bus-for-async-workflows",
+      "type": "AFFECTS",
+      "to": "service:workflows-event-bus-worker",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:celery-and-event-bus-for-async-workflows",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-k8s-deployments",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:native-async-over-to-thread-bridges",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:native-async-over-to-thread-bridges",
+      "type": "SUPERSEDES",
+      "to": "decision:asyncio-to-thread-wrappers-for-blocking-calls",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:native-async-over-to-thread-bridges",
+      "type": "AFFECTS",
+      "to": "datastore:redis-broker",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:native-async-over-to-thread-bridges",
+      "type": "AFFECTS",
+      "to": "datastore:postgres-potpiedb",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:native-async-over-to-thread-bridges",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:native-async-over-to-thread-bridges",
+      "type": "AFFECTS",
+      "to": "service:celery-agent-worker",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:asyncio-to-thread-wrappers-for-blocking-calls",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:asyncio-to-thread-wrappers-for-blocking-calls",
+      "type": "AFFECTS",
+      "to": "datastore:redis-broker",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:self-hosted-postgres-pgbouncer-on-kubernetes",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie-k8s-deployments",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:self-hosted-postgres-pgbouncer-on-kubernetes",
+      "type": "AFFECTS",
+      "to": "datastore:postgres-potpiedb",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:self-hosted-postgres-pgbouncer-on-kubernetes",
+      "type": "AFFECTS",
+      "to": "datastore:neo4j-code-graph",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:self-hosted-postgres-pgbouncer-on-kubernetes",
+      "type": "AFFECTS",
+      "to": "environment:production",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:self-hosted-postgres-pgbouncer-on-kubernetes",
+      "type": "AFFECTS",
+      "to": "environment:staging",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:self-hosted-postgres-pgbouncer-on-kubernetes",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:azure-aks-migration-for-hosted-control-plane",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie-k8s-deployments",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:azure-aks-migration-for-hosted-control-plane",
+      "type": "AFFECTS",
+      "to": "environment:production",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:azure-aks-migration-for-hosted-control-plane",
+      "type": "AFFECTS",
+      "to": "environment:staging",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:azure-aks-migration-for-hosted-control-plane",
+      "type": "AFFECTS",
+      "to": "datastore:postgres-potpiedb",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:azure-aks-migration-for-hosted-control-plane",
+      "type": "AFFECTS",
+      "to": "datastore:neo4j-code-graph",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:azure-aks-migration-for-hosted-control-plane",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:azure-aks-migration-for-hosted-control-plane",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/pie",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:nextjs-app-router-with-route-groups",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:nextjs-app-router-with-route-groups",
+      "type": "AFFECTS",
+      "to": "service:potpie-ui",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:nextjs-app-router-with-route-groups",
+      "type": "AFFECTS",
+      "to": "code:potpie-ui:app/layout.tsx",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:nextjs-app-router-with-route-groups",
+      "type": "AFFECTS",
+      "to": "code:potpie-ui:next.config.mjs",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:redux-toolkit-with-persist-for-global-state",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:redux-toolkit-with-persist-for-global-state",
+      "type": "AFFECTS",
+      "to": "service:potpie-ui",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:redux-toolkit-with-persist-for-global-state",
+      "type": "AFFECTS",
+      "to": "code:potpie-ui:lib/state/store.ts",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:redux-toolkit-with-persist-for-global-state",
+      "type": "AFFECTS",
+      "to": "code:potpie-ui:services/ChatService.ts",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:firebase-auth-as-identity-provider",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:firebase-auth-as-identity-provider",
+      "type": "AFFECTS",
+      "to": "service:potpie-ui",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:firebase-auth-as-identity-provider",
+      "type": "AFFECTS",
+      "to": "code:potpie-ui:lib/auth/cli-callback.ts",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:firebase-auth-as-identity-provider",
+      "type": "AFFECTS",
+      "to": "code:potpie-ui:lib/sso/unified-auth.ts",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:firebase-auth-as-identity-provider",
+      "type": "AFFECTS",
+      "to": "service:potpie-cli",
+      "truth": "user_decision",
+      "confidence": 0.9,
+      "note": "potpie login completes through the web callback."
+    },
+    {
+      "from": "decision:firebase-auth-as-identity-provider",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/pie",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:sandbox-owns-repo-lifecycle",
+      "type": "DECIDED",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "decision:sandbox-owns-repo-lifecycle",
+      "type": "AFFECTS",
+      "to": "datastore:redis-broker",
+      "truth": "user_decision",
+      "confidence": 0.9,
+      "note": "Retires the Redis-backed per-conversation edit staging area."
+    },
+    {
+      "from": "decision:sandbox-owns-repo-lifecycle",
+      "type": "AFFECTS",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "user_decision",
+      "confidence": 0.9
+    },
+    {
+      "from": "decision:sandbox-owns-repo-lifecycle",
+      "type": "AFFECTS",
+      "to": "feature:context-graph-project-memory",
+      "truth": "user_decision",
+      "confidence": 0.9
+    }
+  ]
+}

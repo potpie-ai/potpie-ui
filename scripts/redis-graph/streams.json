@@ -1,0 +1,144 @@
+{
+  "subsystem": "streams",
+  "components": [
+    {
+      "slug": "streams-core",
+      "name": "Streams Core",
+      "paths": ["src/t_stream.c", "src/stream.h"],
+      "summary": "Stream type: rax-indexed listpack macro-nodes, ms-seq IDs, XADD/XRANGE/XREAD/XTRIM plus IDMP dedup",
+      "description": "Core Redis Stream data type in t_stream.c/stream.h: entries live in listpack macro-nodes indexed by a rax radix tree keyed by 128-bit streamID {ms,seq}; streamNew/streamAppendItem/streamIterator (streamIteratorStart/GetID/GetField) and streamTrim/streamTrimByLength/streamTrimByID implement XADD, XRANGE/XREVRANGE, XLEN, XREAD, XDEL, XDELEX, XTRIM (MAXLEN/MINID with ~ approx and LIMIT), XSETID, XINFO. Node splitting is governed by stream-node-max-bytes/stream-node-max-entries (STREAM_LISTPACK_MAX_SIZE cap 1GB); deleted entries become tombstones via STREAM_ITEM_FLAG_DELETED and max_deleted_entry_id/first_id track the gap. This fork also adds IDMP idempotent-producer dedup (idmpProducer/idmpEntry, XXH128 auto-hash via createIdempotencyHash, XADD IDMP/IDMPAUTO, XCFGSET IDMP-DURATION/IDMP-MAXSIZE, XIDMPRECORD, iids_added/iids_duplicates stats). Searchable as 'stream listpack node', 'stream ID ms-seq', 'XADD trim MAXLEN', 'stream tombstone', 'idempotent producer dedup'; symptoms: 'ID specified in XADD is equal or smaller' errors, memory growth from oversized macro-nodes, approx-trim leaving up to 100*stream-node-max-entries extra entries.",
+      "part_of": "service:redis-server",
+      "depends_on": ["rax", "listpack", "sds", "dict", "object-system", "keyspace", "keyspace-notifications", "blocked-clients", "server-core"],
+      "uses_deps": ["xxhash"],
+      "config_vars": ["stream-node-max-entries", "stream-node-max-bytes", "stream-idmp-duration", "stream-idmp-maxsize"],
+      "loc": 6327
+    },
+    {
+      "slug": "stream-consumer-groups",
+      "name": "Stream Consumer Groups & PEL",
+      "paths": ["src/t_stream.c", "src/stream.h"],
+      "summary": "XGROUP/XREADGROUP/XACK/XCLAIM/XAUTOCLAIM/XPENDING/XNACK: PEL, NACK zone, per-consumer delivery tracking",
+      "description": "Consumer-group layer in t_stream.c: streamCG holds last_id, entries_read (see streamEstimateDistanceFromFirstEverEntry for lag math), a rax PEL of streamNACK records (delivery_time, delivery_count, owning consumer) shared with per-consumer PELs (streamConsumer), plus a time-ordered doubly-linked PEL list (pel_time_head/pel_time_tail) giving O(1) access to oldest pending entries for XCLAIM/XAUTOCLAIM. Implements XGROUP CREATE/SETID/DESTROY/CREATECONSUMER/DELCONSUMER, XREADGROUP (NOACK, '>' vs history reads), XACK, XACKDEL (KEEPREF|DELREF|ACKED with per-ID statuses XACKDEL_DELETED/STILL_REFERENCED), XPENDING, XCLAIM, XAUTOCLAIM, and this fork's XNACK key group SILENT|FAIL|FATAL IDS ... [RETRYCOUNT][FORCE], which disowns entries (consumer=NULL, delivery_time=0) into a 'NACK zone' at the PEL head delimited by pel_nack_tail (pelListInsertNacked/pelListNackedCount); FATAL sets delivery_count=LLONG_MAX. A stream-level cgroups_ref rax maps entry IDs to referencing groups (streamLinkCGroupToEntry/streamCleanupEntryCGroupRefs) so DELREF/ACKED trim-delete strategies work. Searchable as 'pending entries list', 'PEL', 'NOGROUP error', 'consumer group lag', 'nack requeue', 'poison message retry'; symptoms: unbounded PEL growth, messages stuck pending after consumer crash, XAUTOCLAIM deleted-entry cleanup.",
+      "part_of": "service:redis-server",
+      "depends_on": ["streams-core", "rax", "adlist", "sds", "blocked-clients", "keyspace-notifications"],
+      "loc": 2800
+    },
+    {
+      "slug": "stream-dlq",
+      "name": "Stream Dead-Letter Queue (PLANNED)",
+      "paths": ["STREAM_DLQ_IMPLEMENTATION_PLAN.md"],
+      "summary": "PLANNED XDLQ command family: quarantine, inspect, replay, purge poisoned consumer-group entries",
+      "description": "Planned (in progress, not yet in src/) first-class dead-letter workflow for Streams consumer groups per STREAM_DLQ_IMPLEMENTATION_PLAN.md: an XDLQ container command with MOVE/LIST/INFO/REPLAY/PURGE/HELP subcommands storing group-scoped DLQ metadata keyed by stream ID (reason string, last consumer, delivery count, moved-at ms, replay count). Dead-lettered entries are a quarantined state stronger than the existing XNACK 'nacked zone': XCLAIM/XAUTOCLAIM must skip them, they leave the XPENDING detailed view, are not ackable until replayed, and XDLQ REPLAY reinserts the original entry ID into the group PEL owned by a target consumer. Plan mandates replication/AOF/RDB fidelity (prefer command rewriting over new encodings), per-ID status replies (moved/already-dead-lettered/not-found/not-pending), cheap XDLQ INFO (dlq-count, first/last-dlq-id, oldest-dlq-age-ms) and XINFO STREAM FULL summary fields; motivated by redis/redis#7386. Searchable as 'dead letter queue', 'DLQ', 'poison message quarantine', 'XDLQ MOVE REPLAY', 'failed message replay'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["stream-consumer-groups", "streams-core"],
+      "loc": 717
+    }
+  ],
+  "config_vars": [
+    {
+      "name": "stream-node-max-entries",
+      "summary": "Max entries per stream listpack macro-node before a new rax node is started",
+      "description": "When a stream listpack macro-node reaches this many entries, streamAppendItem starts a new rax node (server.stream_node_max_entries check in t_stream.c); 0 disables the entry-count limit. Also bounds approximate trimming: XTRIM/XADD with '~' may leave up to 100*stream-node-max-entries extra entries. Larger values pack more entries per node (less rax overhead, slower per-node scans).",
+      "configures": "streams-core",
+      "default": "100"
+    },
+    {
+      "name": "stream-node-max-bytes",
+      "summary": "Max byte size of a stream listpack macro-node before a new rax node is started",
+      "description": "Byte ceiling for each stream listpack macro-node (server.stream_node_max_bytes in streamAppendItem); when exceeded a new node is appended to the rax. Preallocation is clamped to STREAM_LISTPACK_MAX_PRE_ALLOCATE (4KB) and nodes are hard-capped at STREAM_LISTPACK_MAX_SIZE (1GB) to avoid listpack header overflow. 0 means no byte limit.",
+      "configures": "streams-core",
+      "default": "4kb"
+    },
+    {
+      "name": "stream-idmp-duration",
+      "summary": "Default retention window (seconds) for IDMP idempotent-producer dedup records",
+      "description": "Server-wide default for how long per-producer IDMP idempotency IDs (IIDs) are tracked for XADD IDMP/IDMPAUTO deduplication; copied into each stream at streamNew (s->idmp_duration) and overridable per key via XCFGSET IDMP-DURATION. Bounded by CONFIG_STREAM_IDMP_MIN/MAX_DURATION in config.c.",
+      "configures": "streams-core",
+      "default": "100"
+    },
+    {
+      "name": "stream-idmp-maxsize",
+      "summary": "Default max tracked IIDs per IDMP producer before oldest entries are evicted",
+      "description": "Server-wide default cap on idempotency IDs retained per idmpProducer for XADD dedup (s->idmp_max_entries, enforced via idmpEvictOldestEntry); overridable per stream with XCFGSET IDMP-MAXSIZE. Prevents unbounded memory growth from producers emitting unique IIDs.",
+      "configures": "streams-core",
+      "default": "100"
+    }
+  ],
+  "features": [
+    {
+      "slug": "consumer-groups",
+      "name": "Stream Consumer Groups",
+      "summary": "Cooperative stream consumption with per-group cursors, pending-entry tracking, claim/reclaim and NACK requeue",
+      "description": "Lets multiple named consumers share a stream via XGROUP-created groups: each group tracks last_id/entries_read and a PEL of unacknowledged deliveries; consumers read with XREADGROUP, acknowledge with XACK/XACKDEL, recover stuck work with XCLAIM/XAUTOCLAIM, inspect with XPENDING/XINFO, and (in this fork) requeue failures with XNACK SILENT|FAIL|FATAL into an immediately-claimable NACK zone. Foundation the planned XDLQ dead-letter workflow layers on.",
+      "lifecycle": "active",
+      "implemented_in": ["stream-consumer-groups"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "streams-dlq",
+      "name": "Stream Dead-Letter Workflow (XDLQ)",
+      "summary": "In-progress XDLQ command family to quarantine, inspect, replay and purge failed consumer-group entries",
+      "description": "Planned feature (STREAM_DLQ_IMPLEMENTATION_PLAN.md; no XDLQ code in src/ yet) adding operator-grade dead-letter handling to consumer groups: XDLQ MOVE quarantines poisoned entries with failure metadata (reason, consumer, delivery count, moved-at), XDLQ LIST/INFO expose bounded inspection and cheap summaries, XDLQ REPLAY returns entries to the claimable PEL for a chosen consumer preserving original IDs, XDLQ PURGE removes metadata. Claim paths and XPENDING must skip quarantined entries; replication/AOF/RDB must reconstruct DLQ state. Phased plan: command skeleton, internal group-level DLQ state, workflow semantics, integration with XCLAIM/XPENDING/XINFO, persistence, docs.",
+      "lifecycle": "in_progress",
+      "implemented_in": ["stream-dlq"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "stream-idempotent-producer",
+      "name": "Stream Idempotent Producer (IDMP)",
+      "summary": "XADD IDMP/IDMPAUTO deduplicates producer retries via per-producer idempotency IDs",
+      "description": "Fork feature making XADD idempotent: producers pass IDMP pid iid (or IDMPAUTO pid, which XXH128-hashes the field-value payload via createIdempotencyHash) and duplicate IIDs within the retention window return the original entry ID instead of appending again. State lives in per-stream idmpProducer rax with insertion-order eviction (stream-idmp-duration/stream-idmp-maxsize, per-key XCFGSET overrides); XIDMPRECORD replays dedup records for replication/AOF, and XINFO exposes iids_added/iids_duplicates.",
+      "lifecycle": "active",
+      "implemented_in": ["streams-core"],
+      "provided_by": "service:redis-server"
+    }
+  ],
+  "decisions": [
+    {
+      "slug": "dlq-group-scoped-not-side-stream",
+      "title": "DLQ is consumer-group-scoped metadata, not a separate stream key",
+      "statement": "Dead-letter state is stored at the consumer-group level keyed by stream ID; v1 will not route entries to a side stream key.",
+      "rationale": "A separate stream key broadens keyspace, cluster routing, replication and UX complexity; group-scoped metadata matches the semantics of 'this message failed in this consumer group' and keeps stream invariants intact.",
+      "description": "The XDLQ plan locks storage design: DLQ records (reason, consumer, delivery count, moved-at, replay count) hang off the streamCG keyed by entry ID, compatible with existing PEL ownership structures; the core stream entry payload must not carry opaque DLQ blobs.",
+      "affects": ["stream-dlq", "streams-dlq", "stream-consumer-groups"],
+      "evidence": "STREAM_DLQ_IMPLEMENTATION_PLAN.md 'Internal Design Guidance' and Q1 ('Should DLQ be implemented as a separate stream key? no for v1')"
+    },
+    {
+      "slug": "dlq-distinct-from-xnack",
+      "title": "XDLQ layers above XNACK; nacked and dead-lettered are distinct states",
+      "statement": "XNACK stays the transient 'eligible for reclaim' primitive; dead-lettered is a stronger quarantined state that normal claim/reclaim paths (XCLAIM/XAUTOCLAIM) skip and that leaves the XPENDING detailed view.",
+      "rationale": "Quarantine loses meaning if generic claim paths can bypass it; XPENDING implies active outstanding work, not quarantined work; overloading XNACK would blur a useful low-level primitive.",
+      "description": "State model decision in the DLQ plan: entries move normal-pending -> nacked/unowned -> dead-lettered -> replayed, with DLQ entries invisible to XCLAIM/XAUTOCLAIM/XPENDING iteration and not ackable until replayed; visibility comes via XDLQ INFO/LIST and XINFO STREAM FULL summary fields (dlq-count, first/last-dlq-id).",
+      "affects": ["stream-dlq", "streams-dlq", "stream-consumer-groups"],
+      "evidence": "STREAM_DLQ_IMPLEMENTATION_PLAN.md 'State Model', 'Interaction With Existing Commands', Q2/Q3/Q4 answers"
+    },
+    {
+      "slug": "dlq-replay-preserves-entry-id",
+      "title": "XDLQ REPLAY reuses the original entry ID instead of creating a new stream entry",
+      "statement": "Replay removes DLQ state and reinserts the same stream ID into the group PEL owned by the target consumer; no new entry is appended.",
+      "rationale": "Preserving the original entry ID keeps semantics simple, avoids producer-side confusion, and keeps replay explicit and deterministic with per-ID result reporting.",
+      "description": "Replay semantics locked in the plan: after XDLQ REPLAY the message is owned by the specified consumer, appears in normal XPENDING again, disappears from XDLQ LIST, and replay accounting (replay count) is updated; lower-risk persistence via command rewriting is preferred over richer metadata or new encodings.",
+      "affects": ["stream-dlq", "streams-dlq"],
+      "evidence": "STREAM_DLQ_IMPLEMENTATION_PLAN.md 'XDLQ REPLAY' section, Q5 ('Should replay create a brand new stream entry? no for v1') and Q8"
+    },
+    {
+      "slug": "pel-time-ordered-list-nack-zone",
+      "title": "PEL keeps a time-ordered doubly-linked list with a NACK zone at its head",
+      "statement": "Every streamCG maintains pel_time_head/pel_time_tail ordering streamNACKs by delivery_time for O(1) oldest-entry access, with an XNACK-populated 'NACK zone' (up to pel_nack_tail) at the head whose entries have delivery_time=0 and no owner.",
+      "rationale": "XCLAIM/XAUTOCLAIM need the oldest pending entries efficiently without rax scans, and NACKed entries must be immediately claimable ahead of all time-ordered entries while staying structurally intact during inserts.",
+      "description": "Code-evidenced fork design in stream.h/t_stream.c: streamNACK gains pel_prev/pel_next; pelListInsertSorted/pelListUnlink/pelListInsertNacked/pelListNackedCount maintain the list; new entries are never placed before pel_nack_tail so the NACK zone stays intact; XINFO reports the nacked-entries count.",
+      "affects": ["stream-consumer-groups", "consumer-groups"],
+      "evidence": "src/stream.h streamCG comments (pel_time_head/pel_time_tail/pel_nack_tail, 'O(1) access to oldest entries') and src/t_stream.c pelListInsertNacked comment 'The NACK zone occupies positions from pel_time_head to pel_nack_tail'"
+    }
+  ],
+  "documents": [
+    {
+      "slug": "stream-dlq-implementation-plan",
+      "title": "Stream Dead-Letter Workflow Implementation Plan",
+      "path": "STREAM_DLQ_IMPLEMENTATION_PLAN.md",
+      "summary": "717-line engineering contract for the planned XDLQ command family: semantics, state model, phases, tests",
+      "description": "Implementation handoff doc specifying the XDLQ MOVE/LIST/INFO/REPLAY/PURGE surface, group-scoped metadata model, interactions with XPENDING/XCLAIM/XAUTOCLAIM/XACK/XNACK, replication/AOF/RDB requirements, per-ID reply shapes, error handling, six delivery phases (design lock through docs polish), expected file impact (src/t_stream.c, src/commands/xdlq*.json, tests/unit/type/stream-dlq.tcl), and Q&A locking key tradeoffs. The authoritative source for stream-dlq scope; cites redis/redis#7386 as demand.",
+      "documents": ["stream-dlq", "streams-dlq", "stream-consumer-groups"]
+    }
+  ]
+}

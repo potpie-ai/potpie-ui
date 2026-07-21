@@ -1,0 +1,248 @@
+{
+  "subsystem": "core-runtime",
+  "components": [
+    {
+      "slug": "server-core",
+      "name": "Server Core",
+      "paths": ["src/server.c", "src/server.h"],
+      "summary": "Main server lifecycle: main(), initServer, serverCron, beforeSleep, and the processCommand/call dispatch path.",
+      "description": "Owns the redis-server process lifecycle and global state (struct redisServer server): main() -> initServerConfig/initServer/initListeners -> aeMain(server.el). serverCron (driven by 'hz', run_with_period macro) handles clientsCron, replicationCron, child-info collection and stats; beforeSleep/afterSleep flush AOF, drain TLS/compression pending data, handle blocked clients and pending writes each event-loop cycle, with a reduced re-entrant path guarded by ProcessingEventsWhileBlocked (processEventsWhileBlocked during RDB/AOF load). Command execution flows preprocessCommand -> processCommand -> call(); searchable as 'command dispatch', 'server cron', 'beforeSleep', 'event loop cycle', 'main loop stall'. Related directives: hz, dynamic-hz; failure symptoms: latency spikes when cron tasks or beforeSleep work (AOF fsync, expired-key cycles) run long.",
+      "part_of": "service:redis-server",
+      "depends_on": ["event-loop", "networking", "command-table", "config-engine", "connection-layer", "io-threads", "background-io", "keyspace", "object-system", "expire-cycle", "eviction", "zmalloc-layer"],
+      "config_vars": ["hz", "dynamic-hz"],
+      "loc": 8401
+    },
+    {
+      "slug": "event-loop",
+      "name": "Event Loop (ae)",
+      "paths": ["src/ae.c", "src/ae.h"],
+      "summary": "Self-contained event-driven library multiplexing socket I/O and timers; aeMain/aeProcessEvents drive everything.",
+      "description": "Minimal event library (originally written for the Jim Tcl interpreter) providing aeEventLoop with file events (aeFileEvent/aeFiredEvent) and timer events; aeCreateEventLoop, aeCreateFileEvent, aeCreateTimeEvent, aeProcessEvents, aeMain, plus aeSetBeforeSleepProc/aeSetAfterSleepProc hooks used by server-core and by each IO thread. The multiplexing backend is chosen at compile time by #ifdef in performance order: evport > epoll > kqueue > select (ae_evport.c/ae_epoll.c/ae_kqueue.c/ae_select.c are #included, not linked). Searchable as 'event loop', 'multiplexing backend', 'aeApiPoll', 'timer resolution', 'busy loop'; uses monotonic clock (monotonicInit).",
+      "part_of": "service:redis-server",
+      "depends_on": ["zmalloc-layer"],
+      "uses_adapters": ["ae-epoll", "ae-kqueue", "ae-select", "ae-evport"],
+      "loc": 516
+    },
+    {
+      "slug": "networking",
+      "name": "Client Networking",
+      "paths": ["src/networking.c"],
+      "summary": "Client lifecycle, RESP request parsing, reply construction, and output-buffer management (networking.c).",
+      "description": "Implements createClient/freeClient, readQueryFromClient -> processInputBuffer -> processMultibulkBuffer/processInlineBuffer (RESP vs inline protocol), and the reply path: addReply into a fixed c->buf (PROTO_REPLY_CHUNK_BYTES) that overflows into a reply block list, drained by writeToClient/handleClientsWithPendingWrites (with _writeToClientSlave/_writeToClientNonSlave split and an IO-thread variant for replicas). closeClientOnOutputBufferLimitReached enforces client-output-buffer-limit; helloCommand switches clients between RESP2/RESP3 (c->resp) and addReplyPushLen emits RESP3 push frames. Searchable as 'client output buffer', 'obuf limit', 'pending writes', 'protocol error', 'query buffer', 'CLIENT KILL'; directives: client-output-buffer-limit, maxmemory-clients, proto-max-bulk-len, tcp-keepalive.",
+      "part_of": "service:redis-server",
+      "depends_on": ["connection-layer", "event-loop", "server-core", "io-threads", "sds", "adlist"],
+      "exposes_interfaces": ["resp3"],
+      "config_vars": ["client-output-buffer-limit", "maxmemory-clients", "tcp-keepalive"],
+      "loc": 6004
+    },
+    {
+      "slug": "connection-layer",
+      "name": "Connection Abstraction Layer",
+      "paths": ["src/connection.c", "src/connection.h", "src/anet.c", "src/socket.c", "src/unix.c"],
+      "summary": "ConnectionType vtable abstracting TCP/Unix/TLS transports over anet.c low-level socket helpers.",
+      "description": "connection.c/h define the ConnectionType function table (ae_handler, accept_handler, read/write/writev, listen, addr) and connTypeRegister; socket.c registers CT_Socket (tcp), unix.c registers CT_Unix, tls.c registers CT_TLS, so networking code is transport-agnostic. Connection state machine CONN_STATE_CONNECTING/ACCEPTING/CONNECTED/CLOSED plus CONN_FLAG_WRITE_BARRIER; anet.c ('basic TCP socket stuff made a bit less boring') provides anetTcpServer, anetUnixServer, anetNonBlock, keepalive and DNS helpers. Searchable as 'connection type', 'listener', 'accept handler', 'bind', 'unix socket'; directives: port, bind, tcp-backlog, unixsocket, unixsocketperm; symptoms: 'Could not create server TCP listening socket', accept backlog overflow.",
+      "part_of": "service:redis-server",
+      "depends_on": ["event-loop"],
+      "config_vars": ["port", "tcp-backlog", "unixsocket", "unixsocketperm"],
+      "loc": 812
+    },
+    {
+      "slug": "tls-layer",
+      "name": "TLS Layer",
+      "paths": ["src/tls.c"],
+      "summary": "OpenSSL-backed CT_TLS connection type; can be built into the core or as a separate module.",
+      "description": "Implements the CT_TLS ConnectionType over OpenSSL: createSSLContext builds server/client SSL_CTX (redis_tls_ctx/redis_tls_client_ctx) from redisTLSContextConfig, with session caching, keyfile-password callbacks, and TLSv1.3 detection; compiled in-core or as a module depending on USE_OPENSSL/BUILD_TLS_MODULE. Because TLS can buffer decrypted bytes, beforeSleep calls connTypeProcessPendingData/connTypeHasPendingData to drain pending reads and avoid sleeping on hidden data. Searchable as 'TLS handshake failure', 'certificate reload', 'tls-port', 'SSL_ERROR'; directives: tls-port, tls-cert-file, tls-key-file, tls-ciphers, tls-auth-clients, tls-replication, tls-cluster.",
+      "part_of": "service:redis-server",
+      "depends_on": ["connection-layer", "event-loop", "config-engine"],
+      "uses_adapters": ["openssl-tls"],
+      "config_vars": ["tls-port", "tls-cert-file", "tls-ciphers", "tls-auth-clients", "tls-replication", "tls-cluster"],
+      "loc": 1297
+    },
+    {
+      "slug": "io-threads",
+      "name": "IO Threads",
+      "paths": ["src/iothread.c"],
+      "summary": "Multi-threaded I/O: per-thread event loops offload socket reads, RESP parsing, and writes; commands still run on the main thread.",
+      "description": "iothread.c (2024 redesign) gives each IOThread its own aeEventLoop and IOThreadBeforeSleep; clients are pinned via assignClientToIOThread/fetchClientFromIOThread and exchanged through mutex-protected pending lists plus eventNotifier wakeups (enqueuePendingClientsToMainThread, handleClientsFromMainThread). IO threads perform read(2), protocol parsing (CLIENT_IO_PENDING_COMMAND handoff), reply writing and per-client cron, while processClientsFromIOThread executes the parsed commands on the main thread — with prefetchIOThreadCommands batching memory prefetch — so command execution stays single-threaded and race-free. Searchable as 'threaded I/O', 'io-threads', 'client handoff', 'running_tid', 'IO thread pause'; directive: io-threads (immutable, default 1; io-threads-do-reads is now deprecated).",
+      "part_of": "service:redis-server",
+      "depends_on": ["event-loop", "networking", "connection-layer", "memory-prefetch", "repl-compression"],
+      "config_vars": ["io-threads"],
+      "loc": 1080
+    },
+    {
+      "slug": "resp-protocol",
+      "name": "RESP Reply Parser & CallReply",
+      "paths": ["src/resp_parser.c", "src/call_reply.c"],
+      "summary": "Callback-based RESP2/RESP3 reply parser and the opaque CallReply object used by RM_Call and Lua redis.call().",
+      "description": "resp_parser.c is a callback-driven parser (parseReply with per-type callbacks: array/set/map/attribute/big-number/verbatim) for replies generated by Redis itself — explicitly documented as NOT safe for parsing user input; call_reply.c wraps it in the opaque CallReply struct (REPLY_FLAG_ROOT/PARSED/RESP3) with lazy parsing and nested sub-reply access, consumed by the module API (RM_Call) and Lua scripting. Searchable as 'RESP parser', 'CallReply', 'RM_Call reply', 'RESP3 map/set/attribute', 'reply protocol blob'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["server-core", "sds"],
+      "exposes_interfaces": ["resp3"],
+      "loc": 540
+    },
+    {
+      "slug": "command-table",
+      "name": "Command Table",
+      "paths": ["src/commands.c", "src/commands.def", "src/commands/"],
+      "summary": "Generated redisCommand table: 460 JSON specs compiled into commands.def via MAKE_CMD macros.",
+      "description": "commands.c is a 13-line shim: MAKE_CMD/MAKE_ARG macros expand commands.def (or commands_with_reply_schema.def when LOG_REQ_RES is defined) into the redisCommand/redisCommandArg tables consumed by lookupCommand and COMMAND DOCS/INFO. The .def file is generated by utils/generate-command-code.py from ~460 per-command JSON files in src/commands/ carrying arity, flags, ACL categories, key specs, history and tips; cli_commands.c reuses the same .def for redis-cli. Searchable as 'command table', 'command flags', 'key specs', 'arity', 'commands.def generation', 'unknown command'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["server-core", "acl-engine"],
+      "loc": 12000
+    },
+    {
+      "slug": "config-engine",
+      "name": "Config Engine",
+      "paths": ["src/config.c"],
+      "summary": "Typed config registry (standardConfig) behind redis.conf parsing and CONFIG GET/SET/REWRITE.",
+      "description": "config.c declares every directive in a static_configs table via createBoolConfig/createIntConfig/createEnumConfig/createStringConfig/createSpecialConfig macros with flags (MODIFIABLE_CONFIG, IMMUTABLE_CONFIG, DEBUG_CONFIG), bounds, defaults and apply/update callbacks (e.g. updateHZ, applyTLSPort); loadServerConfig/loadServerConfigFromString parse redis.conf and stdin, configSetCommand/configGetCommand implement CONFIG SET/GET with glob matching, and rewriteConfigState powers CONFIG REWRITE preserving user comments; a deprecatedConfig list silently accepts retired directives like io-threads-do-reads. Searchable as 'config directive', 'CONFIG REWRITE', 'immutable config', 'FATAL CONFIG FILE ERROR', 'unknown directive'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["server-core", "sds", "background-io"],
+      "loc": 3905
+    },
+    {
+      "slug": "background-io",
+      "name": "Background I/O (bio)",
+      "paths": ["src/bio.c", "src/childinfo.c"],
+      "summary": "Dedicated worker threads for blocking ops: deferred close(2), AOF fsync, lazy-free; plus fork-child info pipe.",
+      "description": "bio.c runs fixed worker threads (BIO_WORKER_CLOSE_FILE, BIO_WORKER_AOF_FSYNC, BIO_WORKER_LAZY_FREE) each draining a FIFO job queue in insertion order; bioInit/bioSubmitJob plus bioCreateCloseJob, bioCreateCloseAofJob, bioCreateFsyncJob, bioCreateLazyFreeJob, and completion-callback jobs (bioCreateCompRq / BIO_COMP_RQ_*) that notify the main thread through a pipe read in the event loop; bioDrainWorker/bioKillThreads used at shutdown and by DEBUG. childinfo.c opens a child->parent pipe (openChildInfoPipe) reporting copy-on-write bytes and progress from RDB/AOF fork children, polled by serverCron's receiveChildInfo. Searchable as 'bio threads', 'background fsync', 'lazyfree thread', 'slow close', 'copy-on-write reporting'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["server-core", "lazyfree", "aof-persistence"],
+      "loc": 449
+    }
+  ],
+  "interfaces": [
+    {
+      "slug": "resp3",
+      "name": "RESP2/RESP3 Wire Protocol",
+      "summary": "Redis serialization protocol spoken on every client connection; RESP3 adds maps, sets, push and attribute frames.",
+      "description": "The request/reply protocol clients speak over TCP/Unix/TLS: multibulk requests parsed by processMultibulkBuffer, replies built by the addReply* family. HELLO 2|3 (helloCommand) selects the per-client version (c->resp); RESP3 adds typed maps (%), sets (~), doubles, big numbers, verbatim strings, attributes, and out-of-band push frames (addReplyPushLen) used by client-side caching and pub/sub. Same grammar is re-parsed internally by resp_parser.c for RM_Call/Lua replies.",
+      "exposed_by": "service:redis-server",
+      "implemented_by": ["networking", "resp-protocol"]
+    }
+  ],
+  "adapters": [
+    {
+      "slug": "ae-epoll",
+      "name": "ae epoll backend",
+      "summary": "Linux epoll(7) multiplexing backend for the ae event loop (ae_epoll.c), selected when HAVE_EPOLL.",
+      "description": "aeApiCreate/aeApiPoll wrappers over epoll_create/epoll_ctl/epoll_wait; the default and fastest general backend on Linux, compiled in via #ifdef HAVE_EPOLL in ae.c.",
+      "used_by": ["event-loop"]
+    },
+    {
+      "slug": "ae-kqueue",
+      "name": "ae kqueue backend",
+      "summary": "BSD/macOS kqueue multiplexing backend (ae_kqueue.c), selected when HAVE_KQUEUE.",
+      "description": "aeApi* implementation over kqueue/kevent for FreeBSD, OpenBSD and macOS builds; chosen after evport/epoll in ae.c's compile-time preference order.",
+      "used_by": ["event-loop"]
+    },
+    {
+      "slug": "ae-select",
+      "name": "ae select backend",
+      "summary": "Portable select(2) fallback backend (ae_select.c) used when no better multiplexer exists.",
+      "description": "Lowest-performance fallback in ae.c's backend ladder; limited by FD_SETSIZE, used only on platforms without evport/epoll/kqueue.",
+      "used_by": ["event-loop"]
+    },
+    {
+      "slug": "ae-evport",
+      "name": "ae evport backend",
+      "summary": "illumos/Solaris event-ports backend (ae_evport.c), highest priority in the compile-time ladder.",
+      "description": "Contributed by Joyent for illumos event ports (port_create/port_getn); listed first in ae.c's 'ordered by performances, descending' backend selection.",
+      "used_by": ["event-loop"]
+    },
+    {
+      "slug": "openssl-tls",
+      "name": "OpenSSL",
+      "summary": "OpenSSL library backing tls.c: SSL_CTX setup, handshakes, session caching, cert/key loading.",
+      "description": "tls.c targets OpenSSL >= 1.0 with version-conditional init (OPENSSL_config vs OPENSSL_init_crypto), RAND seeding checks, and locking callbacks for pre-1.1.0; encapsulated so it can ship as a loadable TLS module (BUILD_TLS_MODULE).",
+      "used_by": ["tls-layer"]
+    }
+  ],
+  "config_vars": [
+    {"name": "hz", "summary": "serverCron frequency (calls per second).", "description": "Controls how often serverCron runs and the granularity of run_with_period tasks (client timeouts, expired-key sampling, replicationCron); updateHZ callback applies changes live. Higher hz = more CPU, lower latency for background tasks.", "configures": "server-core", "default": "10"},
+    {"name": "dynamic-hz", "summary": "Adapt effective hz to the number of connected clients.", "description": "When enabled, the effective cron frequency scales with client count so clientsCron can visit every client in bounded time without wasting CPU on idle instances.", "configures": "server-core", "default": "yes"},
+    {"name": "io-threads", "summary": "Number of I/O threads (1 = classic single-threaded I/O).", "description": "IMMUTABLE_CONFIG, range 1-128. Above 1, initThreadedIO spawns IOThreadMain threads each with its own event loop, handling reads, RESP parsing and writes; redis.conf advises leaving at least one spare core and enabling only under real CPU pressure.", "configures": "io-threads", "default": "1"},
+    {"name": "client-output-buffer-limit", "summary": "Per-class (normal/replica/pubsub) hard and soft output buffer limits.", "description": "Special multi-arg config enforced by closeClientOnOutputBufferLimitReached: clients exceeding the hard limit, or the soft limit for soft-seconds, are disconnected — the classic cause of 'client scheduled to be closed ASAP for overcoming of output buffer limits' and replica disconnect loops.", "configures": "networking", "default": "normal 0 0 0 slave 256mb 64mb 60 pubsub 32mb 8mb 60"},
+    {"name": "maxmemory-clients", "summary": "Total memory cap across all client buffers (client eviction).", "description": "SSizeT config (bytes or percent of maxmemory); when aggregate client query/output buffers exceed it, Redis evicts the highest-usage clients (applyClientMaxMemoryUsage, memory usage buckets updated by updateClientMemUsageAndBucket).", "configures": "networking", "default": "0"},
+    {"name": "tcp-backlog", "summary": "listen(2) backlog for accept queues.", "description": "IMMUTABLE_CONFIG passed to anetTcpServer; must be raised together with /proc/sys/net/core/somaxconn or bursts of connections get dropped in SYN/accept queues.", "configures": "connection-layer", "default": "511"},
+    {"name": "port", "summary": "TCP listening port; 0 disables TCP.", "description": "Applied via updatePort which rebuilds the connListener for CT_Socket; distinct from tls-port which drives the CT_TLS listener.", "configures": "connection-layer", "default": "6379"},
+    {"name": "tls-port", "summary": "TLS listening port; 0 disables TLS.", "description": "applyTLSPort creates the CT_TLS listener; requires tls-cert-file/tls-key-file to be configured or connections fail at handshake.", "configures": "tls-layer", "default": "0"}
+  ],
+  "features": [
+    {
+      "slug": "threaded-io",
+      "name": "Threaded I/O",
+      "summary": "Multi-core scaling of socket I/O and protocol parsing without sharding or pipelining.",
+      "description": "Per-thread event loops (iothread.c) take over read(2), RESP parsing and write(2) for assigned clients while command execution remains on the main thread; enabled by io-threads > 1. Redis.conf frames it as an alternative to pipelining/multi-instance sharding for boxes with 4+ cores.",
+      "lifecycle": "active",
+      "implemented_in": ["io-threads", "networking", "event-loop"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "tls-support",
+      "name": "TLS Connections",
+      "summary": "Encrypted client, replication, and cluster-bus connections via the CT_TLS connection type.",
+      "description": "TLS terminates inside the server through the pluggable connection layer; tls-replication and tls-cluster extend it to replica links and the cluster bus. Buildable in-core or as a module (USE_OPENSSL/BUILD_TLS_MODULE).",
+      "lifecycle": "active",
+      "implemented_in": ["tls-layer", "connection-layer"],
+      "provided_by": "service:redis-server"
+    }
+  ],
+  "decisions": [
+    {
+      "slug": "compile-time-multiplexer-selection",
+      "title": "Select the I/O multiplexing backend at compile time, ordered by performance",
+      "statement": "ae.c #includes exactly one backend (evport > epoll > kqueue > select) chosen by preprocessor checks rather than runtime dispatch.",
+      "rationale": "Avoids virtual-dispatch overhead in the hottest loop and keeps each backend a tiny drop-in file implementing the same aeApi* functions.",
+      "description": "The ae.c comment 'Include the best multiplexing layer supported by this system. The following should be ordered by performances, descending' documents the explicit ladder: HAVE_EVPORT -> HAVE_EPOLL -> HAVE_KQUEUE -> select fallback.",
+      "affects": ["event-loop"],
+      "evidence": "src/ae.c lines 30-44: '#ifdef HAVE_EVPORT ... #include \"ae_evport.c\" ... #include \"ae_select.c\"' with the ordering comment."
+    },
+    {
+      "slug": "io-threads-no-command-execution",
+      "title": "IO threads offload reads, parsing, and writes — never command execution",
+      "statement": "IO threads own socket I/O and RESP parsing for their clients; parsed commands are handed to the main thread (processClientsFromIOThread) which alone touches shared server data.",
+      "rationale": "Keeps the data plane single-threaded and lock-free for keyspace access while parallelizing the dominant syscall/parse cost; clients marked CLIENT_IO_READ/WRITE_ENABLED are disabled before handoff to avoid races.",
+      "description": "iothread.c enforces the boundary with running_tid switching, mutex-guarded pending lists, and asserts that a client is neither readable nor writable in an IO thread while the main thread processes it; redis.conf documents that threads cover 'writes... but also reads and protocol parsing'.",
+      "affects": ["io-threads", "networking", "server-core"],
+      "evidence": "redis.conf THREADED I/O section ('we not only use threads for writes... but also use threads for reads and protocol parsing') and src/iothread.c processClientsFromIOThread comment 'The main thread processes the clients from IO threads... IO threads never free client since this operation access much server data.'"
+    },
+    {
+      "slug": "connection-type-vtable",
+      "title": "Pluggable ConnectionType vtable unifies TCP, Unix, and TLS transports",
+      "statement": "All transports register a ConnectionType (function table with ae_handler, accept, read/write/writev, listen) via connTypeRegister, so networking.c is transport-agnostic.",
+      "rationale": "Lets TLS ship as an optional module and keeps encryption/socket details out of client logic; the same abstraction supports replication and cluster links over any transport.",
+      "description": "connection.h defines the ConnectionType struct with init/cleanup/configure and I/O hooks; socket.c (CT_Socket), unix.c (CT_Unix) and tls.c (CT_TLS) each register themselves into the static connTypes[CONN_TYPE_MAX] array.",
+      "affects": ["connection-layer", "tls-layer", "networking"],
+      "evidence": "src/connection.h ConnectionType struct definition; src/connection.c connTypeRegister; CT_Socket/CT_Unix/CT_TLS registrations in src/socket.c:467, src/unix.c:218, src/tls.c:403."
+    },
+    {
+      "slug": "json-generated-command-table",
+      "title": "Command table generated from per-command JSON specs",
+      "statement": "Command metadata lives in src/commands/*.json (460 files) and is compiled by utils/generate-command-code.py into commands.def, expanded by MAKE_CMD macros in commands.c.",
+      "rationale": "Single source of truth for arity, flags, ACL categories, key specs, history and docs shared by the server, COMMAND DOCS output, and redis-cli (cli_commands.c includes the same .def).",
+      "description": "commands.c is a 13-line macro shim; a parallel commands_with_reply_schema.def exists for LOG_REQ_RES builds that validate reply schemas.",
+      "affects": ["command-table"],
+      "evidence": "src/commands.c (#include \"commands.def\" behind MAKE_CMD/MAKE_ARG), src/commands/ JSON directory, utils/generate-command-code.py."
+    },
+    {
+      "slug": "resp-parser-trusted-input-only",
+      "title": "Internal RESP parser is deliberately not hardened for user input",
+      "statement": "resp_parser.c only parses replies generated by Redis itself (RM_Call, Lua redis.call) and skips validations, trading safety checks for speed.",
+      "rationale": "The blob being parsed was just produced by the reply-writing code, so full protocol validation would be redundant on the hot module/scripting path.",
+      "description": "Header comment states: 'NOTE: This parser is designed to only handle replies generated by Redis itself. It does not perform many required validations and thus NOT SAFE FOR PARSING USER INPUT.'",
+      "affects": ["resp-protocol"],
+      "evidence": "src/resp_parser.c top-of-file comment block."
+    }
+  ],
+  "documents": [
+    {
+      "slug": "redis-conf-reference",
+      "title": "redis.conf annotated configuration reference",
+      "path": "redis.conf",
+      "summary": "Self-documenting example config; the THREADED I/O, TLS, and clients sections explain tuning rationale.",
+      "description": "The shipped redis.conf doubles as the operator manual for core-runtime directives: it explains when to enable io-threads (4+ cores, leave a spare), client-output-buffer-limit classes, TLS setup, and hz/dynamic-hz tradeoffs, and is kept in sync with config.c defaults.",
+      "documents": ["config-engine", "io-threads", "tls-layer", "networking"]
+    }
+  ]
+}

@@ -13,7 +13,7 @@ export function EventStatusBadge({ status, className }: Props) {
     <Badge
       variant="outline"
       className={cn(
-        "text-[10px] capitalize",
+        "text-[11px] font-medium",
         STATUS_COLORS[status] ?? "bg-muted text-muted-foreground",
         className,
       )}

@@ -1,0 +1,219 @@
+{
+  "subsystem": "client-features",
+  "components": [
+    {
+      "slug": "pubsub",
+      "name": "Pub/Sub Messaging",
+      "paths": ["src/pubsub.c"],
+      "summary": "SUBSCRIBE/PSUBSCRIBE/PUBLISH plus slot-scoped shard pubsub (SSUBSCRIBE/SPUBLISH) over kvstore channel dicts",
+      "description": "Implements classic and shard-level Pub/Sub via a shared 'pubsubtype' vtable struct (pubSubType/pubSubShardType) so subscribeCommand/ssubscribeCommand, pubsubPublishMessageInternal and pubsubUnsubscribeAllChannelsInternal handle both modes; global channels live in kvstore server.pubsub_channels, shard channels in server.pubsubshard_channels bound to cluster slots (pubsubShardUnsubscribeAllChannelsInSlot cleans up on slot migration). Delivers messages as RESP3 push frames or RESP2 multibulk via addReplyPubsubMessage/addReplyPubsubPatMessage with CLIENT_PUSHING; PUBSUB CHANNELS/NUMSUB/NUMPAT/SHARDCHANNELS introspect state and pubsubMemOverhead feeds MEMORY USAGE. Searchable as 'pubsub message not delivered', 'shard channel', 'pattern subscribe glob', 'CROSSSLOT ssubscribe'; pubsub client output limits come from client-output-buffer-limit pubsub class.",
+      "part_of": "service:redis-server",
+      "depends_on": ["server-core", "networking", "kvstore", "dict", "cluster-core", "cluster-slot-stats"],
+      "exposes_interfaces": ["keyspace-events"],
+      "config_vars": ["client-output-buffer-limit"],
+      "loc": 771
+    },
+    {
+      "slug": "keyspace-notifications",
+      "name": "Keyspace Event Notifications",
+      "paths": ["src/notify.c"],
+      "summary": "notify-keyspace-events flag engine publishing __keyspace@/__keyevent@ (and subkey) events over Pub/Sub",
+      "description": "notifyKeyspaceEvent/notifyKeyspaceEventWithSubkeys publish key-change events to __keyspace@<db>__:<key> and __keyevent@<db>__:<event> channels, gated by keyspaceEventsStringToFlags classes (K/E/A/g/$/l/s/h/z/x/e/t/m/d/n/o/c plus this tree's subkey classes S/T/I/V mapping to __subkeyspace@/__subkeyevent@/__subkeyspaceitem@/__subkeyspaceevent@ channels with length-prefixed '<len>:<subkey>' payloads, and GCRA 'r' rate-limit class). Always calls moduleNotifyKeyspaceEvent first (modules bypass the flag config), then short-circuits when no pubsub subscribers exist; isSubkeyNotifyEnabled decides whether callers should collect subkeys. Searchable as 'keyspace notifications not firing', 'expired event', 'notify-keyspace-events flags', '__keyevent__ del'; notifications are fire-and-forget with no delivery guarantee and default to off (notify-keyspace-events \"\").",
+      "part_of": "service:redis-server",
+      "depends_on": ["pubsub", "module-system", "sds", "server-core"],
+      "exposes_interfaces": ["keyspace-events"],
+      "config_vars": ["notify-keyspace-events"],
+      "loc": 297
+    },
+    {
+      "slug": "client-tracking",
+      "name": "Client-Side Caching / Tracking",
+      "paths": ["src/tracking.c"],
+      "summary": "CLIENT TRACKING invalidation engine: rax TrackingTable/PrefixTable, RESP3 push, BCAST mode, RESP2 redirect",
+      "description": "Implements RESP3 client-side caching invalidation: TrackingTable is a rax of keys -> rax of client IDs filled by trackingRememberKeys, and trackingInvalidateKey sends 'invalidate' push frames via sendTrackingMessage (RESP2 works only with REDIRECT to a pubsub connection on the __redis__:invalidate channel; a dead redirect target triggers a 'tracking-redir-broken' push). BCAST mode registers prefixes in PrefixTable (bcastState{keys,clients}) with checkPrefixCollisionsOrReply rejecting overlapping prefixes, batching invalidations per event-loop cycle via trackingBroadcastInvalidationMessages; supports OPTIN/OPTOUT/CACHING/NOLOOP flags (CLIENT_TRACKING_* client flags) and trackingLimitUsedSlots evicts random keys once tracking-table-max-keys is exceeded. Searchable as 'client side caching', 'invalidation message', 'CLIENT TRACKING REDIRECT', 'tracking table memory'; sendTrackingMessage pauses IO threads (pauseIOThread) when pushing into a connection owned by another thread.",
+      "part_of": "service:redis-server",
+      "depends_on": ["rax", "pubsub", "networking", "io-threads", "resp-protocol", "server-core"],
+      "config_vars": ["tracking-table-max-keys"],
+      "loc": 761
+    },
+    {
+      "slug": "blocked-clients",
+      "name": "Blocking Command Infrastructure",
+      "paths": ["src/blocked.c", "src/timeout.c"],
+      "summary": "Generic blocking for BLPOP/XREAD BLOCK/WAIT/WAITAOF: blockClient, signalKeyAsReady, rax timeout table",
+      "description": "blockClient sets CLIENT_BLOCKED with a btype (BLOCKED_LIST/ZSET/STREAM/WAIT/MODULE/LAZYFREE/POSTPONE/SHUTDOWN); blockForKeys parks clients on c->bstate.keys, writers call signalKeyAsReady, and handleClientsBlockedOnKeys + blockedBeforeSleep serve ready keys and run processUnblockedClients inside beforeSleep (unblocked clients are queued there because no readable event fires for already-read query buffers). timeout.c keeps a radix tree of encodeTimeoutKey(big-endian timeout || client pointer) entries so handleBlockedClientsTimeout wakes expired blockers in order and replyToBlockedClientTimedOut sends the null/timeout reply; blockForReplication backs WAIT, blockForAofFsync backs WAITAOF, and blockPostponeClient implements CLIENT PAUSE-style postponing until CLIENT UNPAUSE/timeout. Searchable as 'BLPOP timeout', 'blocked_clients metric', 'client stuck blocked', 'XREAD BLOCK never returns', 'CLIENT UNPAUSE'; updateStatsOnUnblock feeds commandstats, latency histograms and the slowlog for commands that finished while blocked.",
+      "part_of": "service:redis-server",
+      "depends_on": ["server-core", "event-loop", "dict", "rax", "keyspace", "cluster-core", "latency-monitor", "slowlog", "module-system"],
+      "loc": 1025
+    },
+    {
+      "slug": "transactions",
+      "name": "MULTI/EXEC Transactions",
+      "paths": ["src/multi.c"],
+      "summary": "MULTI/EXEC/DISCARD command queueing plus WATCH/UNWATCH optimistic CAS via touchWatchedKey",
+      "description": "queueMultiCommand accumulates pendingCommand pointers into c->mstate (a growable array; this tree moves parsed commands from the client's pending_cmds queue rather than copying argv) and execCommand replays them atomically, aborting with EXECABORT via execCommandAbort or returning nil when CLIENT_DIRTY_CAS/CLIENT_DIRTY_EXEC is set. WATCH implements optimistic locking: watchForKey links clients into db->watched_keys, touchWatchedKey dirties every watcher on modification, isWatchedKeyExpired handles lazily-expired keys, and touchAllWatchedKeysInDb fires on FLUSHDB/SWAPDB and cluster slot changes (slotRangeArray). Searchable as 'EXEC returned nil', 'EXECABORT', 'WATCH CAS retry', 'transaction discarded', 'commands queued'; multiStateMemOverhead reports per-client transaction memory.",
+      "part_of": "service:redis-server",
+      "depends_on": ["server-core", "keyspace", "command-table", "networking"],
+      "loc": 517
+    },
+    {
+      "slug": "acl-engine",
+      "name": "ACL Engine",
+      "paths": ["src/acl.c"],
+      "summary": "ACL users/rules/categories/selectors: rax Users table, per-selector command bitmaps, ACL LOG audit ring",
+      "description": "Access control: rax *Users maps usernames to user structs, each holding a list of aclSelector (root selector + additional selectors in parentheses) with a command-ID bitmap (ACLGetCommandID/ACLSetSelectorCommandBit), key patterns including %R~/%W~ read/write-only patterns (keyPattern), and &channel pubsub patterns. ACLSetUser/ACLSetSelector parse rules (+cmd, -@category, allkeys, resetchannels, on/off, >password hashed via ACLHashPassword SHA256, time_independent_strcmp compare); ACLAuthenticateUser/ACLCheckUserCredentials back AUTH/HELLO, ACLCheckAllPerm gates every command, and denials are recorded in the ACLLog list served by ACL LOG (capped by acllog-max-len). Categories are a 64-bit flag space (ACL_MAX_CATEGORIES, ACLAddCommandCategory lets modules register new ones); users load from aclfile or redis.conf user lines via UsersToLoad. Searchable as 'NOPERM error', 'ACL SETUSER rules', 'WRONGPASS', 'default user nopass', 'ACL selectors', 'ACL GENPASS'; related directives aclfile, acllog-max-len, acl-pubsub-default (default resetchannels), requirepass.",
+      "part_of": "service:redis-server",
+      "depends_on": ["server-core", "rax", "sds", "checksums", "command-table", "pubsub", "config-engine"],
+      "config_vars": ["aclfile", "acllog-max-len", "acl-pubsub-default", "requirepass"],
+      "loc": 3367
+    },
+    {
+      "slug": "slowlog",
+      "name": "Slowlog and Request/Response Logging",
+      "paths": ["src/slowlog.c", "src/logreqres.c"],
+      "summary": "In-memory ring of slow commands (SLOWLOG GET/RESET/LEN) plus compile-time req/res logging for RESP testing",
+      "description": "slowlogPushEntryIfNeeded appends a slowlogEntry (id, timestamp, duration, client name/peer, trimmed argv) to the server.slowlog list when execution exceeds slowlog-log-slower-than microseconds, trimming to slowlog-max-len; slowlogCreateEntry caps arguments at slowlog-entry-max-argc and truncates strings at slowlog-entry-max-string-len (configurable in this tree, upstream constants), duplicating robjs to avoid sharing with the keyspace. logreqres.c (compiled under LOG_REQ_RES, enabled by hidden req-res-logfile directive) dumps every client's argv and raw RESP2/RESP3 reply to a per-client file with an __argv_end__ marker, used to validate RESP3 coverage in tests; reqresShouldLog skips pubsub/monitor/replica links. Searchable as 'SLOWLOG GET empty', 'slow query log', 'command took too long', 'slowlog entry truncated arguments'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["server-core", "adlist", "sds", "networking"],
+      "config_vars": ["slowlog-log-slower-than", "slowlog-max-len", "slowlog-entry-max-argc", "slowlog-entry-max-string-len", "req-res-logfile"],
+      "loc": 540
+    }
+  ],
+  "interfaces": [
+    {
+      "slug": "keyspace-events",
+      "name": "Keyspace Events Channel Protocol",
+      "summary": "Pub/Sub channel naming contract for key-change events: __keyspace@<db>__, __keyevent@<db>__ and subkey variants",
+      "description": "The wire contract consumed by external watchers: SUBSCRIBE/PSUBSCRIBE to __keyspace@<db>__:<key> (message = event name) or __keyevent@<db>__:<event> (message = key name), plus this tree's subkey channels __subkeyspace@/__subkeyevent@/__subkeyspaceitem@/__subkeyspaceevent@ carrying length-prefixed '<len>:<subkey>' payloads. Event classes are selected by the notify-keyspace-events directive (K/E required to emit anything); delivery is best-effort fire-and-forget over normal or shard pubsub with no persistence, so disconnected subscribers miss events.",
+      "exposed_by": "service:redis-server",
+      "implemented_by": ["keyspace-notifications", "pubsub"]
+    }
+  ],
+  "config_vars": [
+    {
+      "name": "notify-keyspace-events",
+      "summary": "Flag string selecting which keyspace event classes are published (K/E/g/$/l/s/h/z/x/e/t/m/n/S/T/I/V/A)",
+      "description": "Parsed by keyspaceEventsStringToFlags in notify.c; must include K (keyspace) and/or E (keyevent) or nothing is emitted. 'A' aliases all class flags except K/E/m and subkey classes. Empty by default because notifications cost CPU per write; special config with custom set/get/rewrite handlers in config.c.",
+      "configures": "keyspace-notifications",
+      "default": "\"\""
+    },
+    {
+      "name": "tracking-table-max-keys",
+      "summary": "Max keys held in the client-tracking invalidation table before random keys are evicted-and-invalidated",
+      "description": "Enforced by trackingLimitUsedSlots in tracking.c: when TrackingTable exceeds this count, random keys are removed and invalidation messages sent to their trackers, bounding server-side CSC memory. 0 disables the limit.",
+      "configures": "client-tracking",
+      "default": "1000000"
+    },
+    {
+      "name": "slowlog-log-slower-than",
+      "summary": "Microsecond execution-time threshold above which a command is recorded in the slowlog",
+      "description": "Checked by slowlogPushEntryIfNeeded; negative disables slowlog entirely, 0 logs every command. I/O time is not counted, only command execution time.",
+      "configures": "slowlog",
+      "default": "10000"
+    },
+    {
+      "name": "slowlog-max-len",
+      "summary": "Maximum number of retained slowlog entries; oldest are trimmed from the tail",
+      "description": "server.slowlog list is trimmed to this length after each push in slowlogPushEntryIfNeeded; SLOWLOG RESET reclaims all memory.",
+      "configures": "slowlog",
+      "default": "128"
+    },
+    {
+      "name": "acllog-max-len",
+      "summary": "Maximum entries retained in the ACL security log served by ACL LOG",
+      "description": "Caps the ACLLog list in acl.c that records AUTH failures and NOPERM command/key/channel denials for security auditing.",
+      "configures": "acl-engine",
+      "default": "128"
+    },
+    {
+      "name": "aclfile",
+      "summary": "External file holding 'user ...' ACL definitions, enabling ACL LOAD/ACL SAVE",
+      "description": "Immutable config; mutually exclusive with user lines in redis.conf. Users parsed into UsersToLoad and applied after module load during server init (ACLInit/ACLLoadUsersAtStartup path in acl.c).",
+      "configures": "acl-engine",
+      "default": "\"\""
+    },
+    {
+      "name": "acl-pubsub-default",
+      "summary": "Whether new/reset users get allchannels or resetchannels pubsub permissions by default",
+      "description": "Enum in config.c mapping allchannels -> SELECTOR_FLAG_ALLCHANNELS; default 0 (resetchannels) so users must be granted &channel patterns explicitly, closing the pre-ACLv2 pubsub hole.",
+      "configures": "acl-engine",
+      "default": "resetchannels"
+    }
+  ],
+  "features": [
+    {
+      "slug": "keyspace-notifications",
+      "name": "Keyspace Notifications",
+      "summary": "Clients observe key modifications, expirations and evictions as Pub/Sub events, down to subkey granularity",
+      "description": "Opt-in event stream over Pub/Sub for data changes: every write path calls notifyKeyspaceEvent, and this tree extends the upstream feature with subkey-level channels (S/T/I/V flags) carrying which hash fields/members changed, plus new/overwritten/type-changed (n/o/c) classes. Used for cache invalidation, TTL-expiry triggers ('x' expired events) and audit pipelines; best-effort delivery only.",
+      "lifecycle": "active",
+      "implemented_in": ["keyspace-notifications", "pubsub"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "client-side-caching",
+      "name": "Client-Side Caching",
+      "summary": "RESP3 tracking-based invalidation lets clients cache keys locally and receive push invalidations",
+      "description": "CLIENT TRACKING on|off with REDIRECT/BCAST/PREFIX/OPTIN/OPTOUT/NOLOOP options; server remembers served keys per client-ID in a rax and pushes RESP3 'invalidate' frames (or __redis__:invalidate pubsub messages for RESP2 redirection) when keys change, flush, or are evicted from the tracking table. Memory bounded by tracking-table-max-keys.",
+      "lifecycle": "active",
+      "implemented_in": ["client-tracking"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "access-control",
+      "name": "Access Control Lists (ACL)",
+      "summary": "Named users with rule-based command, key-pattern and pubsub-channel permissions, selectors, and audit log",
+      "description": "AUTH/HELLO authenticate against the Users rax; per-user selectors grant command bits (+@category/-cmd), key patterns (~glob, %R~/%W~ read/write-only), and &channel pubsub patterns, checked on every command by ACLCheckAllPerm. ACL SETUSER/GETUSER/LIST/CAT/GENPASS/WHOAMI/LOG manage it at runtime; passwords stored as SHA256 hashes, denials audited in ACL LOG.",
+      "lifecycle": "active",
+      "implemented_in": ["acl-engine"],
+      "provided_by": "service:redis-server"
+    }
+  ],
+  "decisions": [
+    {
+      "slug": "tracking-lazy-client-cleanup",
+      "title": "Tracking table cleans up disconnected clients lazily",
+      "statement": "When a tracking client disconnects, its IDs are left in TrackingTable and garbage-collected on later invalidation passes instead of being eagerly removed.",
+      "rationale": "A client with millions of tracked keys would make disconnect O(tracked keys); storing only client IDs makes lazy removal cheap and bounds disconnect latency.",
+      "description": "disableTracking only decrements server.tracking_clients and clears CLIENT_TRACKING* flags (BCAST prefixes are the exception and are unsubscribed eagerly); stale IDs are dropped when trackingInvalidateKey walks a key's client rax and finds the client gone.",
+      "affects": ["client-tracking", "client-side-caching"],
+      "evidence": "src/tracking.c disableTracking() comment: 'we just store the ID of the client in the tracking table, so we'll remove the ID reference in a lazy way. Otherwise when a client with many entries in the table is removed, it would cost a lot of time to do the cleanup.'"
+    },
+    {
+      "slug": "unblocked-clients-beforesleep",
+      "title": "Unblocked clients are reprocessed in beforeSleep, not via the event loop",
+      "statement": "unblockClient queues clients into an unblocked_clients list drained by processUnblockedClients inside beforeSleep rather than waiting for socket readability.",
+      "rationale": "The pending commands were already read into the query buffer while the client was blocked, so no 'readable' event will ever fire for them; beforeSleep is the only reliable hook to resume parsing.",
+      "description": "Documented in the blocked.c header API comment; CLIENT_UNBLOCKED flag marks membership in the list, and blockedBeforeSleep ties handleClientsBlockedOnKeys + timeout processing into every event-loop iteration.",
+      "affects": ["blocked-clients"],
+      "evidence": "src/blocked.c header comment: 'It puts the client into a list of just unblocked clients that are processed ASAP in the beforeSleep() event loop callback... otherwise there is no readable event fired, we already read the pending commands.'"
+    },
+    {
+      "slug": "bcast-prefixes-no-overlap",
+      "title": "BCAST tracking prefixes must not overlap per client",
+      "statement": "CLIENT TRACKING BCAST rejects prefix sets where any prefix is a prefix of another (for the same client), returning an error instead of registering them.",
+      "rationale": "Overlapping prefixes would emit duplicate invalidation messages for the same key; rejecting collisions up front keeps the invariant that each key change maps to at most one bcastState per client.",
+      "description": "checkPrefixCollisionsOrReply compares each new prefix against the client's existing client_tracking_prefixes rax and against the other prefixes in the same command using stringCheckPrefix.",
+      "affects": ["client-tracking"],
+      "evidence": "src/tracking.c checkPrefixCollisionsOrReply(): 'A collision is defined as two prefixes that will emit an invalidation for the same key' and error reply 'Prefixes for a single client must not overlap.'"
+    },
+    {
+      "slug": "slowlog-dup-argv",
+      "title": "Slowlog duplicates argv objects instead of sharing them",
+      "statement": "slowlogCreateEntry deep-copies non-shared string objects rather than retaining references to command argv.",
+      "rationale": "Slowlog entries outlive the command; sharing robjs with objects stored in keys races with FLUSHALL ASYNC lazy-freeing them from another thread.",
+      "description": "Also trims oversize entries: at most slowlog-entry-max-argc arguments (last slot becomes '... (N more arguments)') and slowlog-entry-max-string-len bytes per string ('... (N more bytes)'), bounding slowlog memory.",
+      "affects": ["slowlog"],
+      "evidence": "src/slowlog.c slowlogCreateEntry() comment: 'Having shared objects between any part of Redis, and the data structure holding the data, is a problem: FLUSHALL ASYNC may release the shared string object and create a race.'"
+    },
+    {
+      "slug": "resp2-invalidation-via-redirect-only",
+      "title": "RESP2 clients get invalidations only via redirection to a pubsub connection",
+      "statement": "Tracking invalidation is pushed in-band only on RESP3; RESP2 clients must use CLIENT TRACKING REDIRECT to a second connection subscribed to __redis__:invalidate.",
+      "rationale": "RESP2 has no push frame type on a request/response connection, so the only RESP2-compatible delivery channel is a Pub/Sub message on a dedicated connection.",
+      "description": "sendTrackingMessage branches on c->resp > 2 (push 'invalidate') vs using_redirection && CLIENT_PUBSUB (pubsub message on TrackingChannelName); a broken redirect target sets CLIENT_TRACKING_BROKEN_REDIR and notifies RESP3 originators with 'tracking-redir-broken'.",
+      "affects": ["client-tracking", "client-side-caching"],
+      "evidence": "src/tracking.c sendTrackingMessage() comment: 'Only send such info for clients in RESP version 3 or more. However if redirection is active, and the connection we redirect to is in Pub/Sub mode, we can support the feature with RESP 2 as well.'"
+    }
+  ]
+}

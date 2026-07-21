@@ -17,6 +17,15 @@ import {
   isDemoRecipeId,
   submitDemoTaskSplitting,
 } from "@/lib/mock/demoBuildFlow";
+import {
+  connectVectorDemoCodegenStream,
+  createVectorDemoPullRequest,
+  getVectorDemoTaskSplittingItems,
+  getVectorDemoTaskSplittingStatus,
+  isVectorDemoRecipeId,
+  isVectorDemoTaskSplittingId,
+  submitVectorDemoTaskSplitting,
+} from "@/lib/mock/demoVectorSearchFlow";
 
 export default class TaskSplittingService {
   private static readonly BASE_URL = process.env.NEXT_PUBLIC_WORKFLOWS_URL;
@@ -32,6 +41,9 @@ export default class TaskSplittingService {
   ): Promise<SubmitTaskSplittingResponse> {
     if (isDemoRecipeId(request.recipe_id)) {
       return submitDemoTaskSplitting();
+    }
+    if (isVectorDemoRecipeId(request.recipe_id)) {
+      return submitVectorDemoTaskSplitting();
     }
     try {
       const headers = await getHeaders();
@@ -72,6 +84,9 @@ export default class TaskSplittingService {
     if (isDemoTaskSplittingId(taskSplittingId)) {
       return getDemoTaskSplittingStatus();
     }
+    if (isVectorDemoTaskSplittingId(taskSplittingId)) {
+      return getVectorDemoTaskSplittingStatus();
+    }
     try {
       const headers = await getHeaders();
       const response = await axios.get<TaskSplittingStatusResponse>(
@@ -101,6 +116,9 @@ export default class TaskSplittingService {
     if (isDemoTaskSplittingId(taskSplittingId)) {
       return getDemoTaskSplittingItems();
     }
+    if (isVectorDemoTaskSplittingId(taskSplittingId)) {
+      return getVectorDemoTaskSplittingItems();
+    }
     try {
       const headers = await getHeaders();
       const response = await axios.get<TaskSplittingItemsResponse>(
@@ -126,6 +144,9 @@ export default class TaskSplittingService {
   ): Promise<CreatePullRequestResponse> {
     if (isDemoTaskSplittingId(taskSplittingId)) {
       return createDemoPullRequest();
+    }
+    if (isVectorDemoTaskSplittingId(taskSplittingId)) {
+      return createVectorDemoPullRequest();
     }
     try {
       const headers = await getHeaders();
@@ -157,6 +178,10 @@ export default class TaskSplittingService {
   ): void {
     if (isDemoTaskSplittingId(taskSplittingId)) {
       connectDemoCodegenStream(options);
+      return;
+    }
+    if (isVectorDemoTaskSplittingId(taskSplittingId)) {
+      connectVectorDemoCodegenStream(options);
       return;
     }
     const url = `${this.API_BASE}/${taskSplittingId}/stream${options.cursor ? `?cursor=${encodeURIComponent(options.cursor)}` : ""}`;

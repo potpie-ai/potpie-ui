@@ -9,6 +9,13 @@ import {
   isDemoConversationId,
   streamDemoConversationReply,
 } from "@/lib/mock/demoBuildFlow";
+import {
+  createVectorDemoConversation,
+  getVectorDemoConversationMessages,
+  isVectorDemoConversationId,
+  streamVectorDemoConversationReply,
+  VECTOR_DEMO_BRANCH,
+} from "@/lib/mock/demoVectorSearchFlow";
 
 /** Tool call from message history / stream API */
 export interface ToolCall {
@@ -564,6 +571,9 @@ export default class ChatService {
     if (isDemoConversationId(conversationId)) {
       return streamDemoConversationReply(onMessageUpdate, abortSignal);
     }
+    if (isVectorDemoConversationId(conversationId)) {
+      return streamVectorDemoConversationReply(onMessageUpdate, abortSignal);
+    }
     let currentSessionId = sessionId;
 
     // Check for existing active session if no sessionId provided
@@ -905,6 +915,9 @@ export default class ChatService {
     if (isDemoConversationId(conversationId)) {
       return getDemoConversationMessages().slice(start, start + limit);
     }
+    if (isVectorDemoConversationId(conversationId)) {
+      return getVectorDemoConversationMessages().slice(start, start + limit);
+    }
     const headers = await getHeaders();
     const response = await axios.get(
       `${process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL}/api/v1/conversations/${conversationId}/messages`,
@@ -1138,6 +1151,9 @@ export default class ChatService {
   ) {
     if (repoName === "redis" && branchName === "stream-dlq-demo") {
       return createDemoConversation();
+    }
+    if (repoName === "redis" && branchName === VECTOR_DEMO_BRANCH) {
+      return createVectorDemoConversation();
     }
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_CONVERSATION_BASE_URL;

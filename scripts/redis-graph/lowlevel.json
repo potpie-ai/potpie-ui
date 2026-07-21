@@ -1,0 +1,306 @@
+{
+  "subsystem": "lowlevel",
+  "components": [
+    {
+      "slug": "sds",
+      "name": "SDS Dynamic Strings",
+      "paths": ["src/sds.c", "src/sds.h"],
+      "summary": "Length-prefixed binary-safe dynamic string library (SDSLib 2.0) used for every Redis string value.",
+      "description": "Binary-safe dynamic C strings with five header sizes (sdshdr5/8/16/32/64) chosen by sdsReqType so short strings pay 1-byte overhead; sdsnewlen/sdsMakeRoomFor/sdscatlen handle growth, and sdsResize/sdsRemoveFreeSpace trim allocations. Every key, value, client buffer, and protocol argument flows through sds, so searches like 'string overhead', 'sds header corruption', 'embstr vs raw' land here. Header/alloc mismatch bugs (alloc truncated below buffer size) are handled by adjustTypeIfNeeded per the top-of-file comment.",
+      "part_of": "service:redis-server",
+      "depends_on": ["zmalloc-layer"],
+      "loc": 1599
+    },
+    {
+      "slug": "dict",
+      "name": "Hash Table (dict)",
+      "paths": ["src/dict.c", "src/dict.h"],
+      "summary": "Chained hash table with incremental rehashing; the backbone of the keyspace and most collections.",
+      "description": "Power-of-two chained hash table (dictEntry, compact dictEntryNoValue variant) that rehashes incrementally: dictRehash moves buckets a step at a time and dictRehashMicroseconds lets serverCron time-box it, so lookups touch both ht_table[0] and ht_table[1] mid-rehash. dictSetResizeEnabled(DICT_RESIZE_AVOID) suppresses resizes while an RDB/AOF fork child exists to protect copy-on-write, though expand is still forced past dict_force_resize_ratio=4. dictScan implements the reverse-binary-cursor guarantee behind SCAN/HSCAN. Searchable as 'incremental rehashing', 'rehash latency spike', 'hash table resize during bgsave'; tuned by the activerehashing directive; keyed hashing uses SipHash (see checksums).",
+      "part_of": "service:redis-server",
+      "depends_on": ["zmalloc-layer", "checksums"],
+      "config_vars": ["activerehashing"],
+      "loc": 2397
+    },
+    {
+      "slug": "kvstore",
+      "name": "kvstore (per-slot dict manager)",
+      "paths": ["src/kvstore.c", "src/kvstore.h"],
+      "summary": "Manages an array of dicts (one per cluster slot) with cumulative-count indexing via a Fenwick tree.",
+      "description": "Wraps num_dicts hash tables (one per slot in cluster mode, one otherwise) behind a single keyspace API: struct _kvstore keeps a rehashing list, a resize_cursor for cron-driven gradual resizing, key/bucket counts, and a fenwickTree dict_sizes of cumulative key frequencies so kvstoreGetFairRandomDictIndex/kvstoreFindDictIndexByKeyIndex pick dicts weighted by size (fair RANDOMKEY in cluster mode). kvstoreIncrementallyRehash spreads rehash work across dicts and tracks overhead_hashtable_rehashing for INFO memory. Searchable as 'per-slot dictionary', 'kvstore', 'slot dict rehashing', 'cluster keyspace sharding'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["dict", "fenwick-tree", "adlist", "zmalloc-layer"],
+      "loc": 1174
+    },
+    {
+      "slug": "adlist",
+      "name": "adlist Doubly Linked List",
+      "paths": ["src/adlist.c", "src/adlist.h"],
+      "summary": "Generic doubly linked list (listCreate/listNode) used for clients, rehashing queues, and bookkeeping.",
+      "description": "Plain doubly linked list of void* values with pluggable dup/free/match callbacks: listCreate, listAddNodeHead/Tail, listSearchKey, safe iterators via listGetIterator. Not a data-type encoding — it backs server bookkeeping such as the clients list, kvstore's rehashing queue, and blocked-client queues. Searchable as 'adlist', 'listNode', 'server linked list'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["zmalloc-layer"],
+      "loc": 395
+    },
+    {
+      "slug": "quicklist",
+      "name": "Quicklist",
+      "paths": ["src/quicklist.c", "src/quicklist.h"],
+      "summary": "Doubly linked list of listpack nodes with optional LZF compression; storage engine for the List type.",
+      "description": "The List type's engine: a doubly linked list where each quicklistNode holds a listpack of entries (or a PLAIN node for huge elements, test-tunable via quicklistSetPackedThreshold). Node fill is bounded by optimization_level sizes 4096..65536 bytes selected by list-max-listpack-size (negative values -1..-5; alias list-max-ziplist-size), and interior nodes beyond list-compress-depth are LZF-compressed into quicklistLZF via lzf_compress. Searchable as 'quicklist node', 'list compression', 'LPUSH memory', 'quicklist bookmark'; failure symptoms include list memory bloat when fill limits are mistuned.",
+      "part_of": "service:redis-server",
+      "depends_on": ["listpack", "lzf-compression", "zmalloc-layer"],
+      "config_vars": ["list-max-listpack-size", "list-compress-depth"],
+      "loc": 3658
+    },
+    {
+      "slug": "listpack",
+      "name": "Listpack",
+      "paths": ["src/listpack.c", "src/listpack.h"],
+      "summary": "Compact single-allocation list-of-strings serialization; the successor to ziplist for all small encodings.",
+      "description": "Flat byte-array serialization of a list of string/integer elements (original listpack spec): 6-byte header (LP_HDR_SIZE, 32-bit total len + 16-bit count), per-element encodings from 7-bit uint through 64-bit int and 6/12/32-bit strings, and a variable 'backlen' after each entry enabling backward traversal without ziplist's cascading prevlen updates. lpAppend/lpInsert/lpGet/lpSeek/lpSafeToAdd are the core API. It is the small-object encoding for hash, zset, set, and list (inside quicklist) and the entry payload format for streams. Searchable as 'listpack encoding', 'lpGet crash', 'hash-max-listpack-entries', 'ziplist replacement'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["zmalloc-layer"],
+      "loc": 3588
+    },
+    {
+      "slug": "ziplist-legacy",
+      "name": "Ziplist (legacy)",
+      "paths": ["src/ziplist.c", "src/ziplist.h", "src/zipmap.c", "src/zipmap.h"],
+      "summary": "SUPERSEDED by listpack: legacy compact list/hash encodings kept only to convert old RDB payloads.",
+      "description": "Legacy compact encodings fully superseded by listpack: ziplist is the old <zlbytes><zltail><zllen>...<zlend> dually-linked byte array whose prevlen field caused cascading-update reallocations, and zipmap is the even older string->string small-hash map. No live data type uses them; rdb.c's ziplistPairsConvertAndValidateIntegrity / _ziplistEntryConvertAndValidate validate old-format RDB values and convert them to listpack on load. Searchable as 'ziplist deprecated', 'zipmap', 'old RDB encoding conversion', 'cascading prevlen update'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["zmalloc-layer", "listpack"],
+      "loc": 2665
+    },
+    {
+      "slug": "rax",
+      "name": "Rax Radix Tree",
+      "paths": ["src/rax.c", "src/rax.h"],
+      "summary": "Compressed radix tree keyed by binary strings; indexes stream IDs, consumer-group PELs, and ebuckets.",
+      "description": "Compressed radix (prefix) tree: raxNode packs edge characters inline, raxInsert/raxRemove/raxFind mutate it, raxStack retains parent chains for upward fixups, and raxIterator (raxStart/raxSeek/raxNext) walks keys in lexicographic order. It indexes stream entries by 16-byte big-endian stream IDs (stream.h), consumer-group pending-entries lists, and ebuckets' expiration buckets. Searchable as 'radix tree', 'raxNode', 'stream ID index', 'raxSeek iterator'; oom flags on raxStack signal allocation failure during deep walks.",
+      "part_of": "service:redis-server",
+      "depends_on": ["zmalloc-layer"],
+      "loc": 2993
+    },
+    {
+      "slug": "intset",
+      "name": "Intset",
+      "paths": ["src/intset.c", "src/intset.h"],
+      "summary": "Sorted array of integers with on-demand 16/32/64-bit encoding upgrades; small-Set encoding.",
+      "description": "Contiguous sorted integer array used as the Set type's encoding when all members are integers: _intsetValueEncoding picks INTSET_ENC_INT16/32/64, intsetAdd binary-searches for position, and intsetUpgradeAndAdd widens every element when a larger value arrives (upgrades are one-way). Converted to listpack/hashtable past set-max-intset-entries. Searchable as 'intset encoding', 'SADD integer set', 'intset upgrade', 'set-max-intset-entries'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["zmalloc-layer"],
+      "config_vars": ["set-max-intset-entries"],
+      "loc": 566
+    },
+    {
+      "slug": "ebuckets",
+      "name": "Ebuckets (TTL buckets)",
+      "paths": ["src/ebuckets.c", "src/ebuckets.h"],
+      "summary": "Expiration-ordered bucket store over a rax (or list when small); backs estore and hash-field TTLs.",
+      "description": "Stores items carrying an embedded ExpireMeta into time-interval buckets keyed by expiration-time >> EB_BUCKET_KEY_PRECISION in a rax tree (plain linked list when tiny). Each bucket holds segments (FirstSegHdr/NextSegHdr, cyclic singly linked, EB_SEG_MAX_ITEMS=16) so most add/remove work stays at segment level instead of mutating the rax (~40 bytes/leaf), and bucket keys are pruned to 6 bytes (EB_KEY_SIZE) to bound tree depth; full segments split buckets, while same-TTL overflow chains extended segments. ebAdd/ebRemove/ebExpire drive active expiration for the expiration-store (estore.c/expire.c) and hash-field expiration in t_hash.c. Searchable as 'ebuckets', 'TTL buckets', 'active expire data structure', 'HEXPIRE internals'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["rax", "zmalloc-layer"],
+      "loc": 2725
+    },
+    {
+      "slug": "mstr",
+      "name": "Mstr (metadata string)",
+      "paths": ["src/mstr.c", "src/mstr.h"],
+      "summary": "Immutable string with optional attached metadata flags (mstrKind); largely idle after hash-entry rework.",
+      "description": "String type that can carry typed metadata blocks before the char buffer: mstrNew builds headers MSTR_TYPE_5/8/16/64 (CREATE_MSTR_INFO packs len/ismeta/type into the info byte), and mstrKind/mstrFlags describe which metadata slots (mstrSumMetaLen) are attached. Originally introduced for hash fields with expiration; t_hash.c now notes its entry layout is 'simpler than the previous mstr approach', so mstr currently survives mostly with its unit test (mstrTest wired in server.c). Searchable as 'mstr', 'metadata string', 'hash field expiration string'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["zmalloc-layer"],
+      "loc": 528
+    },
+    {
+      "slug": "sparse-array",
+      "name": "Sparse Array",
+      "paths": ["src/sparsearray.c", "src/sparsearray.h", "src/t_array.c"],
+      "summary": "Memory-efficient sparse array over a 64-bit index space; engine of the new ARRAY data type.",
+      "description": "Random-access sequence indexed by non-negative 64-bit integers with O(1) get/set: values are tagged pointer-sized words (ints/short strings inlined, arString heap fallback with 2-or-8-byte length headers via arStringLen), slices of ArraySliceSize elements keep sparse regions cheap, and ar->alloc_size is tracked on every zmalloc so kvobjAllocSize answers in O(1). Backs the ARRAY data type commands in t_array.c (argetCommand/arsetCommand/ardelCommand/arlenCommand/arscanCommand/argrepCommand/aropCommand/arinsertCommand; ARGREP uses the tre regex dep). Searchable as 'sparse array', 'redisArray', 'ARRAY type', 'array-slice-size'; tuned by array-slice-size/array-sparse-kmax/array-sparse-kmin.",
+      "part_of": "service:redis-server",
+      "depends_on": ["zmalloc-layer"],
+      "uses_deps": ["tre"],
+      "config_vars": ["array-slice-size", "array-sparse-kmax", "array-sparse-kmin"],
+      "loc": 2080
+    },
+    {
+      "slug": "fenwick-tree",
+      "name": "Fenwick Tree",
+      "paths": ["src/fwtree.c", "src/fwtree.h"],
+      "summary": "Binary indexed tree of cumulative counts; lets kvstore find the dict owning the Nth key in O(log n).",
+      "description": "Classic 1-based Fenwick/Binary Indexed Tree over 2^sizeBits slots: fwTreeCreate/fwTreeUpdate maintain per-index counts plus a running total, fwTreePrefixSum answers cumulative sums, and fwTreeFindIndex locates the first index whose prefix sum reaches a target. Its consumer is kvstore's dict_sizes field, which records cumulative key frequencies per dict-index so fair random dict selection and kvstoreFindDictIndexByKeyIndex work across cluster slot dicts without linear scans. Searchable as 'fenwick tree', 'binary indexed tree', 'BIT prefix sum', 'weighted random slot'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["zmalloc-layer"],
+      "loc": 237
+    },
+    {
+      "slug": "topk-sketch",
+      "name": "CuckooHeavyKeeper Top-K",
+      "paths": ["src/chk.c", "src/chk.h"],
+      "summary": "Top-K heavy-hitter sketch (CuckooHeavyKeeper + min-heap) powering the HOTKEYS commands.",
+      "description": "Probabilistic top-K structure from the paper 'Cuckoo Heavy Keeper and the balancing act of maintaining heavy hitters in stream processing' (Ngo & Papatriantafilou), extended with a min-heap of item names borrowed from RedisBloom's TopK: chkTopKCreate/chkTopKUpdate/chkTopKList, with lobby-to-heavy promotion (LOBBY_PROMOTION_THRESHOLD=16), bounded cuckoo eviction (MAX_KICKS=16), heavy-hitter threshold HEAVY_RATIO=0.008, and xxhash fingerprints. hotkeys.c instantiates one sketch per tracked metric (CPU and NET, decay 1.08, k*10 tracked keys) behind the HOTKEYS START/GET/STOP/RESET commands. Searchable as 'hotkeys sketch', 'heavy keeper', 'top-k keys', 'hot key detection'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["sds", "zmalloc-layer"],
+      "uses_deps": ["xxhash"],
+      "loc": 822
+    },
+    {
+      "slug": "vector-util",
+      "name": "Vec (append-only vector)",
+      "paths": ["src/vector.c", "src/vector.h"],
+      "summary": "Small append-only pointer vector with optional caller-provided stack storage; helper for db.c and t_hash.c.",
+      "description": "Minimal growable array of void* (struct vec): vecInit accepts caller stack storage for the first initcap items before spilling to heap, vecPush/vecGet/vecReserve/vecClear/vecRelease manage it, and an optional per-element free callback runs on clear/release. Used by db.c and t_hash.c for transient element collections. Not related to vector-sets (that is a module). Searchable as 'vec', 'append-only vector', 'stack-backed vector'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["zmalloc-layer"],
+      "loc": 227
+    },
+    {
+      "slug": "lzf-compression",
+      "name": "LZF Compression",
+      "paths": ["src/lzf_c.c", "src/lzf_d.c", "src/lzfP.h"],
+      "summary": "Vendored libLZF (Marc Lehmann) fast compressor used by quicklist nodes and RDB string objects.",
+      "description": "In-tree copy of Marc Alexander Lehmann's libLZF: lzf_compress (hash-chain match finder tuned by HLOG/ULTRA_FAST/VERY_FAST) and lzf_decompress, favoring speed over ratio and aborting when data is incompressible. quicklist compresses interior nodes into quicklistLZF blobs (list-compress-depth), and rdb.c LZF-compresses string payloads when rdbcompression is enabled. Searchable as 'lzf_compress', 'rdbcompression', 'quicklist compressed node', 'LZF decompress corruption'.",
+      "part_of": "service:redis-server",
+      "loc": 500
+    },
+    {
+      "slug": "checksums",
+      "name": "Checksums & Hash Primitives",
+      "paths": ["src/crc16.c", "src/crc64.c", "src/crccombine.c", "src/crcspeed.c", "src/siphash.c", "src/sha1.c", "src/sha256.c"],
+      "summary": "CRC16/CRC64 (speed-optimized), SipHash 1-2, SHA1, and SHA256 primitives shared across the server.",
+      "description": "Hash/checksum toolbox: crc16 computes cluster key hash slots (CRC16 mod 16384); crc64 with crcspeed's table-generated, segment-parallel implementation (Mark Adler base, Matt Stancliff and Josiah Carlson mods, 10-90% faster on >1MB blobs) and crccombine's gf2_matrix_times_vec CRC merging checksums RDB files via rio.c and DEBUG DIGEST; siphash implements SipHash 1-2 (deliberately reduced from 2-4, which cost ~4% throughput) as the dict seed-keyed hash defending against hash-flooding; sha1 backs EVALSHA script digests and sha256 backs ACL password hashing. Searchable as 'rdb checksum mismatch', 'crc64', 'key hash slot', 'siphash', 'hash flooding DoS'.",
+      "part_of": "service:redis-server",
+      "loc": 1900
+    }
+  ],
+  "config_vars": [
+    {
+      "name": "activerehashing",
+      "summary": "Spend 1ms every 100ms of serverCron actively rehashing main dictionaries.",
+      "description": "Enables cron-driven incremental rehashing (dictRehashMicroseconds via kvstoreIncrementallyRehash) so hash tables finish migrating buckets even without traffic; disabling trades faster idle response for lingering dual-table memory overhead.",
+      "configures": "dict",
+      "default": "yes"
+    },
+    {
+      "name": "list-max-listpack-size",
+      "summary": "Fill limit per quicklist node: positive = entry count, -1..-5 = size classes 4KB..64KB.",
+      "description": "Bounds each quicklistNode's listpack by count or by optimization_level byte sizes (4096..65536); alias of the legacy name list-max-ziplist-size kept in config.c.",
+      "configures": "quicklist",
+      "default": "-2"
+    },
+    {
+      "name": "list-compress-depth",
+      "summary": "Number of quicklist nodes at each list end left uncompressed; 0 disables compression.",
+      "description": "Interior quicklist nodes beyond this depth from head/tail are LZF-compressed (quicklistLZF), trading CPU on access for memory on long lists.",
+      "configures": "quicklist",
+      "default": "0"
+    },
+    {
+      "name": "set-max-intset-entries",
+      "summary": "Maximum members for a Set to stay intset-encoded.",
+      "description": "Integer-only sets convert away from the sorted intset array once they exceed this many entries.",
+      "configures": "intset",
+      "default": "512"
+    },
+    {
+      "name": "array-slice-size",
+      "summary": "Elements per sparse-array slice; must be a power of two.",
+      "description": "Controls the granularity of redisArray slices (AR_SLICE_SIZE_DEFAULT 4096); validated by isValidArraySliceSize in config.c.",
+      "configures": "sparse-array",
+      "default": "4096"
+    },
+    {
+      "name": "array-sparse-kmax",
+      "summary": "Upper bound K for sparse-array density heuristics; 0 disables, must exceed kmin.",
+      "description": "Paired with array-sparse-kmin to decide when redisArray regions switch between sparse and dense slice representations (AR_SPARSE_KMAX_DEFAULT 10).",
+      "configures": "sparse-array",
+      "default": "10"
+    },
+    {
+      "name": "array-sparse-kmin",
+      "summary": "Lower bound K for sparse-array density heuristics; must be below kmax.",
+      "description": "Paired with array-sparse-kmax for redisArray sparse/dense representation switching (AR_SPARSE_KMIN_DEFAULT 5).",
+      "configures": "sparse-array",
+      "default": "5"
+    }
+  ],
+  "features": [
+    {
+      "slug": "array-datatype",
+      "name": "ARRAY data type",
+      "summary": "New Redis data type: 64-bit-indexed arrays with ARGET/ARSET/ARDEL/ARSCAN/ARGREP/AROP commands.",
+      "description": "A first-class array type whose command surface lives in t_array.c (argetCommand, armget/armset, ardelrange, arlen/arcount, argetrange, arscan, argrep with tre-based regex, arop, arinsert) on top of the sparse-array structure, with RDB/AOF/defrag/lazyfree integration across rdb.c, aof.c, defrag.c, and lazyfree.c.",
+      "lifecycle": "active",
+      "implemented_in": ["sparse-array"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "hotkeys-topk-tracking",
+      "name": "HOTKEYS tracking",
+      "summary": "On-demand hot-key detection sampling CPU and network cost per key into CuckooHeavyKeeper sketches.",
+      "description": "HOTKEYS START/GET/STOP/RESET (commands/hotkeys-*.json) create hotkeyStats holding one chkTopK sketch per tracked metric (HOTKEYS_TRACK_CPU, HOTKEYS_TRACK_NET) with decay 1.08 and k*10 tracked keys, optionally scoped to cluster slot ranges via slotRangeArray; sketch internals live in the topk-sketch component, orchestration in memory-subsystem hotkeys.c.",
+      "lifecycle": "active",
+      "implemented_in": ["topk-sketch", "hotkeys-tracking"],
+      "provided_by": "service:redis-server"
+    }
+  ],
+  "decisions": [
+    {
+      "slug": "listpack-supersedes-ziplist",
+      "title": "Listpack replaces ziplist for all compact encodings",
+      "statement": "All small-object encodings use listpack; ziplist/zipmap code is retained only to validate and convert legacy RDB payloads on load.",
+      "rationale": "Ziplist's prevlen field forced cascading reallocation updates on insert; listpack's per-entry backlen removes that class of O(n^2) update and corruption bugs while keeping backward traversal.",
+      "description": "rdb.c converts old payloads via ziplistPairsConvertAndValidateIntegrity/_ziplistEntryConvertAndValidate ('the ziplist element pointed by p will be converted and stored into listpack'); no data-type file includes ziplist.h anymore, and config.c keeps list-max-ziplist-size only as an alias of list-max-listpack-size.",
+      "affects": ["listpack", "ziplist-legacy", "quicklist"],
+      "evidence": "src/rdb.c ~2385-2467 conversion callbacks; src/config.c:3323 alias 'list-max-ziplist-size'; grep shows ziplist.h included only via server.h/ziplist.c"
+    },
+    {
+      "slug": "siphash12-over-siphash24",
+      "title": "SipHash 1-2 chosen over the standard 2-4 variant",
+      "statement": "Redis hashes dict keys with reduced-round SipHash 1-2 rather than the canonical SipHash 2-4.",
+      "rationale": "The 2-4 variant slowed Redis by roughly 4%; 1-2 runs at Murmurhash2 speed while still keeping seed-keyed protection against hash-flooding attacks, with no known trivial attacks on the reduced-round form.",
+      "description": "The modification notes in siphash.c document the tradeoff explicitly, including hard-coded rounds for compiler optimization and case-insensitive variants for command lookup.",
+      "affects": ["checksums", "dict"],
+      "evidence": "src/siphash.c header comment: 'We use SipHash 1-2 ... the 2-4 variant slowed down Redis by a 4% figure more or less.'"
+    },
+    {
+      "slug": "dict-resize-avoid-during-cow",
+      "title": "Dict resizing is suppressed while a fork child is saving",
+      "statement": "dictSetResizeEnabled(DICT_RESIZE_AVOID) disables most rehashing while RDB/AOF-rewrite children run, to avoid copy-on-write memory blowup.",
+      "rationale": "Rehashing moves every bucket, dirtying pages shared with the fork child; avoiding resizes keeps COW cost down, with a safety valve forcing expansion once used/buckets >= dict_force_resize_ratio (4) or shrink below 1/(HASHTABLE_MIN_FILL*ratio).",
+      "description": "Documented at the top of dict.c next to dict_can_resize; serverCron toggles the mode around child lifecycle.",
+      "affects": ["dict", "kvstore"],
+      "evidence": "src/dict.c:34-46 comment on dictSetResizeEnabled/DICT_RESIZE_AVOID and dict_force_resize_ratio"
+    },
+    {
+      "slug": "ebuckets-segments-bound-rax-cost",
+      "title": "Ebuckets aggregates items into segments and prunes bucket keys to bound rax cost",
+      "statement": "Expiration items are grouped into 16-item segments per rax leaf, and bucket keys keep only 6 significant bytes (EB_KEY_SIZE), instead of one rax leaf per item with full 8-byte keys.",
+      "rationale": "Each rax leaf costs ~40 bytes and tree mutations are expensive; segment-level cyclic lists make most add/remove operations local (8 bytes per extra item), and shallower keys prune B-tree depth for traversal and maintenance.",
+      "description": "The design is spelled out in the ebuckets.h 'WHAT IS EBUCKETS' comment (splitting vs extending buckets for same-TTL overflow) and the ebuckets.c EB_KEY_SIZE comment tying key precision to tree depth.",
+      "affects": ["ebuckets", "rax", "expiration-store"],
+      "evidence": "src/ebuckets.h intro comment (segments, ~40 bytes per leaf, 6-byte keys); src/ebuckets.c:44-58 EB_KEY_SIZE rationale"
+    },
+    {
+      "slug": "kvstore-fenwick-cumulative-counts",
+      "title": "Kvstore tracks per-dict key counts in a Fenwick tree",
+      "statement": "kvstore maintains a binary indexed tree of cumulative key frequencies per dict-index instead of scanning dict sizes linearly.",
+      "rationale": "With up to 16384 slot dicts in cluster mode, weighted-fair random dict selection and 'which dict holds the Nth key' queries (kvstoreFindDictIndexByKeyIndex) need O(log n) prefix sums, not O(n) scans.",
+      "description": "The dict_sizes field is documented in struct _kvstore as a 'Binary indexed tree (BIT) that describes cumulative key frequencies up until given dict-index'; fwtree.c exists solely to serve this.",
+      "affects": ["kvstore", "fenwick-tree"],
+      "evidence": "src/kvstore.c:41 struct comment on fenwickTree *dict_sizes; src/kvstore.c kvstoreGetFairRandomDictIndex/kvstoreFindDictIndexByKeyIndex"
+    },
+    {
+      "slug": "chk-cuckoo-heavy-keeper-adoption",
+      "title": "Hot-key tracking uses CuckooHeavyKeeper plus a RedisBloom-style min-heap",
+      "statement": "The top-K sketch implements the Ngo & Papatriantafilou CuckooHeavyKeeper algorithm, extended with a min-heap to retain the names of the top K elements.",
+      "rationale": "CuckooHeavyKeeper balances accuracy and memory for heavy-hitter detection in streams; the sketch alone tracks counts, so a k-sized heap (idea credited to RedisBloom's TopK) is added to answer 'which keys' rather than just 'how heavy'.",
+      "description": "The chk.c header cites the paper and the reference C++ implementation, and constants (HEAVY_RATIO=0.008, MAX_KICKS=16, LOBBY_PROMOTION_THRESHOLD=16) encode the paper's tuning.",
+      "affects": ["topk-sketch", "hotkeys-tracking"],
+      "evidence": "src/chk.c:1-16 header comment citing the paper, reference repo, and RedisBloom min-heap addition"
+    }
+  ]
+}

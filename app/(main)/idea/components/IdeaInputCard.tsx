@@ -46,6 +46,12 @@ import { planTypesEnum } from "@/lib/Constants";
 import { useGithubAppPopup } from "../hooks/useGithubAppPopup";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import { toast } from "@/components/ui/sonner";
+import {
+  DEMO_REPO_BRANCH,
+  DEMO_REPO_ENTRY,
+  DEMO_REPO_FULL_NAME,
+  isDemoRepoName,
+} from "@/lib/mock/demoBuildFlow";
 
 interface IdeaInputCardProps {
   input: string;
@@ -261,6 +267,82 @@ export default function IdeaInputCard({
   const selectedRepoData = repositories.find(
     (repo) => repo.id?.toString() === selectedRepo
   );
+
+  // The demo repo and its branch are rendered straight from constants so they stay
+  // selectable while the real lists load in the background, and when the backend is
+  // unreachable. Everything else in these dropdowns still comes from the API.
+  const showDemoRepo = useMemo(() => {
+    const query = localRepoSearch.trim().toLowerCase();
+    return !query || DEMO_REPO_FULL_NAME.includes(query);
+  }, [localRepoSearch]);
+
+  const nonDemoRepos = useMemo(
+    () => repositories.filter((repo) => !isDemoRepoName(repo.full_name || repo.name)),
+    [repositories]
+  );
+
+  const isDemoRepoSelected =
+    selectedRepo === DEMO_REPO_ENTRY.id ||
+    isDemoRepoName(selectedRepoData?.full_name || selectedRepoData?.name);
+
+  const showDemoBranch = useMemo(() => {
+    const query = localBranchSearch.trim().toLowerCase();
+    return !query || DEMO_REPO_BRANCH.includes(query);
+  }, [localBranchSearch]);
+
+  const renderRepoItem = (repo: any) => {
+    const isSelected = repo.id?.toString() === selectedRepo;
+    const repoName = repo.full_name || repo.name;
+    const isLocalPath = repoName.startsWith("/") || repoName.includes("\\");
+    return (
+      <DropdownMenuItem
+        key={repo.id}
+        onClick={() => {
+          onRepoSelect(repo.id?.toString() || "");
+          setRepoDropdownOpen(false);
+        }}
+        className={`flex items-center gap-2.5 px-2.5 py-2 cursor-pointer rounded-lg transition-colors ${isSelected ? "bg-zinc-50 border border-zinc-200 text-foreground" : "hover:bg-zinc-50 text-foreground"}`}
+      >
+        <div className="flex-shrink-0">
+          {isLocalPath ? (
+            <FolderOpen className={`h-3.5 w-3.5 ${isSelected ? "text-foreground" : "text-zinc-400"}`} />
+          ) : (
+            <Github className={`h-3.5 w-3.5 ${isSelected ? "text-foreground" : "text-zinc-400"}`} />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[10px] font-medium truncate ${isSelected ? "text-foreground" : "text-foreground"}`}>{repoName}</span>
+            {isSelected && <Check className="h-3 w-3 text-foreground flex-shrink-0" />}
+          </div>
+          {repo.description && (
+            <p className="text-[9px] text-zinc-400 mt-0.5 truncate">{repo.description}</p>
+          )}
+        </div>
+      </DropdownMenuItem>
+    );
+  };
+
+  const renderBranchItem = (branch: string) => {
+    const isSelected = branch === selectedBranch;
+    return (
+      <DropdownMenuItem
+        key={branch}
+        onClick={() => {
+          onBranchSelect(branch);
+          setBranchDropdownOpen(false);
+        }}
+        className={`flex items-center gap-2.5 px-2.5 py-2 cursor-pointer rounded-lg transition-colors ${isSelected ? "bg-zinc-50 border border-zinc-200 text-foreground" : "hover:bg-zinc-50 text-foreground"}`}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[10px] font-medium truncate ${isSelected ? "text-foreground" : "text-foreground"}`}>{branch}</span>
+            {isSelected && <Check className="h-3 w-3 text-foreground flex-shrink-0" />}
+          </div>
+        </div>
+      </DropdownMenuItem>
+    );
+  };
 
   const isLocalhost = process.env.NEXT_PUBLIC_BASE_URL?.includes('localhost');
   
@@ -522,9 +604,12 @@ export default function IdeaInputCard({
                 )}
               </div>
               <div className="flex-1 overflow-y-auto min-h-0 p-2">
+                {showDemoRepo && (
+                  <div className="space-y-0.5">{renderRepoItem(DEMO_REPO_ENTRY)}</div>
+                )}
                 {reposError ? (
-                  <div className="p-7 text-center">
-                    <FolderOpen className="h-9 w-9 mx-auto mb-2.5 text-red-400" />
+                  <div className={showDemoRepo ? "px-3 py-4 text-center" : "p-7 text-center"}>
+                    {!showDemoRepo && <FolderOpen className="h-9 w-9 mx-auto mb-2.5 text-red-400" />}
                     <p className="text-[10px] font-medium text-red-600 mb-1">Failed to load repositories</p>
                     <p className="text-[9px] text-zinc-400 mb-3">
                       {reposError instanceof Error ? reposError.message : "An error occurred while fetching repositories"}
@@ -543,59 +628,28 @@ export default function IdeaInputCard({
                     )}
                   </div>
                 ) : reposLoading ? (
-                  <div className="p-7 text-center">
+                  <div className={showDemoRepo ? "px-3 py-4 text-center" : "p-7 text-center"}>
                     <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2.5 text-zinc-400" />
                     <p className="text-[10px] text-zinc-500">
                       {localRepoSearch.trim() ? "Searching repositories..." : "Loading repositories..."}
                     </p>
                   </div>
-                ) : repositories.length === 0 ? (
-                  <div className="p-7 text-center">
-                    <FolderOpen className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
-                    <p className="text-[10px] font-medium text-foreground mb-1">
-                      {localRepoSearch.trim()
-                        ? `No repositories found matching '${localRepoSearch.trim()}'`
-                        : "No parsed repositories found"}
-                    </p>
-                    <p className="text-[9px] text-zinc-400">
-                      {localRepoSearch.trim() ? "Try a different search term" : "Parse a repository to get started"}
-                    </p>
-                  </div>
+                ) : nonDemoRepos.length === 0 ? (
+                  showDemoRepo ? null : (
+                    <div className="p-7 text-center">
+                      <FolderOpen className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
+                      <p className="text-[10px] font-medium text-foreground mb-1">
+                        {localRepoSearch.trim()
+                          ? `No repositories found matching '${localRepoSearch.trim()}'`
+                          : "No parsed repositories found"}
+                      </p>
+                      <p className="text-[9px] text-zinc-400">
+                        {localRepoSearch.trim() ? "Try a different search term" : "Parse a repository to get started"}
+                      </p>
+                    </div>
+                  )
                 ) : (
-                  <div className="space-y-0.5">
-                    {repositories.map((repo) => {
-                      const isSelected = repo.id?.toString() === selectedRepo;
-                      const repoName = repo.full_name || repo.name;
-                      const isLocalPath = repoName.startsWith("/") || repoName.includes("\\");
-                      return (
-                        <DropdownMenuItem
-                          key={repo.id}
-                          onClick={() => {
-                            onRepoSelect(repo.id?.toString() || "");
-                            setRepoDropdownOpen(false);
-                          }}
-                          className={`flex items-center gap-2.5 px-2.5 py-2 cursor-pointer rounded-lg transition-colors ${isSelected ? "bg-zinc-50 border border-zinc-200 text-foreground" : "hover:bg-zinc-50 text-foreground"}`}
-                        >
-                          <div className="flex-shrink-0">
-                            {isLocalPath ? (
-                              <FolderOpen className={`h-3.5 w-3.5 ${isSelected ? "text-foreground" : "text-zinc-400"}`} />
-                            ) : (
-                              <Github className={`h-3.5 w-3.5 ${isSelected ? "text-foreground" : "text-zinc-400"}`} />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`text-[10px] font-medium truncate ${isSelected ? "text-foreground" : "text-foreground"}`}>{repoName}</span>
-                              {isSelected && <Check className="h-3 w-3 text-foreground flex-shrink-0" />}
-                            </div>
-                            {repo.description && (
-                              <p className="text-[9px] text-zinc-400 mt-0.5 truncate">{repo.description}</p>
-                            )}
-                          </div>
-                        </DropdownMenuItem>
-                      );
-                    })}
-                  </div>
+                  <div className="space-y-0.5">{nonDemoRepos.map(renderRepoItem)}</div>
                 )}
               </div>
               <div className="sticky bottom-0 border-t border-zinc-100 bg-white p-2 pt-2.5">
@@ -640,9 +694,9 @@ export default function IdeaInputCard({
                     borderRadius: FIGMA.inputRadius,
                     color: FIGMA.textPrimary,
                   }}
-                  disabled={loading || isSubmitting || !selectedRepo || branchesLoading}
+                  disabled={loading || isSubmitting || !selectedRepo || (branchesLoading && !isDemoRepoSelected)}
                 >
-                  {branchesLoading ? (
+                  {branchesLoading && !isDemoRepoSelected ? (
                     <>
                       <Loader2 className="h-4 w-4 shrink-0 animate-spin" style={{ color: FIGMA.textMuted }} />
                       <span className="flex-1 truncate italic">Fetching branches..</span>
@@ -700,6 +754,18 @@ export default function IdeaInputCard({
                   <div className="p-5 text-center">
                     <p className="text-[10px] text-zinc-500">Please select a repository first</p>
                   </div>
+                ) : isDemoRepoSelected ? (
+                  showDemoBranch ? (
+                    <div className="space-y-0.5">{renderBranchItem(DEMO_REPO_BRANCH)}</div>
+                  ) : (
+                    <div className="p-7 text-center">
+                      <GitBranch className="h-9 w-9 mx-auto mb-2.5 text-zinc-300" />
+                      <p className="text-[10px] font-medium text-foreground mb-1">
+                        {`No branches found matching '${localBranchSearch.trim()}'`}
+                      </p>
+                      <p className="text-[9px] text-zinc-400">Try a different search term</p>
+                    </div>
+                  )
                 ) : branchesError ? (
                   <div className="p-7 text-center">
                     <GitBranch className="h-9 w-9 mx-auto mb-2.5 text-red-400" />
@@ -741,26 +807,7 @@ export default function IdeaInputCard({
                   </div>
                 ) : (
                   <div className="space-y-0.5">
-                    {branches.map((branch) => {
-                      const isSelected = branch === selectedBranch;
-                      return (
-                        <DropdownMenuItem
-                          key={branch}
-                          onClick={() => {
-                            onBranchSelect(branch);
-                            setBranchDropdownOpen(false);
-                          }}
-                          className={`flex items-center gap-2.5 px-2.5 py-2 cursor-pointer rounded-lg transition-colors ${isSelected ? "bg-zinc-50 border border-zinc-200 text-foreground" : "hover:bg-zinc-50 text-foreground"}`}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`text-[10px] font-medium truncate ${isSelected ? "text-foreground" : "text-foreground"}`}>{branch}</span>
-                              {isSelected && <Check className="h-3 w-3 text-foreground flex-shrink-0" />}
-                            </div>
-                          </div>
-                        </DropdownMenuItem>
-                      );
-                    })}
+                    {branches.map(renderBranchItem)}
                   </div>
                 )}
               </div>

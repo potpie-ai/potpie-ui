@@ -78,6 +78,7 @@ import {
 } from "@/components/stream/StreamTimeline";
 import { BuildFlowChatHeader } from "@/components/build-flow/BuildFlowChatHeader";
 import { DEMO_RECIPE_ID } from "@/lib/mock/demoBuildFlow";
+import { VECTOR_DEMO_RECIPE_ID } from "@/lib/mock/demoVectorSearchFlow";
 
 /**
  * VERTICAL SLICE PLANNER (Auto-Generation Mode)
@@ -429,6 +430,7 @@ const PlanPage = () => {
 
   const showReStartImplementation =
     recipeId !== DEMO_RECIPE_ID &&
+    recipeId !== VECTOR_DEMO_RECIPE_ID &&
     hasImplementationBeenStartedBefore(
       recipeDetailsForImplBtn?.status,
       sessionCodegenFlag,

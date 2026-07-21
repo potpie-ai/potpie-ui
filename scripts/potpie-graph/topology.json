@@ -1,0 +1,740 @@
+{
+  "repositories": [
+    {
+      "slug": "potpie-ai/potpie",
+      "name": "potpie",
+      "repo_name": "potpie-ai/potpie",
+      "default_branch": "main",
+      "visibility": "public",
+      "language": "Python",
+      "summary": "The flagship open-source Potpie monorepo — CLI, daemon, MCP server, context-engine and the legacy momentum backend.",
+      "description": "potpie-ai/potpie is the public 5.5k-star flagship repository, tagged 'Context Graph for AI Native SDLC'. It is a uv workspace: the root `potpie` distribution (v2.0.0, Apache-2.0, Python >=3.12,<3.15) ships the `potpie`, `potpie-mcp` and `potpie-daemon` console scripts, while the workspace members `potpie/context-core`, `potpie/context-engine`, `potpie/integrations`, `potpie/parsing` and `potpie/sandbox` provide the graph ontology, graph API, Rust/tree-sitter parser and agent sandbox. The `legacy/` subtree still holds the original momentum-core FastAPI backend (mom-api, convo-server, five Celery workers) that runs production today. Search this repo for context graph, ontology, workbench, graph propose/commit, code knowledge graph, FalkorDB, Neo4j, pot management or CLI doctor."
+    },
+    {
+      "slug": "potpie-ai/potpie-ui",
+      "name": "potpie-ui",
+      "repo_name": "potpie-ai/potpie-ui",
+      "default_branch": "main",
+      "visibility": "public",
+      "language": "TypeScript",
+      "summary": "Next.js 15 App Router frontend for Potpie — chat, pots, graph explorer, events and agent setup.",
+      "description": "potpie-ai/potpie-ui is the public TypeScript/Next.js 15 web application served at app.potpie.ai and app-azure.potpie.ai. It uses the App Router with Redux Toolkit + Redux Persist for global state, TanStack Query for server state, Tailwind + Radix/shadcn primitives for styling, Firebase for auth and PostHog for analytics. Feature areas include `app/(main)/pots/**` (pot overview, sources, events, graph explorer, members), `app/(main)/newchat`, the assistant-ui chat surface and the d3-force/elkjs powered graph canvas. Search for potpie frontend, Next.js app router, pot theme, graph explorer, event stream, PotSourcesPanel or shadcn."
+    },
+    {
+      "slug": "potpie-ai/potpie-workflows",
+      "name": "potpie-workflows",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "default_branch": "main",
+      "visibility": "private",
+      "language": "Python",
+      "summary": "Private workflow/recipe execution engine — FastAPI REST server plus Celery and event-bus workers.",
+      "description": "potpie-ai/potpie-workflows is the private Python 3.13 service that executes Potpie workflows, recipes and codegen jobs. It is a hexagonal codebase: `src/core` holds workflows, recipes, nodes, agents and execution primitives; `src/adapters` holds the Celery worker, the Redis event-bus subscribers, LiteLLM adapter, Postgres stores and the PotpieAgentExecutor; `src/modules` holds codegen, credits, integrations, projects, recipes, triggers, webhooks and workflows routers. The container runs FastAPI on port 8002 plus Celery and event-bus workers under supervisord. Search for workflow execution, recipe streaming, trigger hashes, event bus subscriber, celery insights, DSPy, Prefect or phased plan generation."
+    },
+    {
+      "slug": "potpie-ai/pie",
+      "name": "pie",
+      "repo_name": "potpie-ai/pie",
+      "default_branch": "main",
+      "visibility": "private",
+      "language": "Python",
+      "summary": "Enterprise Potpie ('pie') monorepo — Go Connect-RPC services, Python CLI, VS Code app, Next.js web and shared observability.",
+      "description": "potpie-ai/pie is the private 'Enterprise potpie' monorepo described in its own pyproject as an 'Enterprise AI platform monorepo from potpie.ai'. `apps/` contains Go services (api, comm-gateway, harness-runner, worker) generated against Connect/gRPC contracts in `packages/contracts/proto/pie/v1/*.proto`, a Typer-based Python CLI in `apps/cli/src/pie_cli`, a VS Code extension in `apps/vscode` and a Next.js surface in `apps/web`. The `observability/` workspace member is the shared structured-logging and tracing library with Loki/Logfire/Sentry/loguru sinks and redaction. Much of the platform lives on spec branches (feat/spec0-harness-runtime … feat/spec7-sidecar-packaging, feat/pi-integration) rather than main. Search for pie enterprise, harness runner, agent sidecar, tool governance, SSO team access or Connect RPC."
+    },
+    {
+      "slug": "potpie-ai/potpie-vscode-extension",
+      "name": "potpie-vscode-extension",
+      "repo_name": "potpie-ai/potpie-vscode-extension",
+      "default_branch": "main",
+      "visibility": "private",
+      "language": "TypeScript",
+      "summary": "Private VS Code extension 'Potpie AI' — in-editor chat webview backed by the Potpie backend.",
+      "description": "potpie-ai/potpie-vscode-extension packages the marketplace extension displayName 'Potpie AI' (v1.0.5, engines vscode ^1.80.0). It registers an activitybar container `potpie-chat` with a webview view, plus commands `potpie.newChat`, `potpie.openSignInExternal` and `potpie.focusView`, and activates `onStartupFinished`. Builds are webpack-based into `out/extension.js` with per-environment manifests (`package-local.json`, `package-stage.json`, `package-prod.json`) and a checked-in `.vsix`. Search for VS Code extension, potpie chat webview, editor sidebar agent, vsix packaging or extension sign-in flow."
+    },
+    {
+      "slug": "potpie-ai/potpie-slack",
+      "name": "potpie-slack",
+      "repo_name": "potpie-ai/potpie-slack",
+      "default_branch": "main",
+      "visibility": "private",
+      "language": "Python",
+      "summary": "Private Slack integration — a slack-bolt + FastAPI bot that fronts Potpie agents inside Slack.",
+      "description": "potpie-ai/potpie-slack is the private Python service implementing the Potpie Slack app. It combines slack-bolt with FastAPI/uvicorn (`src/main.py:fastapi_app`, default port 8010, optional TLSv1_2 SSL via SSL_CERTFILE/SSL_KEYFILE) and stores installation and conversation state in Postgres via SQLAlchemy/asyncpg. `src/handlers` and `src/events` implement slash commands, mention handling and message posting through markdown-to-mrkdwn; `bot/manifest.json` and `bot/prod_manifest.json` hold the Slack app manifests. Search for Slack bot, slack-bolt, Potpie in Slack, mrkdwn formatting, Slack OAuth install or channel agent."
+    },
+    {
+      "slug": "potpie-ai/mintlify-docs",
+      "name": "mintlify-docs",
+      "repo_name": "potpie-ai/mintlify-docs",
+      "default_branch": "main",
+      "visibility": "public",
+      "language": "MDX",
+      "summary": "Public Mintlify documentation site for docs.potpie.ai — quickstart, agents, API reference and self-hosting.",
+      "description": "potpie-ai/mintlify-docs is the public MDX documentation source rendered by Mintlify (theme 'maple', primary colour #0D9373) at docs.potpie.ai. `docs.json` defines the navigation tabs and groups covering Get Started (introduction, quickstart), How to use Agents (debugging-agent, qna-agent and friends), custom-agents, extensions, self-hosting and an API Reference generated from `openapi.json`. Contributors edit `.mdx` pages and snippets directly. Search for Potpie docs, quickstart guide, self-hosting instructions, custom agent tutorial, API reference or mintlify navigation."
+    },
+    {
+      "slug": "potpie-ai/potpie-k8s-deployments",
+      "name": "potpie-k8s-deployments",
+      "repo_name": "potpie-ai/potpie-k8s-deployments",
+      "default_branch": "main",
+      "visibility": "public",
+      "language": "Dockerfile",
+      "summary": "Public Kubernetes manifests and Jenkins pipelines for the prod and stage Potpie clusters.",
+      "description": "potpie-ai/potpie-k8s-deployments holds the raw Kubernetes YAML and Jenkinsfiles that deploy Potpie, split into `prod/` and `stage/` trees. It contains the mom-server microservice workloads (`mom-server-microsvc/mom-api`, `/celery`, `/convo`), the Neo4j Helm and StatefulSet manifests including the three-server `neo4j-cluster` values, PgBouncer Deployment/HPA/PDB/RBAC, HashiCorp Vault policies and service accounts, cert-manager certificates and ClusterIssuers, and nginx ingress definitions for api and monitoring hosts. Branches like `feat-workflows`, `pgb-prod`, `deploy-pdb` and `fix/workflow-cert` track in-flight infra work. Search for k8s manifests, HPA, PodDisruptionBudget, Jenkinsfile rollback, neo4j statefulset, pgbouncer or vault policy."
+    }
+  ],
+  "services": [
+    {
+      "slug": "potpie-cli",
+      "name": "potpie CLI",
+      "repo": "potpie-ai/potpie",
+      "path": "potpie/cli",
+      "language": "Python",
+      "summary": "The `potpie` command — Typer/Rich CLI for login, doctor, pots, sources, search and graph workbench operations.",
+      "description": "potpie-cli is the user-facing entry point declared in pyproject as `potpie = \"potpie.cli.main:main\"`. It is a Typer + Rich application under `potpie/cli` with `commands/`, `auth/`, `ui/`, `telemetry/` and `templates/` (including the Claude plugin marketplace/hooks templates). Users run `potpie doctor`, `potpie login`, `potpie pot list`, `potpie source list`, `potpie search`, `potpie graph catalog|read|propose|commit|quality|inbox` and `potpie --json …` for machine output; it talks to the local daemon over the daemon RPC transport and falls back to in-process context-engine calls. Search for potpie command not found, potpie doctor, potpie login, CLI JSON output, pot scope or graph workbench CLI."
+    },
+    {
+      "slug": "potpie-daemon",
+      "name": "potpie daemon",
+      "repo": "potpie-ai/potpie",
+      "path": "potpie/daemon",
+      "language": "Python",
+      "summary": "Long-lived local background process (`potpie-daemon`) that hosts the graph runtime, managed services and RPC transport for the CLI and MCP server.",
+      "description": "potpie-daemon is the `potpie-daemon = \"potpie.daemon.main:main\"` console script. It runs a persistent local process exposing `daemon_rpc` over an HTTP transport (`potpie/daemon/http/transport.py`) so the CLI and MCP server avoid paying cold-start cost on every invocation, and it supervises managed services (`potpie/services/managed_services` with container, subprocess and external backends) such as the embedded graph store. `daemon_runtime/`, `ports/`, `process/` and `shell.py` handle lifecycle, port allocation, PID files and shell integration. Search for daemon not starting, stale pid file, daemon port already in use, potpie daemon restart, RPC transport or managed service backend."
+    },
+    {
+      "slug": "potpie-mcp-server",
+      "name": "potpie MCP server",
+      "repo": "potpie-ai/potpie",
+      "path": "potpie/mcp",
+      "language": "Python",
+      "summary": "Model Context Protocol server (`potpie-mcp`) that exposes Potpie context-graph tools to Claude Code, Cursor and other MCP clients.",
+      "description": "potpie-mcp-server is declared as `potpie-mcp = \"potpie.mcp.server:main\"` and implements an MCP stdio server on top of the `mcp>=1.28.1` SDK. `potpie/mcp/server.py` registers the context_* tool surface (search entities, read graph views, propose and commit mutations) and `potpie/mcp/project_access.py` enforces which project/pot a client session is scoped to. It is the integration point wired into Claude Code, Cursor and the VS Code extension so agents can query durable project memory. Search for MCP server, context_ tools, mcp stdio, Claude Code integration, project access denied or MCP tool schema."
+    },
+    {
+      "slug": "context-engine",
+      "name": "context-engine",
+      "repo": "potpie-ai/potpie",
+      "path": "potpie/context-engine",
+      "language": "Python",
+      "summary": "The graph API, webhook and HTTP delivery layer — hexagonal service that reads/writes the context graph across FalkorDB, Neo4j and Postgres backends.",
+      "description": "context-engine is the `potpie-context-engine` distribution described as 'Context graph API, webhooks, daemon, and MCP'. Its hexagonal layout is `domain/`, `application/`, `bootstrap/`, `api.py` and `adapters/{inbound,outbound}`: inbound holds the FastAPI app, api routers, webhooks and UI mounts; outbound holds graph backends (falkordb_backend, neo4j_backend, in_memory_backend, stub_backend), postgres stores (ledger, ingestion events, reconciliation, agent checkpoints), the Redis event-stream publisher, connectors, scanners, source resolvers and pot stores. Backends and delivery surfaces live behind extras (`http`, `local`, `neo4j`, `postgres`, `github`, `embeddings`) so importing the base package requires nothing beyond pydantic. Search for graph backend selection, GRAPH_DB_BACKEND, apply_plan, entity summary repair, cypher builder, reconciliation ledger or ingestion event store."
+    },
+    {
+      "slug": "context-core",
+      "name": "context-core",
+      "repo": "potpie-ai/potpie",
+      "path": "potpie/context-core",
+      "language": "Python",
+      "summary": "Pure-Python library holding the ontology, workbench, records, mutations and graph ports — pydantic + stdlib only.",
+      "description": "context-core is the `potpie-context-core` distribution: 'Context graph core: ontology, workbench, records, mutations, and graph ports.' It is deliberately dependency-free apart from pydantic — the pyproject comment states that anything needing more belongs in potpie-context-engine, not here. `src/potpie_context_core/ontology.py` is the canonical source of ONTOLOGY_VERSION '2026-06-graph' and GRAPH_CONTRACT_VERSION 'v1.5': the 24 entity labels, the 26 predicates and the allowed_pairs table every writer is validated against. It also ships authoring playbooks as markdown under `src/potpie_context_core/playbooks/`. Search for ontology labels, allowed pairs, predicate validation, entity key prefix, mutation records or graph ports."
+    },
+    {
+      "slug": "potpie-parsing",
+      "name": "potpie-parsing",
+      "repo": "potpie-ai/potpie",
+      "path": "potpie/parsing",
+      "language": "Rust",
+      "summary": "Rust + tree-sitter code parser built with maturin, exposed to Python as the `parsing.parsing_rs` extension module.",
+      "description": "potpie-parsing is the maturin-built native extension (`module-name = \"parsing.parsing_rs\"`) that turns source trees into the code knowledge graph. The Rust crate under `src/` with `Cargo.toml` does the heavy lifting; the Python side layers grep-ast, tree-sitter-language-pack, networkx, pygments and loguru for repo mapping and symbol extraction. It is the component behind repo map generation, definition/reference extraction and multi-language symbol resolution used by the parsing Celery worker and the sandbox parser shim. Search for tree-sitter parse failure, repomap, symbol extraction, maturin build, parsing_rs import error or unsupported language."
+    },
+    {
+      "slug": "potpie-sandbox",
+      "name": "potpie-sandbox",
+      "repo": "potpie-ai/potpie",
+      "path": "potpie/sandbox",
+      "language": "Python",
+      "summary": "Hexagonal sandbox runtime that executes agent work in isolated workspaces — local subprocess or Daytona-backed containers.",
+      "description": "potpie-sandbox is the `potpie-sandbox` distribution providing 'sandbox core with hexagonal workspace and runtime providers'. It exposes the console script `potpie-parse = \"sandbox.parser_runner.__main__:main\"` so that `ProjectSandbox.parse()` can shell out to the same command whether the workspace is a local checkout or a Daytona container built from `images/agent-sandbox/Dockerfile`. The optional `daytona` extra pulls `daytona>=0.134.0` plus aiohttp; `docker/Dockerfile.test` backs the container integration tests. Search for sandbox runtime, Daytona workspace, potpie-parse not on PATH, agent sandbox image, isolated execution or workspace provider."
+    },
+    {
+      "slug": "mom-api",
+      "name": "mom-api",
+      "repo": "potpie-ai/potpie",
+      "path": "legacy/app",
+      "language": "Python",
+      "summary": "The production FastAPI backend (momentum-core) — gunicorn + uvicorn workers on port 8001, api.potpie.ai.",
+      "description": "mom-api is the main hosted Potpie backend, still living in the `legacy/` subtree of potpie-ai/potpie and started by supervisord as `gunicorn --workers $(nproc) --worker-class uvicorn.workers.UvicornWorker --timeout 1800 --bind 0.0.0.0:8001 app.main:app`. Its modules cover auth, users, billing, projects, conversations, intelligence, knowledge_graph, parsing, context_graph, event_bus, integrations, search, usage, key_management, media, repo_manager, sandbox_repos, tunnel and analytics. It fronts Postgres (via PgBouncer), Redis, Neo4j and Qdrant, is deployed as the k8s `mom-api` Deployment behind ingress api-azure.potpie.ai, and optionally wraps itself in newrelic-admin when `/app/newrelic.ini` is present. Search for momentum core, mom-api 500, api.potpie.ai, gunicorn timeout 1800, FastAPI backend or legacy app.main."
+    },
+    {
+      "slug": "convo-server",
+      "name": "convo-server",
+      "repo": "potpie-ai/potpie",
+      "path": "legacy/deployment/prod/convo-server",
+      "language": "Python",
+      "summary": "Conversation-serving split of the momentum backend, deployed separately so long-lived chat streams don't starve the main API.",
+      "description": "convo-server is the conversation/streaming slice of the legacy momentum backend, built from `legacy/deployment/prod/convo-server/convo.Dockerfile` with its own `convo-api-supervisord.conf` and Jenkins pipeline. It serves the `legacy/app/modules/conversations` surface — SSE/streaming chat responses, message persistence and citation handling — and is deployed as the k8s `conversation` workload with its own HPA under `mom-server-microsvc/convo`. It exists because long-lived streaming connections have very different scaling and timeout characteristics from the rest of mom-api. Search for convo server, streaming chat disconnect, SSE timeout, conversation-hpa, message streaming or citation rendering."
+    },
+    {
+      "slug": "celery-parsing-worker",
+      "name": "celery parsing worker",
+      "repo": "potpie-ai/potpie",
+      "path": "legacy/app/modules/parsing",
+      "language": "Python",
+      "summary": "Celery worker on queue `${CELERY_QUEUE_NAME}_process_repository` that clones repos and builds the code knowledge graph in Neo4j.",
+      "description": "celery-parsing-worker runs `celery -A app.celery.celery_app worker -Q ${CELERY_QUEUE_NAME}_process_repository -n parsing@%h --concurrency=${CELERY_PARSING_CONCURRENCY:-2}`. It is the slowest and most memory-hungry worker in the fleet: it clones or pulls repositories into PROJECT_PATH on the shared NFS volume, runs the tree-sitter/Rust parser to build the repo map, and writes nodes and edges into the Neo4j code knowledge graph via `graph_construction/code_graph_service.py`. Parsing status transitions surfaced in the UI (submitted → cloned → parsed → ready / error) come from here. Search for parsing stuck, repository parse failed, process_repository queue, parsing concurrency, clone timeout or knowledge graph not built."
+    },
+    {
+      "slug": "celery-agent-worker",
+      "name": "celery agent worker",
+      "repo": "potpie-ai/potpie",
+      "path": "legacy/app/modules/intelligence",
+      "language": "Python",
+      "summary": "Celery worker on queue `${CELERY_QUEUE_NAME}_agent_tasks` that executes agent runs and LLM tool loops.",
+      "description": "celery-agent-worker runs `celery -A app.celery.celery_app worker -Q ${CELERY_QUEUE_NAME}_agent_tasks -n agent@%h --concurrency=${CELERY_AGENT_CONCURRENCY:-4}` and drives everything under `legacy/app/modules/intelligence`: agent orchestration, prompt assembly, tool execution and LLM calls routed by LLM_PROVIDER / CHAT_MODEL / INFERENCE_MODEL. It reads the Neo4j code graph and Qdrant vectors for retrieval, records usage against the billing/usage modules, and persists agent output back to Postgres. Search for agent task failed, agent_tasks queue, LLM timeout, tool call loop, retrieval returned nothing or agent concurrency."
+    },
+    {
+      "slug": "celery-events-worker",
+      "name": "celery events worker",
+      "repo": "potpie-ai/potpie",
+      "path": "legacy/app/modules/event_bus",
+      "language": "Python",
+      "summary": "Celery worker on the `external-event` queue that ingests GitHub/Linear/Slack webhooks into the internal event bus.",
+      "description": "celery-events-worker runs `celery -A app.celery.celery_app worker -Q external-event -n events@%h --concurrency=${CELERY_EVENTS_CONCURRENCY:-4}` and owns `legacy/app/modules/event_bus`. It normalises inbound webhook payloads from GitHub, Linear, Slack and Sentry into internal events, deduplicates them, persists them to Postgres and republishes onto the Redis event-bus queues that potpie-workflows subscribes to for trigger evaluation. Search for webhook not processed, external-event queue, event bus backlog, duplicate events, webhook signature or event ingestion delay."
+    },
+    {
+      "slug": "celery-context-graph-worker",
+      "name": "celery context-graph ETL worker",
+      "repo": "potpie-ai/potpie",
+      "path": "legacy/app/modules/context_graph",
+      "language": "Python",
+      "summary": "Celery worker on the `context-graph-etl` queue that backfills and incrementally ingests PRs, issues and commits into the context graph.",
+      "description": "celery-context-graph-worker runs `celery -A app.celery.celery_app worker -Q context-graph-etl -n context@%h --concurrency=${CELERY_CONTEXT_CONCURRENCY:-2}` and only starts when CONTEXT_GRAPH_ENABLED is not false/0/no/off — the supervisord program exits 0 otherwise. It is the ETL path that turns repository history into Activity/CodeAsset/Person nodes, honouring CONTEXT_GRAPH_BACKFILL_MAX_PRS_PER_RUN (default 100) and CONTEXT_GRAPH_JOB_QUEUE_BACKEND=celery. It writes through context-engine into the configured graph backend and records progress in the Postgres ingestion/reconciliation ledgers. Search for context graph backfill, context-graph-etl queue, ingestion stalled, CONTEXT_GRAPH_ENABLED, PR backfill limit or graph ETL retry."
+    },
+    {
+      "slug": "potpie-ui",
+      "name": "potpie-ui",
+      "repo": "potpie-ai/potpie-ui",
+      "path": ".",
+      "language": "TypeScript",
+      "summary": "The Next.js 15 web app users log into — chat, pots, sources, events and the graph explorer.",
+      "description": "potpie-ui is the deployed Next.js 15 App Router frontend (`next build` / `next start`, container port 3000) served at app.potpie.ai and app-azure.potpie.ai. It authenticates with Firebase, calls mom-api for projects/conversations/graph reads and potpie-workflows for recipe and workflow execution, streams events over the EventStreamService, and renders the context graph with d3-force + elkjs on a custom canvas. State is Redux Toolkit + Redux Persist plus TanStack Query; UI is Tailwind with Radix/shadcn under the `.pot-theme` token set. Search for potpie web app, app.potpie.ai, pot page, graph explorer canvas, new chat, event timeline or frontend build failure."
+    },
+    {
+      "slug": "workflows-rest-server",
+      "name": "workflows REST server",
+      "repo": "potpie-ai/potpie-workflows",
+      "path": "src/rest_server.py",
+      "language": "Python",
+      "summary": "FastAPI server on port 8002 exposing workflow, recipe, trigger, webhook and codegen APIs.",
+      "description": "workflows-rest-server is started by supervisord as `python -m uvicorn src.rest_server:app --host 0.0.0.0 --port 8002` after the `alembic-migrate` program completes. It mounts the routers in `src/modules/{workflows,recipes,triggers,webhooks,codegen,projects,integrations,credits}` and serves the endpoints the frontend uses to create workflows, run recipes and stream execution output. It authenticates callers with Firebase admin plus POTPIE_INTERNAL_API_SECRET for service-to-service calls and reads/writes the Postgres workflow, execution-log, event and trigger-hash stores. Search for workflows API 8002, recipe run, workflow execution log, trigger registration, webhook endpoint or alembic migration on boot."
+    },
+    {
+      "slug": "workflows-celery-worker",
+      "name": "workflows Celery worker",
+      "repo": "potpie-ai/potpie-workflows",
+      "path": "start_celery_worker.py",
+      "language": "Python",
+      "summary": "Celery worker that actually executes workflow nodes, recipes and codegen jobs.",
+      "description": "workflows-celery-worker is launched by supervisord as `python start_celery_worker.py` using the app defined in `src/celery_config.py`, which special-cases macOS by forcing the spawn start method and setting OBJC_DISABLE_INITIALIZE_FORK_SAFETY to avoid SIGSEGV under fork. It consumes tasks queued by the REST server and the event-bus worker, runs the node graph in `src/core/{workflows,nodes,executions,agents}`, calls models through the LiteLLM adapter and delegates repo-aware steps to mom-api via PotpieAgentExecutor and POTPIE_BASE_URL. Search for celery worker crash, SIGSEGV spawn fork macOS, workflow node failed, recipe streaming, litellm adapter or execution log missing."
+    },
+    {
+      "slug": "workflows-event-bus-worker",
+      "name": "workflows event-bus worker",
+      "repo": "potpie-ai/potpie-workflows",
+      "path": "start_event_bus_worker.py",
+      "language": "Python",
+      "summary": "Long-running asyncio subscriber that reads Redis event queues and fires matching workflow triggers.",
+      "description": "workflows-event-bus-worker is `python start_event_bus_worker.py`, which wires `EventBusSubscriber` from `src/adapters/event_bus_subscriber_single_queue.py` to the SQLAlchemy workflows, execution-log, event and trigger-hash stores. It listens on the Redis queues published by the potpie event_bus module, matches each event against registered triggers using trigger hashes for dedupe, and enqueues workflow executions. It is the component behind 'my workflow didn't fire on the PR event'. Search for event bus worker, trigger did not fire, redis queue subscriber, duplicate trigger, trigger hash store or event-driven workflow."
+    },
+    {
+      "slug": "potpie-slack-bot",
+      "name": "potpie Slack bot",
+      "repo": "potpie-ai/potpie-slack",
+      "path": "src/main.py",
+      "language": "Python",
+      "summary": "slack-bolt + FastAPI service on port 8010 that brings Potpie agents into Slack channels and threads.",
+      "description": "potpie-slack-bot is started by `start.sh`, which sources `.env`, runs `run_migrations.py`, then launches `uvicorn main:fastapi_app --host 0.0.0.0 --port ${PORT:-8010}` (with TLSv1_2 and an explicit ECDHE cipher suite when SSL_CERTFILE/SSL_KEYFILE are set). It handles Slack events and slash commands in `src/handlers` and `src/events`, translates agent markdown into Slack mrkdwn, and stores workspace installs and thread mappings in Postgres through `src/store.py`. All agent work is delegated to mom-api via `src/potpie_service.py`. Search for Slack bot not responding, slack-bolt handler, slack install oauth, mrkdwn conversion, port 8010 or Slack thread context."
+    },
+    {
+      "slug": "potpie-vscode-extension",
+      "name": "Potpie AI VS Code extension",
+      "repo": "potpie-ai/potpie-vscode-extension",
+      "path": "src/extension.ts",
+      "language": "TypeScript",
+      "summary": "VS Code extension shipping the Potpie chat webview into the editor sidebar.",
+      "description": "potpie-vscode-extension is the packaged VS Code client (`main: ./out/extension.js`, webpack build, activation `onStartupFinished`). It contributes the `potpie-chat` activitybar container and webview, the commands `potpie.newChat`, `potpie.openSignInExternal` and `potpie.focusView`, and a Tailwind-styled webview UI under `media/`. It authenticates by opening the browser sign-in flow and then calls mom-api for projects, conversations and agent responses; `package-local.json`, `package-stage.json` and `package-prod.json` swap the backend base URL per environment. Search for VS Code extension not loading, potpie chat panel blank, extension sign-in, vsix install or webview CSP error."
+    },
+    {
+      "slug": "potpie-docs",
+      "name": "docs.potpie.ai",
+      "repo": "potpie-ai/mintlify-docs",
+      "path": ".",
+      "language": "MDX",
+      "summary": "The Mintlify-hosted public documentation site built from the mintlify-docs MDX sources.",
+      "description": "potpie-docs is the deployed documentation site at docs.potpie.ai, built and hosted by Mintlify directly from the `potpie-ai/mintlify-docs` default branch — a push to main is the deploy. Navigation is driven by `docs.json` (theme maple) and covers introduction, quickstart, agent guides, custom-agents, extensions, self-hosting and an auto-generated API reference from `openapi.json`. Because it is the public front door, a broken `docs.json` reference or missing page produces a visible 404 on docs.potpie.ai. Search for docs site build failed, mintlify broken link, docs.json navigation, missing mdx page or API reference out of date."
+    },
+    {
+      "slug": "pie-api",
+      "name": "pie api",
+      "repo": "potpie-ai/pie",
+      "path": "apps/api",
+      "language": "Go",
+      "summary": "Go Connect-RPC API service for the enterprise pie platform, generated from packages/contracts/proto/pie/v1.",
+      "description": "pie-api is the Go module `github.com/potpie-ai/pie/apps/api` (go 1.25.0) depending on the shared `packages/go/platform` module. It serves the Connect/gRPC surfaces generated from `packages/contracts/proto/pie/v1/{health,orchestration,runs,session}.proto` into `packages/go/platform/gen/pie/v1/piev1connect/`, exposing run creation, session management and orchestration to the pie CLI, VS Code app and web surface. Health is implemented in `apps/api/internal/health/health.go`. Search for pie API, Connect RPC handler, orchestration proto, runs service, session service or go platform gen package."
+    },
+    {
+      "slug": "pie-comm-gateway",
+      "name": "pie comm-gateway",
+      "repo": "potpie-ai/pie",
+      "path": "apps/comm-gateway",
+      "language": "Go",
+      "summary": "Go edge gateway terminating external client connections and streaming run output into the pie platform.",
+      "description": "pie-comm-gateway is the Go module `github.com/potpie-ai/pie/apps/comm-gateway`, the communication edge in front of pie-api. It owns client connection handling and streaming fan-out for live run output, so that the CLI, VS Code extension and web app can attach to and resume a run without holding a connection open to the core API. `internal/health/health.go` provides the readiness endpoint used by the CI health contract tests. Search for comm gateway, stream disconnect, run attach, resume stream, websocket edge or gateway health check."
+    },
+    {
+      "slug": "pie-harness-runner",
+      "name": "pie harness-runner",
+      "repo": "potpie-ai/pie",
+      "path": "apps/harness-runner",
+      "language": "Go",
+      "summary": "Go service that executes agent harness runs against the harness runtime contract and emits the golden stream events.",
+      "description": "pie-harness-runner is the Go module `github.com/potpie-ai/pie/apps/harness-runner`, the execution engine behind the spec0–spec7 harness work (feat/spec0-harness-runtime through feat/spec7-sidecar-packaging). It implements `packages/contracts/proto/pie/v1/harness_runtime.proto` and is validated against `packages/contracts/testdata/harness_runtime_golden.jsonl`, which pins the exact stream event sequence a harness run must emit. It enforces the tool-governance allowlist and produces the resume/history records the CLI replays. Search for harness runner, harness runtime golden, stream event mismatch, tool governance allowlist, agent sidecar or resume history."
+    },
+    {
+      "slug": "pie-cli",
+      "name": "pie CLI",
+      "repo": "potpie-ai/pie",
+      "path": "apps/cli",
+      "language": "Python",
+      "summary": "Python CLI for the enterprise platform — run, resume, serve and live-view commands against the harness runtime.",
+      "description": "pie-cli lives in `apps/cli/src/pie_cli` and is organised as `main.py` plus `run_cmds.py`, `resume_cmds.py`, `serve_cmds.py`, `harness_cmds.py`, `harness_config.py`, `preflight.py`, `live_view.py`, `stream_view.py` and `stream_format.py`. It performs preflight checks, submits runs through pie-api, renders the live streaming view of harness events in the terminal, and can resume a previous run from its recorded history. Its behaviour is covered by `apps/cli/tests/test_{cli,serve,serve_main,live_view,resume,harness_config,stream_view}.py`. Search for pie run, pie resume, pie serve, preflight failed, live view rendering or stream format."
+    },
+    {
+      "slug": "pie-vscode",
+      "name": "pie VS Code app",
+      "repo": "potpie-ai/pie",
+      "path": "apps/vscode",
+      "language": "TypeScript",
+      "summary": "Enterprise VS Code extension with a bundled harness/launcher and packaged agent skills.",
+      "description": "pie-vscode is the esbuild-bundled extension in `apps/vscode` (`esbuild.mjs`, `scripts/build-harness.mjs`, `scripts/build-launcher.mjs`) — unlike the older potpie-vscode-extension it ships the harness and launcher binaries alongside the extension itself. `src/host/{actions,allowlist}.ts` implement host-side action dispatch and the tool allowlist, and `skills/` bundles authored SKILL.md packs (brainstorming, systematic-debugging, test-driven-development, verification-before-completion, writing-plans) plus walkthrough media. Linux VSIX packaging is tracked on the `codex/vscode-linux-vsix` branch. Search for pie vscode, bundled harness, launcher build, host allowlist, skill pack or linux vsix."
+    },
+    {
+      "slug": "pie-web",
+      "name": "pie web",
+      "repo": "potpie-ai/pie",
+      "path": "apps/web",
+      "language": "TypeScript",
+      "summary": "Next.js surface for the enterprise platform, primarily the live run-stream viewer.",
+      "description": "pie-web is the `@pie/web` Next.js app in `apps/web`, run with `next dev -H 127.0.0.1 -p 5173` and built with NEXT_TELEMETRY_DISABLED=1. It consumes the workspace packages `@pie/api-client`, `@pie/config` and `@pie/ui`, and its main route today is `app/stream/[runId]/page.tsx` — the browser view of a live or replayed harness run. It is intentionally thin relative to potpie-ui because the enterprise product leads with the CLI and VS Code surfaces. Search for pie web, run stream page, port 5173, @pie/ui, api-client workspace package or Next.js enterprise surface."
+    },
+    {
+      "slug": "pie-observability",
+      "name": "pie observability",
+      "repo": "potpie-ai/pie",
+      "path": "observability",
+      "language": "Python",
+      "summary": "Shared structured-logging, tracing and redaction library with pluggable Loki, Logfire, Sentry, loguru and stdout sinks.",
+      "description": "pie-observability is the `potpie-observability` uv workspace member under `observability/`, imported by the Python services in the pie monorepo. It defines logging profiles (`profiles.py`), a sink abstraction (`sink.py` plus `sinks/{console,json_stdout,logfire_sink,loguru_sink,sentry_sink}.py`), stdlib logging interception (`intercept.py`), tracing helpers (`tracing.py`) and PII/secret redaction (`redaction.py`), with ready-made FastAPI and Celery integrations. Its contract is pinned by `tests/test_logging_contract.py` and `tests/test_redaction.py`, and the local stack in `deploy/observability/docker-compose.observability.yml` runs Loki 3.3.2, Promtail 3.3.2 and Grafana 11.4.0. Search for structured logging, log redaction, secrets in logs, logfire sink, sentry sink, promtail scrape or grafana loki datasource."
+    }
+  ],
+  "environments": [
+    {
+      "slug": "production",
+      "name": "production",
+      "summary": "The customer-facing Potpie environment behind api.potpie.ai, app.potpie.ai and docs.potpie.ai.",
+      "description": "production is the live environment serving real users: mom-api and convo-server behind the api ingress, the four Celery workers, potpie-workflows, potpie-ui behind the app ingress, and the Slack bot. Its manifests live under `prod/` in potpie-ai/potpie-k8s-deployments and the Helm charts in potpie-terraform, with TLS issued by the cert-manager `letsencrypt-prod` ClusterIssuer and secrets read from HashiCorp Vault (`mom-micro-services/data/db-secret`). Apps run with ENV=production, LOG_LEVEL=info and TRACE_SAMPLE_RATE tuned down from the dev default. Search for prod outage, production deploy, api.potpie.ai down, prod namespace, letsencrypt-prod or production rollback."
+    },
+    {
+      "slug": "staging",
+      "name": "staging",
+      "summary": "Pre-production mirror of the full stack used to validate deploys before promoting to prod.",
+      "description": "staging is the full-stack rehearsal environment defined by the `stage/` tree in potpie-ai/potpie-k8s-deployments — stage ingress hosts, a separate Neo4j cluster and PgBouncer, its own Vault service accounts, and the `staging-433102` GCP project whose Artifact Registry (asia-south1-docker.pkg.dev) holds every image tag that production later promotes. Services run with ENV=staging and a distinct CELERY_QUEUE_NAME so staging tasks never leak into prod queues. It is where Jenkins pipelines deploy first and where the stage VS Code manifest points. Search for staging deploy, stage namespace, staging-433102, asia-south1 artifact registry, stage ingress or promote to prod."
+    },
+    {
+      "slug": "preview",
+      "name": "preview",
+      "summary": "Ephemeral per-branch preview deployments of potpie-ui and the docs site for PR review.",
+      "description": "preview is the short-lived environment class used to review frontend and documentation changes before merge. potpie-ui preview builds are produced per pull request and pointed at the staging backend, and mintlify renders a preview of docs.potpie.ai for each docs PR. Preview deployments are disposable, carry no production data and are torn down when the PR closes — so a preview URL going stale is expected rather than an incident. Search for preview deployment, PR preview URL, branch deploy, docs preview or ephemeral environment."
+    },
+    {
+      "slug": "local-dev",
+      "name": "local-dev",
+      "summary": "Developer laptop environment — uv/pnpm workspaces, embedded FalkorDBLite and optional local Docker services.",
+      "description": "local-dev is how contributors actually run Potpie: `uv sync` in the potpie workspace, `pnpm run dev` for potpie-ui, and `.env` files derived from `legacy/.env.template` and `.env.template`. The CLI and daemon default to the embedded FalkorDBLite backend at `.potpie/context_graph/falkordb.db` so no Neo4j server or Docker is required, while the legacy backend expects local Postgres (`momentum_dev`), Redis on 127.0.0.1:6379 and Qdrant on 127.0.0.1:6333. ENV=development with STRICT_ENV_VALIDATION=true and LOG_LEVEL=debug. Search for local setup, pnpm run dev, uv sync, .env.template, FalkorDBLite path, local dev mode or missing env var."
+    }
+  ],
+  "clusters": [
+    {
+      "slug": "aks-potpie-prod",
+      "name": "Azure AKS — a0031-potpie-aks-prod (Central India)",
+      "summary": "The production Azure Kubernetes Service cluster Potpie migrated onto, running every stateful backing store in-cluster.",
+      "description": "aks-potpie-prod is the `azurerm_kubernetes_cluster.potpie_aks` named `a0031-potpie-aks-prod` in resource group `a0031-potpie-aks-Resources-Prod`, region Central India, node pool `default` on Standard_D2s_v3, defined in potpie-terraform/terraform-azure/main.tf. Networking lives in `a0031-potpie-aks-Network-Prod` with `potpie-vnet`, an `aks-subnet` and `mgmt-subnet`, and NSG rules allowing HTTP/HTTPS plus internal traffic. The defining architectural choice here is that PostgreSQL was pulled out of Azure managed flexible-server and moved into the cluster as a Helm StatefulSet — `azurerm_postgresql_flexible_server`, its private DNS zone and the 5432 NSG rule were all deleted (see POSTGRESQL_MIGRATION.md). Storage uses the `azure-disk-premium` StorageClass (disk.csi.azure.com, Premium_LRS, WaitForFirstConsumer). Search for AKS, Central India, a0031-potpie-aks-prod, azure migration, azure-disk-premium or in-cluster postgres."
+    },
+    {
+      "slug": "gke-potpie-staging",
+      "name": "GCP staging-433102 (GKE + asia-south1 Artifact Registry)",
+      "summary": "The older Google Cloud project that still hosts staging workloads and remains the source of truth for container images.",
+      "description": "gke-potpie-staging is the GCP project `staging-433102` in asia-south1. Even after the Azure migration it stays load-bearing because every service image is published to and pulled from `asia-south1-docker.pkg.dev/staging-433102/...` — mom-api, celery-api, workflows-aws/potpie-workflows and workflows-aws/potpie-ui all reference it, and AKS pulls them using the `gcp-artifact-secret` imagePullSecret created from a GCP service-account key. It also backs GCS object storage (OBJECT_STORAGE_PROVIDER=gcs) and GCP Secret Manager. Scripts `cp_image_gcp_acr.sh` and `sync_frontend_image.sh` exist purely to copy images out of it. Search for staging-433102, artifact registry, gcp-artifact-secret, image pull backoff, asia-south1 or GCS bucket."
+    },
+    {
+      "slug": "eks-potpie-byoc",
+      "name": "AWS EKS bring-your-own-cloud reference",
+      "summary": "The AWS EKS + RDS + ElastiCache reference stack used for self-hosted and enterprise BYOC deployments.",
+      "description": "eks-potpie-byoc is the AWS path in potpie-terraform/terraform-aws: a VPC with public and private subnets, a single NAT gateway (`single_nat_gateway = true` to keep cost down), an EKS cluster with worker nodes in private subnets, RDS PostgreSQL and ElastiCache. It is not where potpie.ai itself runs — it is the reference topology handed to enterprise customers who must host Potpie in their own AWS account, and the same cloud-agnostic Helm charts deploy onto it. `presetup/create-eks-admin.sh` and `postsetup/register-local-user-k8.sh` bootstrap access. Search for self-hosting, BYOC, EKS, terraform-aws, RDS endpoint, ElastiCache or bring your own cloud."
+    },
+    {
+      "slug": "local-docker",
+      "name": "Local developer machine",
+      "summary": "Laptop-local runtime — Docker/compose services, embedded FalkorDBLite and the local Grafana/Loki observability stack.",
+      "description": "local-docker is the developer's own machine treated as a cluster: Docker Desktop or Colima running Postgres, Redis, Qdrant and optionally Neo4j, plus `deploy/observability/docker-compose.observability.yml` which brings up Loki 3.3.2, Promtail 3.3.2 and Grafana 11.4.0 on the external `potpie_app-network`. Many workflows need no containers at all because the CLI and daemon default to embedded FalkorDBLite. macOS is a first-class but quirky target — `src/celery_config.py` forces the spawn multiprocessing method on Darwin to avoid CoreFoundation fork SIGSEGV. Search for docker compose up, colima, local grafana, potpie_app-network, macOS fork crash or local observability stack."
+    }
+  ],
+  "deployment_targets": [
+    {
+      "slug": "k8s-mom-api",
+      "name": "Deployment/mom-api",
+      "summary": "Kubernetes Deployment + Service + Ingress for the main backend API, published at api-azure.potpie.ai.",
+      "description": "k8s-mom-api is the `mom-api` workload rendered from `helm/mom-api/templates/deployment.yaml` (with service.yaml, ingress.yaml, serviceaccount.yaml, role.yaml and rolebinding.yaml). The image is `asia-south1-docker.pkg.dev/staging-433102/mom-api/mom-api-ss`, the ingress is `mom-api-ingress` on host api-azure.potpie.ai with forced SSL redirect and a cert-manager letsencrypt-prod certificate, and an HPA lives alongside it in potpie-k8s-deployments (`mom-server-microsvc/mom-api/mom-api-hpa.yaml`). Rollouts go through the Jenkins pipeline in the same directory, with JenkinsfileRollBack as the escape hatch. Search for mom-api pod crashloop, api-azure.potpie.ai, mom-api HPA, mom-api rollout or mom-api ingress 502."
+    },
+    {
+      "slug": "k8s-celery-api",
+      "name": "Deployment/celery-api",
+      "summary": "Kubernetes Deployment running the momentum Celery worker fleet under supervisord.",
+      "description": "k8s-celery-api is the `celery-api` workload from `helm/celery-api/templates/deployment.yaml`, image `asia-south1-docker.pkg.dev/staging-433102/celery-api/celery-api-ss`, built from `legacy/deployment/prod/celery/celery.Dockerfile`. A single pod runs all momentum workers via `celery-api-supervisord.conf` — parsing, agent, events, context-graph ETL and beat — which means one OOM-killed parsing task takes the whole worker pod down with it. It scales via `mom-server-microsvc/celery/celery-api-hpa.yaml` and mounts the shared NFS repos volume. Search for celery-api OOMKilled, worker pod restart, celery supervisord, celery HPA or all workers died at once."
+    },
+    {
+      "slug": "k8s-convo-server",
+      "name": "Deployment/conversation",
+      "summary": "Kubernetes workload for the conversation/streaming server, scaled independently of mom-api.",
+      "description": "k8s-convo-server is the `conversation` workload defined in `prod/mom-server-microsvc/convo/` (conversation-svc.yaml, conversation-hpa.yaml, Jenkinsfile) and mirrored under `stage/`. It runs the convo.Dockerfile image with `convo-api-supervisord.conf` and is given its own HPA because streaming chat connections hold pods for far longer than ordinary API requests. Long idle timeouts on the ingress are required for it to work correctly. Search for conversation deployment, convo pods, streaming timeout, conversation HPA or chat stream dropped."
+    },
+    {
+      "slug": "k8s-potpie-workflows",
+      "name": "Deployment/potpie-workflows",
+      "summary": "Kubernetes Deployment running the workflows REST server, Celery worker and event-bus worker in one supervisord pod.",
+      "description": "k8s-potpie-workflows is the `potpie-workflows` Deployment from `helm/workflows/templates/deployment.yaml` and `k8s/deployment.yaml` in the workflows repo, image `asia-south1-docker.pkg.dev/staging-433102/workflows-aws/potpie-workflows` (or `gcr.io/${GCP_PROJECT_ID}/potpie-workflows:${GITHUB_SHA}` from CI). Config comes from the `potpie-workflows-config` ConfigMap and the `potpie-workflows-secrets` Secret, which carries POSTGRES_SERVER, REDIS_URL, POTPIE_BASE_URL, POTPIE_INTERNAL_API_SECRET, FIREBASE_SERVICE_ACCOUNT_JSON, OPENAI_API_KEY and LLM_MODEL. Alembic migrations run as a supervisord program before FastAPI and Celery start. Search for workflows pod, potpie-workflows-secrets, alembic migrate on startup, workflows 8002 or workflows deploy."
+    },
+    {
+      "slug": "k8s-potpie-ui",
+      "name": "Deployment/potpie-ui",
+      "summary": "Kubernetes Deployment + Ingress serving the Next.js frontend at app-azure.potpie.ai.",
+      "description": "k8s-potpie-ui is the `potpie-ui` workload from `helm/potpie-ui/templates/deployment.yaml`, image `asia-south1-docker.pkg.dev/staging-433102/workflows-aws/potpie-ui`, ClusterIP service on port 80 → targetPort 3000. Ingress `potpie-ui-ingress` uses className nginx on host app-azure.potpie.ai with cert-manager letsencrypt-prod and TLS secret `app-azure-tls`. It requests 100m CPU / 128Mi memory (limits 500m / 512Mi), uses topologySpreadConstraints across hostnames, the `potpie-ui-sa` service account and the `gcp-artifact-secret` pull secret. `scripts/sync_frontend_image.sh` copies frontend images between registries. Search for frontend pod, app-azure.potpie.ai, app-azure-tls, potpie-ui image tag or frontend image sync."
+    },
+    {
+      "slug": "k8s-postgresql",
+      "name": "StatefulSet/postgresql",
+      "summary": "In-cluster PostgreSQL StatefulSet in namespace devops with 20Gi persistent storage and a NetworkPolicy.",
+      "description": "k8s-postgresql is the Helm chart at `helm/postgresql/` created during the migration off Azure managed Postgres. It is a StatefulSet with 20Gi persistent storage serving database `potpiedb` as user `potpieadmin` at `postgresql.devops.svc.cluster.local:5432`, credentials injected from Vault path `mom-micro-services/data/db-secret`. Its NetworkPolicy only admits connections from mom-api and celery-api pods, and it has liveness/readiness probes, resource limits and a security context. Deploy with `./deploy-postgresql.sh devops live_render`. Search for postgres statefulset, potpiedb, postgresql.devops.svc.cluster.local, network policy blocked connection, pg PVC full or vault db-secret."
+    },
+    {
+      "slug": "k8s-pgbouncer",
+      "name": "Deployment/pgbouncer",
+      "summary": "PgBouncer connection pooler in front of PostgreSQL, with HPA, PodDisruptionBudget and Vault-sourced credentials.",
+      "description": "k8s-pgbouncer is the `edoburu/pgbouncer` Deployment from `helm/pgbouncer/` and `prod/PgBouncer/` (pgbouncer-deployment.yaml, pgbouncer-svc.yaml, pgb-hpa.yaml, pgb-pdb.yaml, service account, role and role binding, vault-auth-binding.yaml). It exists because the Celery fleet opens far more connections than Postgres max_connections allows; every app connection goes through the pooler rather than direct to the database. `update-pgbouncer-config.sh`, `update-pgbouncer-vault.sh` and `update-pgbouncer-direct.sh` in potpie-terraform manage its userlist and secrets. Search for too many connections, pgbouncer pool exhausted, FATAL sorry too many clients, pgbouncer restart or connection pooler."
+    },
+    {
+      "slug": "k8s-neo4j",
+      "name": "StatefulSet/neo4j",
+      "summary": "Neo4j graph database StatefulSet holding the code knowledge graph, with premium disk storage and its own HPA.",
+      "description": "k8s-neo4j is the Neo4j workload from `helm/neo4j/templates/statefulset.yaml` plus the manifests in potpie-k8s-deployments (`neo4j-helm/`, `neo4j-cluster/server-1..3.values.yaml`, `Neo4j-EE-bkp/`). It stores the code knowledge graph reachable at bolt:// with credentials in the `neo4j-auth` / `neo4j-secret` secrets, and on Azure binds the `azure-disk-premium` StorageClass. History in the repo shows the journey from a three-server enterprise cluster to a single community-edition StatefulSet. Search for neo4j pod, bolt connection refused, neo4j out of memory, neo4j PVC, graph database down or neo4j auth failure."
+    },
+    {
+      "slug": "k8s-redis",
+      "name": "StatefulSet/redis",
+      "summary": "In-cluster Redis StatefulSet serving as the Celery broker and event-bus queue backend.",
+      "description": "k8s-redis is deployed from `helm/redis/` (redis-statefulset.yaml, redis-service.yaml, redis-config.yaml). It is the single Redis that carries the Celery broker for every momentum queue (`${CELERY_QUEUE_NAME}_process_repository`, `_agent_tasks`, `external-event`, `context-graph-etl`), the workflows Celery broker, and the event-bus queues consumed by workflows-event-bus-worker. Because broker and event bus share one instance, a Redis eviction or restart drops in-flight tasks and unfired triggers at the same time. Search for redis down, celery broker unreachable, redis maxmemory eviction, event bus queue lost or redis statefulset restart."
+    },
+    {
+      "slug": "k8s-vault",
+      "name": "StatefulSet/vault",
+      "summary": "HashiCorp Vault workload providing secrets to every in-cluster service via Kubernetes auth.",
+      "description": "k8s-vault is deployed from `helm/vault/` and configured by `prod/vault/` and `stage/vault/` (vault-app-policy.hcl, vault-admin-policy.hcl, mom-vault-sa.yaml, values.yaml). Applications authenticate with their Kubernetes service accounts and read paths such as `mom-micro-services/data/db-secret`; `prod/vault-put.py` and `update-vault-secret.sh` write secrets in. On Azure its data storage uses the azure-disk-premium StorageClass. A sealed or unreachable Vault blocks pod startup across the whole namespace. Search for vault sealed, vault permission denied, kubernetes auth role, vault policy, secret not found or unseal keys."
+    },
+    {
+      "slug": "k8s-nfs-server",
+      "name": "Deployment/nfs-server",
+      "summary": "In-cluster NFS server providing the shared ReadWriteMany repos volume used by parsing workers.",
+      "description": "k8s-nfs-server is the `itsthenetwork/nfs-server-alpine` workload from `helm/nfs-server/`, exporting the `repos-nfs-pvc` PersistentVolumeClaim. It gives every parsing and agent pod the same view of cloned repositories under PROJECT_PATH, which is what allows a repo cloned by one worker to be read by another without re-cloning. `deployment_data/NFS_SERVER_DEPLOYMENT_GUIDE.md` documents the setup. Its failure mode is nasty: pods hang on stale NFS handles rather than erroring cleanly. Search for repos-nfs-pvc, NFS stale file handle, shared volume, ReadWriteMany, clone directory missing or nfs server pod."
+    },
+    {
+      "slug": "k8s-ingress-nginx",
+      "name": "ingress-nginx + cert-manager",
+      "summary": "The nginx ingress controller and cert-manager ClusterIssuer that terminate TLS for every public host.",
+      "description": "k8s-ingress-nginx covers the nginx ingress controller and the cert-manager stack that front the cluster: `prod/ingress-controller/{mom-api-ingress,monitoring-ingress}.yaml`, `stage/ingress-controller/*`, `helm/certs/templates/clusterissuer.yaml` and the certificates under `prod/cert-manager/` (api-certificate.yaml, grafana-certificate.yaml, prod-clusterissuer.yaml). It issues Let's Encrypt certificates via the `letsencrypt-prod` ClusterIssuer with http01-edit-in-place, and terminates api-azure.potpie.ai, app-azure.potpie.ai and the monitoring hosts. Search for ingress 502, certificate not ready, letsencrypt rate limit, ACME http01 challenge failed, TLS secret missing or ssl-redirect."
+    },
+    {
+      "slug": "pypi-potpie-dist",
+      "name": "PyPI / uvx distribution of `potpie`",
+      "summary": "The hatchling-built wheel and sdist that ship the CLI, daemon and MCP server to end users.",
+      "description": "pypi-potpie-dist is how the open-source product actually reaches users: `pip install potpie` or `uvx potpie`, installing the hatchling-built wheel declared in the root pyproject (version 2.0.0, Apache-2.0). The wheel packages `potpie/` with force-included CLI templates (`claude_plugin/.claude-plugin/marketplace.json`, `plugin.json`, `hooks/hooks.json`) and deliberately excludes the workspace subtrees `/potpie/context-engine/**`, `/potpie/integrations/**`, `/potpie/parsing/**` and `/potpie/sandbox/**`, which ship as their own distributions. Its exclude globs are recursive on purpose because the repo .gitignore is merged into the build spec. Search for pip install potpie, uvx potpie, wheel missing template file, sdist contents, hatchling build or console script not found."
+    },
+    {
+      "slug": "vscode-marketplace",
+      "name": "VS Code Marketplace (VSIX)",
+      "summary": "Marketplace publishing target for the Potpie AI and pie VS Code extensions.",
+      "description": "vscode-marketplace is the distribution channel for the editor extensions: `potpie-vscode-extension.vsix` built by webpack from potpie-ai/potpie-vscode-extension (displayName 'Potpie AI', v1.0.5) and the esbuild-bundled `apps/vscode` extension from the pie monorepo. Environment targeting is done by swapping `package-local.json` / `package-stage.json` / `package-prod.json` into package.json before packaging, and `LOCAL_INSTALL_GUIDE.md` documents sideloading a .vsix for testing. Linux VSIX packaging for pie is tracked on the codex/vscode-linux-vsix branch. Search for publish extension, vsce package, vsix sideload, marketplace version bump or extension not updating."
+    },
+    {
+      "slug": "mintlify-docs-site",
+      "name": "Mintlify hosting for docs.potpie.ai",
+      "summary": "Mintlify's hosted build-and-serve pipeline for the public documentation site.",
+      "description": "mintlify-docs-site is the managed hosting target for docs.potpie.ai: Mintlify watches the default branch of potpie-ai/mintlify-docs, builds the MDX tree against `docs.json`, and publishes. There is no Kubernetes involvement — merging to main is the deployment. Build failures usually come from a page listed in `docs.json` navigation that does not exist on disk, or from an `openapi.json` that no longer parses. Search for docs deploy failed, mintlify build error, docs.json page not found, broken doc link or openapi spec invalid."
+    }
+  ],
+  "datastores": [
+    {
+      "slug": "postgres-potpiedb",
+      "name": "PostgreSQL — potpiedb",
+      "summary": "The primary relational database holding users, projects, conversations, workflows, billing and ingestion ledgers.",
+      "description": "postgres-potpiedb is the system of record for Potpie. In production it runs in-cluster as a StatefulSet at `postgresql.devops.svc.cluster.local:5432`, database `potpiedb`, user `potpieadmin`, credentials from Vault `mom-micro-services/data/db-secret`, reached through PgBouncer; locally it is `momentum_dev` via POSTGRES_SERVER. It stores the momentum schema (users, projects, conversations, messages, prompts, preferences, search index, usage/billing) managed by `legacy/app/alembic`, the workflows schema (workflows, executions, events, trigger hashes, recipes) managed by the workflows alembic, the context-engine ledger/ingestion/reconciliation tables, and the Slack bot's install and thread mappings. Search for POSTGRES_SERVER, DATABASE_URL, potpiedb, alembic migration failed, relation does not exist, connection pool exhausted or database is locked."
+    },
+    {
+      "slug": "redis-broker",
+      "name": "Redis — Celery broker and event bus",
+      "summary": "Single Redis instance carrying every Celery queue plus the internal event-bus streams.",
+      "description": "redis-broker is configured via REDIS_URL / BROKER_URL (`redis://127.0.0.1:6379/0` locally, REDISHOST/REDISPORT/REDIS_DB in the legacy env template) and in production is the in-cluster Redis StatefulSet. It brokers the momentum queues `${CELERY_QUEUE_NAME}_process_repository`, `${CELERY_QUEUE_NAME}_agent_tasks`, `external-event` and `context-graph-etl`, the potpie-workflows Celery queues, the recipe-streaming channels in `src/adapters/celery_recipe_streaming.py`, and the event-bus queues that `EventBusSubscriber` consumes. context-engine also publishes graph events through `adapters/outbound/event_stream/redis_publisher.py`. Search for redis connection refused, broker unreachable, celery task stuck in pending, event bus backlog, REDIS_URL or maxmemory policy."
+    },
+    {
+      "slug": "neo4j-code-graph",
+      "name": "Neo4j — code knowledge graph",
+      "summary": "Graph database storing the parsed code knowledge graph: files, classes, functions and their relationships.",
+      "description": "neo4j-code-graph is reached over NEO4J_URI (`bolt://127.0.0.1:7687` locally) with NEO4J_USERNAME/NEO4J_PASSWORD. It holds the output of the parsing pipeline — the per-repository code knowledge graph written by `legacy/app/modules/parsing/graph_construction/code_graph_service.py` and queried by the agent worker's retrieval tools. Note the deliberate split documented in the env template: the context graph can be moved to FalkorDB via GRAPH_DB_BACKEND, but the code knowledge graph still uses Neo4j. context-engine also carries Neo4j reader/writer adapters for deployments that keep both graphs there. Search for bolt://, neo4j auth failure, cypher query slow, code graph missing nodes, NEO4J_URI or graph not found for project."
+    },
+    {
+      "slug": "falkordb-context-graph",
+      "name": "FalkorDB — context graph",
+      "summary": "Redis-module graph database backing the context graph in server mode, selected by GRAPH_DB_BACKEND=falkordb.",
+      "description": "falkordb-context-graph is the FalkorDB server backend for the context graph, driven by FALKORDB_URL, FALKORDB_MODE and FALKORDB_GRAPH_NAME (default `context_graph`) and implemented in `adapters/outbound/graph/{falkordb_backend,falkordb_reader,falkordb_writer,falkordb_inspection}.py`. It stores the 24-label ontology — entities, claims and their validity windows — and serves the graph read views, entity search and plan application (`apply_plan.py`). context-engine pins `falkordb>=1.6.1` and constrains `redis>=7.1,<8` because Redis 8 maintenance notifications break the embedded connection path. Search for FALKORDB_URL, GRAPH_DB_BACKEND=falkordb, falkordb connection error, context graph query, graph name context_graph or redis 8 incompatibility."
+    },
+    {
+      "slug": "falkordb-lite",
+      "name": "FalkorDBLite — embedded local graph",
+      "summary": "Zero-dependency embedded graph file used by the CLI and daemon so local development needs no graph server.",
+      "description": "falkordb-lite is the `falkordblite>=0.10.0` embedded backend that is the default CLI graph store on Python 3.12+, persisted at FALKORDB_LITE_PATH (`.potpie/context_graph/falkordb.db`). It is the reason `potpie doctor` and `potpie graph read` work on a laptop with no Docker, no Neo4j and no Redis server. Because it is hostless it is sensitive to the redis client version — the `local` extra pins `redis>=7.1,<8` precisely to keep the hostless embedded connection working. Search for FALKORDB_LITE_PATH, .potpie/context_graph/falkordb.db, embedded graph corrupt, local graph reset, falkordblite install or no graph backend available."
+    },
+    {
+      "slug": "qdrant-vectors",
+      "name": "Qdrant — vector store",
+      "summary": "Vector database holding code and document embeddings for semantic retrieval.",
+      "description": "qdrant-vectors is configured with QDRANT_HOST, QDRANT_PORT (6333), QDRANT_GRPC_PORT, QDRANT_API_KEY and QDRANT_HTTPS. It stores the embeddings that back semantic code search and RAG retrieval in `legacy/app/modules/search` and the intelligence module when ENABLE_RAG is true. Collections are written during parsing and read by the agent worker at query time, so a collection missing after a re-parse shows up to users as 'the agent can't find anything in my repo'. Search for QDRANT_HOST, qdrant collection not found, vector search empty, embedding dimension mismatch, semantic search returned nothing or ENABLE_RAG."
+    },
+    {
+      "slug": "gcs-object-storage",
+      "name": "Google Cloud Storage — object storage",
+      "summary": "GCS bucket used for blobs, media, exports and parsing artifacts (OBJECT_STORAGE_PROVIDER=gcs).",
+      "description": "gcs-object-storage is selected by OBJECT_STORAGE_PROVIDER=gcs and configured with GCS_PROJECT_ID, GCS_BUCKET_NAME, GCS_HMAC_ACCESS_KEY and GCS_HMAC_SECRET_KEY; the HMAC keys exist so the same S3-compatible client code works against either GCS or AWS (AWS_REGION is present for the S3 path). It holds uploaded media, generated artifacts and cached parsing output for `legacy/app/modules/media` and related surfaces, and lives in the same `staging-433102` GCP project as the Artifact Registry. Search for OBJECT_STORAGE_PROVIDER, GCS_BUCKET_NAME, HMAC signature mismatch, upload failed, signed URL expired or object storage 403."
+    },
+    {
+      "slug": "nfs-repos-volume",
+      "name": "Shared repos volume (repos-nfs-pvc)",
+      "summary": "ReadWriteMany NFS volume where cloned repositories live so every worker sees the same checkout.",
+      "description": "nfs-repos-volume is the `repos-nfs-pvc` PersistentVolumeClaim exported by the in-cluster NFS server and mounted at PROJECT_PATH (`projects` by default, per the env template comment 'repositories will be downloaded/cloned to this path on your system'). Parsing workers clone into it, agent workers read source files out of it, and the sandbox module resolves local repo paths against it. It is the shared-mutable-state hot spot of the fleet: disk pressure, stale NFS handles and half-written clones all manifest here. Search for repos-nfs-pvc, PROJECT_PATH, no space left on device, stale NFS file handle, repo directory missing or clone already exists."
+    },
+    {
+      "slug": "hashicorp-vault",
+      "name": "HashiCorp Vault — secret store",
+      "summary": "Cluster secret store holding database credentials, API keys and service tokens, read via Kubernetes auth.",
+      "description": "hashicorp-vault is the Vault deployment governed by `vault-app-policy.hcl` and `vault-admin-policy.hcl`, with per-service accounts such as `mom-vault-sa` and a vault-auth role binding for PgBouncer. Applications read paths like `mom-micro-services/data/db-secret` for the potpiedb credentials; `prod/vault-put.py`, `update-vault-secret.sh` and `update-pgbouncer-vault.sh` write and rotate entries. GCP Secret Manager is the alternate provider in GCP-hosted deployments (GCP_SECRET_MANAGER_ENABLED). Search for vault sealed, permission denied on path, kubernetes auth login failed, secret rotation, vault policy or missing credential at startup."
+    },
+    {
+      "slug": "loki-logs",
+      "name": "Grafana Loki — log store",
+      "summary": "Log aggregation backend for structured JSON logs shipped by Promtail and queried in Grafana.",
+      "description": "loki-logs is Grafana Loki 3.3.2 as defined in `deploy/observability/docker-compose.observability.yml` alongside Promtail 3.3.2 and Grafana 11.4.0, wired up by `grafana-datasources.yaml` and `promtail-config.yaml`. Services emit structured JSON through the pie observability library's `json_stdout` sink (with redaction applied), Promtail scrapes container stdout, and Grafana queries Loki — the same stack exists under `legacy/deploy/observability/` and is fronted in production by the monitoring ingress with its own grafana-certificate. Search for loki, promtail scrape config, grafana datasource, log query, structured log fields or logs missing in grafana."
+    }
+  ],
+  "edges": [
+    { "from": "service:potpie-cli", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/pyproject.toml#project.scripts potpie=potpie.cli.main:main" },
+    { "from": "service:potpie-daemon", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/pyproject.toml#project.scripts potpie-daemon=potpie.daemon.main:main" },
+    { "from": "service:potpie-mcp-server", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/pyproject.toml#project.scripts potpie-mcp=potpie.mcp.server:main" },
+    { "from": "service:context-engine", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml" },
+    { "from": "service:context-core", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-core/pyproject.toml" },
+    { "from": "service:potpie-parsing", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/parsing/pyproject.toml" },
+    { "from": "service:potpie-sandbox", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/sandbox/pyproject.toml" },
+    { "from": "service:mom-api", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/supervisord.conf#program:gunicorn" },
+    { "from": "service:convo-server", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/deployment/prod/convo-server/convo.Dockerfile" },
+    { "from": "service:celery-parsing-worker", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/supervisord.conf#program:celery_parsing" },
+    { "from": "service:celery-agent-worker", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/supervisord.conf#program:celery_agent" },
+    { "from": "service:celery-events-worker", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/supervisord.conf#program:celery_events" },
+    { "from": "service:celery-context-graph-worker", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/supervisord.conf#program:celery_context" },
+    { "from": "service:potpie-ui", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-ui/package.json#scripts.build next build" },
+    { "from": "service:workflows-rest-server", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie-workflows", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/supervisord.conf#program:fastapi" },
+    { "from": "service:workflows-celery-worker", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie-workflows", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/start_celery_worker.py" },
+    { "from": "service:workflows-event-bus-worker", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie-workflows", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/start_event_bus_worker.py" },
+    { "from": "service:potpie-slack-bot", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie-slack", "truth": "authoritative_fact", "evidence": "code:potpie-slack/start.sh uvicorn main:fastapi_app --port 8010" },
+    { "from": "service:potpie-vscode-extension", "type": "DEFINED_IN", "to": "repo:potpie-ai/potpie-vscode-extension", "truth": "authoritative_fact", "evidence": "code:potpie-vscode-extension/package.json#main out/extension.js" },
+    { "from": "service:potpie-docs", "type": "DEFINED_IN", "to": "repo:potpie-ai/mintlify-docs", "truth": "authoritative_fact", "evidence": "code:mintlify-docs/docs.json" },
+    { "from": "service:pie-api", "type": "DEFINED_IN", "to": "repo:potpie-ai/pie", "truth": "authoritative_fact", "evidence": "code:pie/apps/api/go.mod module github.com/potpie-ai/pie/apps/api" },
+    { "from": "service:pie-comm-gateway", "type": "DEFINED_IN", "to": "repo:potpie-ai/pie", "truth": "authoritative_fact", "evidence": "code:pie/apps/comm-gateway/go.mod" },
+    { "from": "service:pie-harness-runner", "type": "DEFINED_IN", "to": "repo:potpie-ai/pie", "truth": "authoritative_fact", "evidence": "code:pie/apps/harness-runner/go.mod" },
+    { "from": "service:pie-cli", "type": "DEFINED_IN", "to": "repo:potpie-ai/pie", "truth": "authoritative_fact", "evidence": "code:pie/apps/cli/pyproject.toml" },
+    { "from": "service:pie-vscode", "type": "DEFINED_IN", "to": "repo:potpie-ai/pie", "truth": "authoritative_fact", "evidence": "code:pie/apps/vscode/package.json" },
+    { "from": "service:pie-web", "type": "DEFINED_IN", "to": "repo:potpie-ai/pie", "truth": "authoritative_fact", "evidence": "code:pie/apps/web/package.json name @pie/web" },
+    { "from": "service:pie-observability", "type": "DEFINED_IN", "to": "repo:potpie-ai/pie", "truth": "authoritative_fact", "evidence": "code:pie/pyproject.toml#tool.uv.workspace members observability" },
+
+    { "from": "service:potpie-cli", "type": "DEPENDS_ON", "to": "service:potpie-daemon", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/daemon/daemon_client.py" },
+    { "from": "service:potpie-cli", "type": "DEPENDS_ON", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/pyproject.toml#dependencies potpie-context-engine[all]==0.1.0" },
+    { "from": "service:potpie-cli", "type": "DEPENDS_ON", "to": "service:context-core", "truth": "authoritative_fact", "evidence": "code:potpie/pyproject.toml#dependencies potpie-context-core==0.1.0" },
+    { "from": "service:potpie-cli", "type": "DEPENDS_ON", "to": "service:potpie-sandbox", "truth": "agent_claim", "confidence": 0.7, "note": "CLI setup orchestrator provisions sandbox workspaces for agent runs." },
+    { "from": "service:potpie-daemon", "type": "DEPENDS_ON", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/daemon/daemon_runtime" },
+    { "from": "service:potpie-daemon", "type": "DEPENDS_ON", "to": "service:context-core", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml#dependencies potpie-context-core==0.1.0" },
+    { "from": "service:potpie-daemon", "type": "DEPENDS_ON", "to": "service:potpie-parsing", "truth": "agent_claim", "confidence": 0.75, "note": "Daemon drives repo parsing/repomap when ingesting a source." },
+    { "from": "service:potpie-daemon", "type": "DEPENDS_ON", "to": "service:potpie-sandbox", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/services/managed_services/container_backend.py" },
+    { "from": "service:potpie-mcp-server", "type": "DEPENDS_ON", "to": "service:potpie-daemon", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/mcp/server.py" },
+    { "from": "service:potpie-mcp-server", "type": "DEPENDS_ON", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/mcp/project_access.py" },
+    { "from": "service:context-engine", "type": "DEPENDS_ON", "to": "service:context-core", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml#dependencies potpie-context-core==0.1.0" },
+    { "from": "service:potpie-sandbox", "type": "DEPENDS_ON", "to": "service:potpie-parsing", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/sandbox/pyproject.toml#project.scripts potpie-parse=sandbox.parser_runner.__main__:main" },
+    { "from": "service:mom-api", "type": "DEPENDS_ON", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/app/modules/context_graph" },
+    { "from": "service:mom-api", "type": "DEPENDS_ON", "to": "service:celery-parsing-worker", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/supervisord.conf#program:celery_parsing queue ${CELERY_QUEUE_NAME}_process_repository" },
+    { "from": "service:mom-api", "type": "DEPENDS_ON", "to": "service:celery-agent-worker", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/supervisord.conf#program:celery_agent queue ${CELERY_QUEUE_NAME}_agent_tasks" },
+    { "from": "service:mom-api", "type": "DEPENDS_ON", "to": "service:celery-events-worker", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/supervisord.conf#program:celery_events queue external-event" },
+    { "from": "service:mom-api", "type": "DEPENDS_ON", "to": "service:celery-context-graph-worker", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/.env.template CONTEXT_GRAPH_JOB_QUEUE_BACKEND=celery" },
+    { "from": "service:convo-server", "type": "DEPENDS_ON", "to": "service:celery-agent-worker", "truth": "agent_claim", "confidence": 0.8, "note": "Streaming conversations dispatch agent work onto the agent_tasks queue." },
+    { "from": "service:convo-server", "type": "DEPENDS_ON", "to": "service:mom-api", "truth": "agent_claim", "confidence": 0.65, "note": "Shares the momentum codebase and auth/project surfaces with mom-api." },
+    { "from": "service:celery-parsing-worker", "type": "DEPENDS_ON", "to": "service:potpie-parsing", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/app/modules/parsing/graph_construction/parsing_repomap.py" },
+    { "from": "service:celery-agent-worker", "type": "DEPENDS_ON", "to": "service:context-engine", "truth": "agent_claim", "confidence": 0.75, "note": "Agent retrieval tools read context-graph views through context-engine." },
+    { "from": "service:celery-agent-worker", "type": "DEPENDS_ON", "to": "service:potpie-sandbox", "truth": "agent_claim", "confidence": 0.6, "note": "Agent runs that execute code do so inside sandbox workspaces." },
+    { "from": "service:celery-context-graph-worker", "type": "DEPENDS_ON", "to": "service:context-engine", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/postgres/ingestion_event_store.py" },
+    { "from": "service:celery-context-graph-worker", "type": "DEPENDS_ON", "to": "service:context-core", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-core/src/potpie_context_core/ontology.py" },
+    { "from": "service:potpie-ui", "type": "DEPENDS_ON", "to": "service:mom-api", "truth": "authoritative_fact", "evidence": "code:potpie-ui/services/EventStreamService.ts" },
+    { "from": "service:potpie-ui", "type": "DEPENDS_ON", "to": "service:convo-server", "truth": "agent_claim", "confidence": 0.8, "note": "Chat surfaces stream from the conversation server rather than mom-api." },
+    { "from": "service:potpie-ui", "type": "DEPENDS_ON", "to": "service:workflows-rest-server", "truth": "agent_claim", "confidence": 0.85, "note": "Recipe and workflow pages call the workflows REST API on port 8002." },
+    { "from": "service:workflows-rest-server", "type": "DEPENDS_ON", "to": "service:workflows-celery-worker", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/celery_config.py" },
+    { "from": "service:workflows-rest-server", "type": "DEPENDS_ON", "to": "service:mom-api", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/k8s/deployment.yaml#env POTPIE_BASE_URL,POTPIE_INTERNAL_API_SECRET" },
+    { "from": "service:workflows-celery-worker", "type": "DEPENDS_ON", "to": "service:mom-api", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/adapters/potpie_agent_executor.py" },
+    { "from": "service:workflows-event-bus-worker", "type": "DEPENDS_ON", "to": "service:workflows-celery-worker", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/start_event_bus_worker.py" },
+    { "from": "service:workflows-event-bus-worker", "type": "DEPENDS_ON", "to": "service:celery-events-worker", "truth": "agent_claim", "confidence": 0.7, "note": "Consumes the Redis event-bus queues that the momentum external-event worker publishes." },
+    { "from": "service:potpie-slack-bot", "type": "DEPENDS_ON", "to": "service:mom-api", "truth": "authoritative_fact", "evidence": "code:potpie-slack/src/potpie_service.py" },
+    { "from": "service:potpie-vscode-extension", "type": "DEPENDS_ON", "to": "service:mom-api", "truth": "authoritative_fact", "evidence": "code:potpie-vscode-extension/package-prod.json" },
+    { "from": "service:potpie-vscode-extension", "type": "DEPENDS_ON", "to": "service:convo-server", "truth": "agent_claim", "confidence": 0.65, "note": "Chat webview consumes the same streaming conversation endpoints as the web app." },
+    { "from": "service:pie-comm-gateway", "type": "DEPENDS_ON", "to": "service:pie-api", "truth": "authoritative_fact", "evidence": "code:pie/packages/contracts/proto/pie/v1/session.proto" },
+    { "from": "service:pie-api", "type": "DEPENDS_ON", "to": "service:pie-harness-runner", "truth": "authoritative_fact", "evidence": "code:pie/packages/contracts/proto/pie/v1/orchestration.proto" },
+    { "from": "service:pie-api", "type": "DEPENDS_ON", "to": "service:pie-observability", "truth": "agent_claim", "confidence": 0.6, "note": "Go services follow the shared logging/tracing conventions declared in packages/contracts/observability/conventions.yaml." },
+    { "from": "service:pie-api", "type": "DEPENDS_ON", "to": "service:context-engine", "truth": "agent_claim", "confidence": 0.7, "note": "spec/context-engine-module-reuse.md plans reuse of the OSS context-engine inside the enterprise platform." },
+    { "from": "service:pie-harness-runner", "type": "DEPENDS_ON", "to": "service:pie-observability", "truth": "authoritative_fact", "evidence": "code:pie/observability/src/observability/sink.py" },
+    { "from": "service:pie-cli", "type": "DEPENDS_ON", "to": "service:pie-api", "truth": "authoritative_fact", "evidence": "code:pie/apps/cli/src/pie_cli/run_cmds.py" },
+    { "from": "service:pie-cli", "type": "DEPENDS_ON", "to": "service:pie-harness-runner", "truth": "authoritative_fact", "evidence": "code:pie/apps/cli/src/pie_cli/harness_cmds.py" },
+    { "from": "service:pie-cli", "type": "DEPENDS_ON", "to": "service:pie-comm-gateway", "truth": "agent_claim", "confidence": 0.7, "note": "Live view and resume attach to run streams through the comm gateway." },
+    { "from": "service:pie-vscode", "type": "DEPENDS_ON", "to": "service:pie-harness-runner", "truth": "authoritative_fact", "evidence": "code:pie/apps/vscode/scripts/build-harness.mjs" },
+    { "from": "service:pie-vscode", "type": "DEPENDS_ON", "to": "service:pie-cli", "truth": "agent_claim", "confidence": 0.65, "note": "Extension launcher shells out to the bundled CLI/launcher binaries." },
+    { "from": "service:pie-web", "type": "DEPENDS_ON", "to": "service:pie-api", "truth": "authoritative_fact", "evidence": "code:pie/apps/web/package.json#dependencies @pie/api-client" },
+    { "from": "service:pie-web", "type": "DEPENDS_ON", "to": "service:pie-comm-gateway", "truth": "agent_claim", "confidence": 0.7, "note": "app/stream/[runId]/page.tsx renders a live run stream served through the gateway." },
+
+    { "from": "service:mom-api", "type": "USES", "to": "datastore:postgres-potpiedb", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/.env.template POSTGRES_SERVER" },
+    { "from": "service:mom-api", "type": "USES", "to": "datastore:redis-broker", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/.env.template BROKER_URL=redis://127.0.0.1:6379/0" },
+    { "from": "service:mom-api", "type": "USES", "to": "datastore:neo4j-code-graph", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/.env.template NEO4J_URI=bolt://127.0.0.1:7687" },
+    { "from": "service:mom-api", "type": "USES", "to": "datastore:qdrant-vectors", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/.env.template QDRANT_HOST" },
+    { "from": "service:mom-api", "type": "USES", "to": "datastore:gcs-object-storage", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/.env.template OBJECT_STORAGE_PROVIDER=gcs" },
+    { "from": "service:mom-api", "type": "USES", "to": "datastore:hashicorp-vault", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/prod/vault/vault-app-policy.hcl" },
+    { "from": "service:convo-server", "type": "USES", "to": "datastore:postgres-potpiedb", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/deployment/prod/convo-server/convo-api-supervisord.conf" },
+    { "from": "service:convo-server", "type": "USES", "to": "datastore:redis-broker", "truth": "agent_claim", "confidence": 0.8, "note": "Streaming responses fan out over the shared Redis instance." },
+    { "from": "service:convo-server", "type": "USES", "to": "datastore:neo4j-code-graph", "truth": "agent_claim", "confidence": 0.7, "note": "Conversation retrieval reads the code knowledge graph." },
+    { "from": "service:celery-parsing-worker", "type": "USES", "to": "datastore:postgres-potpiedb", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/app/modules/parsing/services" },
+    { "from": "service:celery-parsing-worker", "type": "USES", "to": "datastore:redis-broker", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/supervisord.conf#program:celery_parsing" },
+    { "from": "service:celery-parsing-worker", "type": "USES", "to": "datastore:neo4j-code-graph", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/app/modules/parsing/graph_construction/code_graph_service.py" },
+    { "from": "service:celery-parsing-worker", "type": "USES", "to": "datastore:nfs-repos-volume", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/.env.template PROJECT_PATH=projects" },
+    { "from": "service:celery-parsing-worker", "type": "USES", "to": "datastore:qdrant-vectors", "truth": "agent_claim", "confidence": 0.8, "note": "Parsing writes embeddings into the vector store for later semantic search." },
+    { "from": "service:celery-agent-worker", "type": "USES", "to": "datastore:postgres-potpiedb", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/app/modules/intelligence" },
+    { "from": "service:celery-agent-worker", "type": "USES", "to": "datastore:redis-broker", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/supervisord.conf#program:celery_agent" },
+    { "from": "service:celery-agent-worker", "type": "USES", "to": "datastore:neo4j-code-graph", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/.env.template NEO4J_URI" },
+    { "from": "service:celery-agent-worker", "type": "USES", "to": "datastore:qdrant-vectors", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/.env.template ENABLE_RAG=true" },
+    { "from": "service:celery-agent-worker", "type": "USES", "to": "datastore:nfs-repos-volume", "truth": "agent_claim", "confidence": 0.85, "note": "Agent file-read tools resolve paths against the shared repos checkout." },
+    { "from": "service:celery-events-worker", "type": "USES", "to": "datastore:postgres-potpiedb", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/app/modules/event_bus" },
+    { "from": "service:celery-events-worker", "type": "USES", "to": "datastore:redis-broker", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/supervisord.conf#program:celery_events queue external-event" },
+    { "from": "service:celery-context-graph-worker", "type": "USES", "to": "datastore:postgres-potpiedb", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/postgres/reconciliation_ledger.py" },
+    { "from": "service:celery-context-graph-worker", "type": "USES", "to": "datastore:redis-broker", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/supervisord.conf#program:celery_context queue context-graph-etl" },
+    { "from": "service:celery-context-graph-worker", "type": "USES", "to": "datastore:neo4j-code-graph", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/neo4j_writer.py" },
+    { "from": "service:celery-context-graph-worker", "type": "USES", "to": "datastore:falkordb-context-graph", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/falkordb_writer.py" },
+    { "from": "service:context-engine", "type": "USES", "to": "datastore:falkordb-context-graph", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/backends/falkordb_backend.py" },
+    { "from": "service:context-engine", "type": "USES", "to": "datastore:neo4j-code-graph", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/backends/neo4j_backend.py" },
+    { "from": "service:context-engine", "type": "USES", "to": "datastore:postgres-potpiedb", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/postgres/models.py" },
+    { "from": "service:context-engine", "type": "USES", "to": "datastore:redis-broker", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/event_stream/redis_publisher.py" },
+    { "from": "service:context-engine", "type": "USES", "to": "datastore:falkordb-lite", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml#optional-dependencies.local falkordblite>=0.10.0" },
+    { "from": "service:potpie-cli", "type": "USES", "to": "datastore:falkordb-lite", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/.env.template FALKORDB_LITE_PATH=.potpie/context_graph/falkordb.db" },
+    { "from": "service:potpie-daemon", "type": "USES", "to": "datastore:falkordb-lite", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/pyproject.toml#optional-dependencies.local" },
+    { "from": "service:potpie-daemon", "type": "USES", "to": "datastore:falkordb-context-graph", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/outbound/graph/falkordb_reader.py" },
+    { "from": "service:potpie-mcp-server", "type": "USES", "to": "datastore:falkordb-lite", "truth": "agent_claim", "confidence": 0.8, "note": "MCP tools read the same embedded graph the CLI uses when no server backend is configured." },
+    { "from": "service:potpie-sandbox", "type": "USES", "to": "datastore:nfs-repos-volume", "truth": "agent_claim", "confidence": 0.6, "note": "Local sandbox workspaces are materialised from the shared repo checkout path." },
+    { "from": "service:workflows-rest-server", "type": "USES", "to": "datastore:postgres-potpiedb", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/adapters/postgres_workflows_store.py" },
+    { "from": "service:workflows-rest-server", "type": "USES", "to": "datastore:redis-broker", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/k8s/deployment.yaml#env REDIS_URL" },
+    { "from": "service:workflows-celery-worker", "type": "USES", "to": "datastore:postgres-potpiedb", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/adapters/postgres_workflows_exec_store.py" },
+    { "from": "service:workflows-celery-worker", "type": "USES", "to": "datastore:redis-broker", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/adapters/celery_recipe_streaming.py" },
+    { "from": "service:workflows-event-bus-worker", "type": "USES", "to": "datastore:postgres-potpiedb", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/adapters/postgres_events_store.py" },
+    { "from": "service:workflows-event-bus-worker", "type": "USES", "to": "datastore:redis-broker", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/src/adapters/event_bus_subscriber_single_queue.py" },
+    { "from": "service:potpie-slack-bot", "type": "USES", "to": "datastore:postgres-potpiedb", "truth": "authoritative_fact", "evidence": "code:potpie-slack/src/store.py" },
+    { "from": "service:pie-api", "type": "USES", "to": "datastore:postgres-potpiedb", "truth": "agent_claim", "confidence": 0.5, "note": "Enterprise deployments provision their own Postgres; schema ownership still being specified in spec/." },
+    { "from": "service:pie-api", "type": "USES", "to": "datastore:loki-logs", "truth": "authoritative_fact", "evidence": "code:pie/deploy/observability/grafana-datasources.yaml" },
+    { "from": "service:pie-harness-runner", "type": "USES", "to": "datastore:loki-logs", "truth": "authoritative_fact", "evidence": "code:pie/deploy/observability/promtail-config.yaml" },
+    { "from": "service:pie-observability", "type": "USES", "to": "datastore:loki-logs", "truth": "authoritative_fact", "evidence": "code:pie/observability/src/observability/sinks/json_stdout.py" },
+
+    { "from": "service:mom-api", "type": "DEPLOYED_TO", "to": "environment:production", "truth": "source_observation", "evidence": "code:potpie-terraform/helm/mom-api/values.yaml#ingress.host api-azure.potpie.ai" },
+    { "from": "service:mom-api", "type": "DEPLOYED_TO", "to": "environment:staging", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/stage/mom-server-microsvc/mom-api/mom-api-deployment.yaml" },
+    { "from": "service:convo-server", "type": "DEPLOYED_TO", "to": "environment:production", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/prod/mom-server-microsvc/convo/conversation-svc.yaml" },
+    { "from": "service:convo-server", "type": "DEPLOYED_TO", "to": "environment:staging", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/stage/mom-server-microsvc/convo/conversation-svc.yaml" },
+    { "from": "service:celery-parsing-worker", "type": "DEPLOYED_TO", "to": "environment:production", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/prod/mom-server-microsvc/celery/celery-api-hpa.yaml" },
+    { "from": "service:celery-agent-worker", "type": "DEPLOYED_TO", "to": "environment:production", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/prod/mom-server-microsvc/celery/celery-api-hpa.yaml" },
+    { "from": "service:celery-events-worker", "type": "DEPLOYED_TO", "to": "environment:production", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/prod/mom-server-microsvc/celery/celery-api-svc.yaml" },
+    { "from": "service:celery-context-graph-worker", "type": "DEPLOYED_TO", "to": "environment:production", "truth": "source_observation", "evidence": "code:potpie/legacy/supervisord.conf#program:celery_context CONTEXT_GRAPH_ENABLED" },
+    { "from": "service:celery-parsing-worker", "type": "DEPLOYED_TO", "to": "environment:staging", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/stage/mom-server-microsvc/celery/celery-api-hpa.yaml" },
+    { "from": "service:celery-agent-worker", "type": "DEPLOYED_TO", "to": "environment:staging", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/stage/mom-server-microsvc/celery/celery-api-hpa.yaml" },
+    { "from": "service:workflows-rest-server", "type": "DEPLOYED_TO", "to": "environment:production", "truth": "source_observation", "evidence": "code:potpie-terraform/helm/workflows/values.yaml" },
+    { "from": "service:workflows-celery-worker", "type": "DEPLOYED_TO", "to": "environment:production", "truth": "source_observation", "evidence": "code:potpie-workflows/supervisord.conf#program:celery-worker" },
+    { "from": "service:workflows-event-bus-worker", "type": "DEPLOYED_TO", "to": "environment:production", "truth": "source_observation", "evidence": "code:potpie-workflows/start_event_bus_worker.py" },
+    { "from": "service:workflows-rest-server", "type": "DEPLOYED_TO", "to": "environment:staging", "truth": "source_observation", "evidence": "code:potpie-terraform/helm/workflows/values.yaml#image staging-433102" },
+    { "from": "service:potpie-ui", "type": "DEPLOYED_TO", "to": "environment:production", "truth": "source_observation", "evidence": "code:potpie-terraform/helm/potpie-ui/values-production.yaml" },
+    { "from": "service:potpie-ui", "type": "DEPLOYED_TO", "to": "environment:staging", "truth": "source_observation", "evidence": "code:potpie-terraform/scripts/copy_frontend_to_staging.sh" },
+    { "from": "service:potpie-ui", "type": "DEPLOYED_TO", "to": "environment:preview", "truth": "agent_claim", "confidence": 0.6, "note": "Per-PR frontend previews are built for review and pointed at staging APIs." },
+    { "from": "service:potpie-slack-bot", "type": "DEPLOYED_TO", "to": "environment:production", "truth": "source_observation", "evidence": "code:potpie-slack/bot/prod_manifest.json" },
+    { "from": "service:potpie-docs", "type": "DEPLOYED_TO", "to": "environment:production", "truth": "source_observation", "evidence": "code:mintlify-docs/docs.json" },
+    { "from": "service:potpie-docs", "type": "DEPLOYED_TO", "to": "environment:preview", "truth": "agent_claim", "confidence": 0.7, "note": "Mintlify renders a preview build for each documentation pull request." },
+    { "from": "service:potpie-cli", "type": "DEPLOYED_TO", "to": "environment:local-dev", "truth": "authoritative_fact", "evidence": "code:potpie/pyproject.toml#project.scripts" },
+    { "from": "service:potpie-daemon", "type": "DEPLOYED_TO", "to": "environment:local-dev", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/daemon/main.py" },
+    { "from": "service:potpie-mcp-server", "type": "DEPLOYED_TO", "to": "environment:local-dev", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/mcp/server.py" },
+    { "from": "service:context-engine", "type": "DEPLOYED_TO", "to": "environment:local-dev", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-engine/src/potpie_context_engine/adapters/inbound/http/app.py" },
+    { "from": "service:context-engine", "type": "DEPLOYED_TO", "to": "environment:production", "truth": "agent_claim", "confidence": 0.8, "note": "Ships inside the mom-api and celery-api images rather than as its own workload." },
+    { "from": "service:context-core", "type": "DEPLOYED_TO", "to": "environment:local-dev", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/context-core/pyproject.toml" },
+    { "from": "service:potpie-parsing", "type": "DEPLOYED_TO", "to": "environment:local-dev", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/parsing/pyproject.toml#tool.maturin" },
+    { "from": "service:potpie-sandbox", "type": "DEPLOYED_TO", "to": "environment:local-dev", "truth": "authoritative_fact", "evidence": "code:potpie/potpie/sandbox/images/agent-sandbox/Dockerfile" },
+    { "from": "service:potpie-vscode-extension", "type": "DEPLOYED_TO", "to": "environment:production", "truth": "source_observation", "evidence": "code:potpie-vscode-extension/package-prod.json" },
+    { "from": "service:potpie-vscode-extension", "type": "DEPLOYED_TO", "to": "environment:staging", "truth": "source_observation", "evidence": "code:potpie-vscode-extension/package-stage.json" },
+    { "from": "service:pie-api", "type": "DEPLOYED_TO", "to": "environment:staging", "truth": "agent_claim", "confidence": 0.55, "note": "Enterprise platform is pre-GA; CI exercises it but there is no public prod host yet." },
+    { "from": "service:pie-comm-gateway", "type": "DEPLOYED_TO", "to": "environment:staging", "truth": "agent_claim", "confidence": 0.55, "note": "Deployed alongside pie-api in the enterprise staging stack." },
+    { "from": "service:pie-harness-runner", "type": "DEPLOYED_TO", "to": "environment:staging", "truth": "agent_claim", "confidence": 0.55, "note": "Runs as the execution tier of the enterprise staging stack." },
+    { "from": "service:pie-cli", "type": "DEPLOYED_TO", "to": "environment:local-dev", "truth": "authoritative_fact", "evidence": "code:pie/apps/cli/src/pie_cli/main.py" },
+    { "from": "service:pie-vscode", "type": "DEPLOYED_TO", "to": "environment:local-dev", "truth": "authoritative_fact", "evidence": "code:pie/apps/vscode/esbuild.mjs" },
+    { "from": "service:pie-web", "type": "DEPLOYED_TO", "to": "environment:local-dev", "truth": "authoritative_fact", "evidence": "code:pie/apps/web/package.json#scripts.dev next dev -p 5173" },
+    { "from": "service:pie-observability", "type": "DEPLOYED_TO", "to": "environment:local-dev", "truth": "authoritative_fact", "evidence": "code:pie/deploy/observability/docker-compose.observability.yml" },
+
+    { "from": "service:mom-api", "type": "DEPLOYED_WITH", "to": "deployment_target:k8s-mom-api", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/helm/mom-api/templates/deployment.yaml" },
+    { "from": "service:convo-server", "type": "DEPLOYED_WITH", "to": "deployment_target:k8s-convo-server", "truth": "authoritative_fact", "evidence": "code:potpie-k8s-deployments/prod/mom-server-microsvc/convo/conversation-svc.yaml" },
+    { "from": "service:celery-parsing-worker", "type": "DEPLOYED_WITH", "to": "deployment_target:k8s-celery-api", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/helm/celery-api/templates/deployment.yaml" },
+    { "from": "service:celery-agent-worker", "type": "DEPLOYED_WITH", "to": "deployment_target:k8s-celery-api", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/helm/celery-api/templates/deployment.yaml" },
+    { "from": "service:celery-events-worker", "type": "DEPLOYED_WITH", "to": "deployment_target:k8s-celery-api", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/deployment/prod/celery/celery-api-supervisord.conf" },
+    { "from": "service:celery-context-graph-worker", "type": "DEPLOYED_WITH", "to": "deployment_target:k8s-celery-api", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/deployment/prod/celery/celery-api-supervisord.conf" },
+    { "from": "service:workflows-rest-server", "type": "DEPLOYED_WITH", "to": "deployment_target:k8s-potpie-workflows", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/k8s/deployment.yaml" },
+    { "from": "service:workflows-celery-worker", "type": "DEPLOYED_WITH", "to": "deployment_target:k8s-potpie-workflows", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/supervisord.conf#program:celery-worker" },
+    { "from": "service:workflows-event-bus-worker", "type": "DEPLOYED_WITH", "to": "deployment_target:k8s-potpie-workflows", "truth": "authoritative_fact", "evidence": "code:potpie-workflows/dockerfile" },
+    { "from": "service:potpie-ui", "type": "DEPLOYED_WITH", "to": "deployment_target:k8s-potpie-ui", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/helm/potpie-ui/templates/deployment.yaml" },
+    { "from": "service:potpie-cli", "type": "DEPLOYED_WITH", "to": "deployment_target:pypi-potpie-dist", "truth": "authoritative_fact", "evidence": "code:potpie/pyproject.toml#tool.hatch.build.targets.wheel" },
+    { "from": "service:potpie-daemon", "type": "DEPLOYED_WITH", "to": "deployment_target:pypi-potpie-dist", "truth": "authoritative_fact", "evidence": "code:potpie/pyproject.toml#tool.hatch.build.targets.sdist include /potpie/daemon" },
+    { "from": "service:potpie-mcp-server", "type": "DEPLOYED_WITH", "to": "deployment_target:pypi-potpie-dist", "truth": "authoritative_fact", "evidence": "code:potpie/pyproject.toml#tool.hatch.build.targets.sdist include /potpie/mcp" },
+    { "from": "service:potpie-vscode-extension", "type": "DEPLOYED_WITH", "to": "deployment_target:vscode-marketplace", "truth": "authoritative_fact", "evidence": "code:potpie-vscode-extension/potpie-vscode-extension.vsix" },
+    { "from": "service:pie-vscode", "type": "DEPLOYED_WITH", "to": "deployment_target:vscode-marketplace", "truth": "authoritative_fact", "evidence": "code:pie/apps/vscode/.vscodeignore" },
+    { "from": "service:potpie-docs", "type": "DEPLOYED_WITH", "to": "deployment_target:mintlify-docs-site", "truth": "authoritative_fact", "evidence": "code:mintlify-docs/docs.json#$schema https://mintlify.com/docs.json" },
+
+    { "from": "environment:production", "type": "HOSTED_ON", "to": "cluster:aks-potpie-prod", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/terraform-azure/main.tf#azurerm_kubernetes_cluster.potpie_aks a0031-potpie-aks-prod" },
+    { "from": "environment:production", "type": "RELATED_TO", "to": "cluster:gke-potpie-staging", "truth": "source_observation", "evidence": "code:potpie-terraform/helm/mom-api/values.yaml#image asia-south1-docker.pkg.dev/staging-433102", "note": "Not a hosting relationship: production workloads run only on AKS. GCP remains a hard runtime dependency of prod as the container image source — every chart pulls from asia-south1-docker.pkg.dev/staging-433102 via the gcp-artifact-secret imagePullSecret — plus GCS object storage." },
+    { "from": "environment:staging", "type": "HOSTED_ON", "to": "cluster:gke-potpie-staging", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/stage/ingress-controller/apis-stage-ingress.yaml" },
+    { "from": "environment:preview", "type": "HOSTED_ON", "to": "cluster:gke-potpie-staging", "truth": "agent_claim", "confidence": 0.55, "note": "PR previews are built and served from the same GCP project as staging." },
+    { "from": "environment:local-dev", "type": "HOSTED_ON", "to": "cluster:local-docker", "truth": "authoritative_fact", "evidence": "code:potpie/legacy/.env.template ENV=development" },
+
+    { "from": "deployment_target:k8s-mom-api", "type": "HOSTED_ON", "to": "cluster:aks-potpie-prod", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/helm/mom-api/values.yaml#ingress.host api-azure.potpie.ai" },
+    { "from": "deployment_target:k8s-celery-api", "type": "HOSTED_ON", "to": "cluster:aks-potpie-prod", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/helm/celery-api/templates/deployment.yaml" },
+    { "from": "deployment_target:k8s-convo-server", "type": "HOSTED_ON", "to": "cluster:aks-potpie-prod", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/prod/mom-server-microsvc/convo/conversation-hpa.yaml" },
+    { "from": "deployment_target:k8s-potpie-workflows", "type": "HOSTED_ON", "to": "cluster:aks-potpie-prod", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/helm/workflows/templates/deployment.yaml" },
+    { "from": "deployment_target:k8s-potpie-ui", "type": "HOSTED_ON", "to": "cluster:aks-potpie-prod", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/helm/potpie-ui/values.yaml#ingress.host app-azure.potpie.ai" },
+    { "from": "deployment_target:k8s-postgresql", "type": "HOSTED_ON", "to": "cluster:aks-potpie-prod", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/POSTGRESQL_MIGRATION.md#postgresql.devops.svc.cluster.local" },
+    { "from": "deployment_target:k8s-pgbouncer", "type": "HOSTED_ON", "to": "cluster:aks-potpie-prod", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/helm/pgbouncer/values.yaml#image edoburu/pgbouncer" },
+    { "from": "deployment_target:k8s-neo4j", "type": "HOSTED_ON", "to": "cluster:aks-potpie-prod", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/helm/values-azure.yaml#neo4j.persistence.storageClass azure-disk-premium" },
+    { "from": "deployment_target:k8s-redis", "type": "HOSTED_ON", "to": "cluster:aks-potpie-prod", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/helm/redis/redis-statefulset.yaml" },
+    { "from": "deployment_target:k8s-vault", "type": "HOSTED_ON", "to": "cluster:aks-potpie-prod", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/helm/values-azure.yaml#vault.server.dataStorage.storageClass" },
+    { "from": "deployment_target:k8s-nfs-server", "type": "HOSTED_ON", "to": "cluster:aks-potpie-prod", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/helm/nfs-server/values.yaml#repos-nfs-pvc" },
+    { "from": "deployment_target:k8s-ingress-nginx", "type": "HOSTED_ON", "to": "cluster:aks-potpie-prod", "truth": "authoritative_fact", "evidence": "code:potpie-terraform/helm/certs/templates/clusterissuer.yaml" },
+    { "from": "deployment_target:k8s-mom-api", "type": "HOSTED_ON", "to": "cluster:gke-potpie-staging", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/stage/mom-server-microsvc/mom-api/mom-api-deployment.yaml" },
+    { "from": "deployment_target:k8s-celery-api", "type": "HOSTED_ON", "to": "cluster:gke-potpie-staging", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/stage/mom-server-microsvc/celery/celery-api-svc.yaml" },
+    { "from": "deployment_target:k8s-neo4j", "type": "HOSTED_ON", "to": "cluster:gke-potpie-staging", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/stage/neo4j-helm/neo4j-staging-stateful-deployment.yaml" },
+    { "from": "deployment_target:k8s-pgbouncer", "type": "HOSTED_ON", "to": "cluster:gke-potpie-staging", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/stage/PgBouncer/pgbouncer-deployment.yaml" },
+    { "from": "deployment_target:k8s-ingress-nginx", "type": "HOSTED_ON", "to": "cluster:gke-potpie-staging", "truth": "source_observation", "evidence": "code:potpie-k8s-deployments/stage/ingress-controller/mom-server-stage-ingress.yaml" },
+    { "from": "deployment_target:k8s-mom-api", "type": "HOSTED_ON", "to": "cluster:eks-potpie-byoc", "truth": "source_observation", "evidence": "code:potpie-terraform/helm/values-aws.yaml", "note": "Same Helm chart is the BYOC install path on customer-owned EKS." },
+    { "from": "deployment_target:k8s-postgresql", "type": "HOSTED_ON", "to": "cluster:eks-potpie-byoc", "truth": "agent_claim", "confidence": 0.5, "note": "AWS reference stack prefers RDS, but the in-cluster chart is supported for fully self-hosted installs." }
+  ]
+}

@@ -4,13 +4,17 @@ import React from "react";
 import { Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
+import { cn } from "@/lib/utils";
 import type { PotPendingInvitation } from "@/services/PotService";
 import { usePotInvitationActions } from "@/lib/hooks/usePotInvitation";
 
 /**
- * Accept / Decline banner shown on a pot the user was invited to but has not
+ * Accept / Decline strip shown on a pot the user was invited to but has not
  * answered yet. The pot is already visible (auto-added on invite); this lets
  * them keep it (accept) or be removed (decline).
+ *
+ * Rendered as a quiet single-line strip with an accent hairline — designed to
+ * sit inline inside a pot list row or under the pot header, never as a box.
  */
 export function PotInvitationBanner({
   invitation,
@@ -25,7 +29,7 @@ export function PotInvitationBanner({
   const busy = accept.isPending || decline.isPending;
 
   const stop = (e: React.MouseEvent) => {
-    // Banners can sit inside a clickable pot card — don't navigate.
+    // The strip can sit inside a clickable pot row — don't navigate.
     e.preventDefault();
     e.stopPropagation();
   };
@@ -54,23 +58,35 @@ export function PotInvitationBanner({
 
   return (
     <div
-      className={
-        "flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 " +
-        (className ?? "")
-      }
+      className={cn(
+        "flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-l-2 border-accent bg-accent/[0.07] py-1 pl-3 pr-1",
+        className,
+      )}
     >
-      <div className="flex items-center gap-2 min-w-0">
-        <Mail className="h-4 w-4 shrink-0 text-primary" />
-        <p className="text-xs text-foreground/80">
-          You&apos;ve been invited to{" "}
-          <span className="font-medium">{potLabel}</span>.
+      <div className="flex min-w-0 items-center gap-2">
+        <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <p className="truncate text-[13px] text-muted-foreground">
+          You&apos;re invited to{" "}
+          <span className="font-medium text-foreground">{potLabel}</span> —
+          accept to keep it in your list.
         </p>
       </div>
-      <div className="flex items-center gap-2">
-        <Button size="sm" variant="ghost" disabled={busy} onClick={onDecline}>
+      <div className="flex shrink-0 items-center gap-1">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-[13px] font-normal text-muted-foreground hover:text-foreground"
+          disabled={busy}
+          onClick={onDecline}
+        >
           {decline.isPending ? "Declining…" : "Decline"}
         </Button>
-        <Button size="sm" disabled={busy} onClick={onAccept}>
+        <Button
+          size="sm"
+          className="h-7 px-2.5 text-[13px]"
+          disabled={busy}
+          onClick={onAccept}
+        >
           {accept.isPending ? "Accepting…" : "Accept"}
         </Button>
       </div>

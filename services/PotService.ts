@@ -1,5 +1,28 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import {
+  getDemoAcceptedInvitation,
+  getDemoContextGraphResult,
+  getDemoDeclinedInvitation,
+  getDemoEvent,
+  getDemoEventPage,
+  getDemoGraphOverview,
+  getDemoIngestionConfig,
+  getDemoIngestPipeline,
+  getDemoIntegrations,
+  getDemoInvitation,
+  getDemoInvitations,
+  getDemoMembers,
+  getDemoPatchedPot,
+  getDemoProjectGraph,
+  getDemoRawIngestionResult,
+  getDemoRepositories,
+  getDemoSourcePatched,
+  getDemoSources,
+  isDemoEventId,
+  isDemoInviteToken,
+  isDemoPotId,
+} from "@/lib/mock/demoPots";
 
 const baseUrl = () => process.env.NEXT_PUBLIC_BASE_URL;
 
@@ -498,6 +521,7 @@ export default class PotService {
     potId: string,
     body: { display_name?: string; slug?: string; archived?: boolean },
   ): Promise<Pot> {
+    if (isDemoPotId(potId)) return getDemoPatchedPot(potId, body);
     const headers = await getHeaders();
     try {
       const response = await axios.patch(
@@ -512,6 +536,7 @@ export default class PotService {
   }
 
   static async listRepositories(potId: string): Promise<PotRepository[]> {
+    if (isDemoPotId(potId)) return getDemoRepositories(potId);
     const headers = await getHeaders();
     try {
       const response = await axios.get(
@@ -528,6 +553,9 @@ export default class PotService {
     potId: string,
     body: { owner: string; repo: string; default_branch?: string },
   ) {
+    if (isDemoPotId(potId)) {
+      return { ok: true, repo_name: `${body.owner}/${body.repo}`, demo: true };
+    }
     const headers = await getHeaders();
     try {
       const response = await axios.post(
@@ -542,6 +570,7 @@ export default class PotService {
   }
 
   static async deleteRepository(potId: string, repositoryId: string) {
+    if (isDemoPotId(potId)) return { ok: true, id: repositoryId, demo: true };
     const headers = await getHeaders();
     try {
       const response = await axios.delete(
@@ -557,6 +586,7 @@ export default class PotService {
   // ---- Members -----------------------------------------------------
 
   static async listMembers(potId: string): Promise<PotMember[]> {
+    if (isDemoPotId(potId)) return getDemoMembers(potId);
     const headers = await getHeaders();
     try {
       const response = await axios.get(
@@ -570,6 +600,7 @@ export default class PotService {
   }
 
   static async removeMember(potId: string, memberUserId: string) {
+    if (isDemoPotId(potId)) return { ok: true, user_id: memberUserId, demo: true };
     const headers = await getHeaders();
     try {
       const response = await axios.delete(
@@ -585,6 +616,7 @@ export default class PotService {
   // ---- Invitations -------------------------------------------------
 
   static async listInvitations(potId: string): Promise<PotInvitation[]> {
+    if (isDemoPotId(potId)) return getDemoInvitations(potId);
     const headers = await getHeaders();
     try {
       const response = await axios.get(
@@ -601,6 +633,7 @@ export default class PotService {
     potId: string,
     body: { email: string; role?: "user"; expires_in_days?: number },
   ): Promise<PotInvitation> {
+    if (isDemoPotId(potId)) return getDemoInvitation(potId, body.email);
     const headers = await getHeaders();
     try {
       const response = await axios.post(
@@ -615,6 +648,7 @@ export default class PotService {
   }
 
   static async revokeInvitation(potId: string, invitationId: string) {
+    if (isDemoPotId(potId)) return { ok: true, id: invitationId, demo: true };
     const headers = await getHeaders();
     try {
       const response = await axios.delete(
@@ -628,6 +662,9 @@ export default class PotService {
   }
 
   static async resendInvitation(potId: string, invitationId: string) {
+    if (isDemoPotId(potId)) {
+      return { ok: true, invitation_id: invitationId };
+    }
     const headers = await getHeaders();
     try {
       const response = await axios.post(
@@ -642,6 +679,7 @@ export default class PotService {
   }
 
   static async acceptInvitation(token: string) {
+    if (isDemoInviteToken(token)) return getDemoAcceptedInvitation(token);
     const headers = await getHeaders();
     try {
       const response = await axios.post(
@@ -656,6 +694,7 @@ export default class PotService {
   }
 
   static async declineInvitation(token: string) {
+    if (isDemoInviteToken(token)) return getDemoDeclinedInvitation(token);
     const headers = await getHeaders();
     try {
       const response = await axios.post(
@@ -676,6 +715,7 @@ export default class PotService {
   // ---- Sources -----------------------------------------------------
 
   static async listSources(potId: string): Promise<PotSource[]> {
+    if (isDemoPotId(potId)) return getDemoSources(potId);
     const headers = await getHeaders();
     try {
       const response = await axios.get(
@@ -699,6 +739,15 @@ export default class PotService {
       provider_host?: string;
     },
   ) {
+    if (isDemoPotId(potId)) {
+      const [source] = getDemoSources(potId);
+      return {
+        id: source.id,
+        repository_id: `demo-repo-${body.owner}-${body.repo}`,
+        source,
+        already_attached: true,
+      };
+    }
     const headers = await getHeaders();
     try {
       const response = await axios.post(
@@ -720,6 +769,7 @@ export default class PotService {
   }
 
   static async deleteSource(potId: string, sourceId: string) {
+    if (isDemoPotId(potId)) return { ok: true, id: sourceId, demo: true };
     const headers = await getHeaders();
     try {
       const response = await axios.delete(
@@ -737,6 +787,7 @@ export default class PotService {
     sourceId: string,
     body: { sync_enabled?: boolean },
   ): Promise<PotSource> {
+    if (isDemoPotId(potId)) return getDemoSourcePatched(potId, sourceId, body);
     const headers = await getHeaders();
     try {
       const response = await axios.patch(
@@ -754,6 +805,7 @@ export default class PotService {
     potId: string,
     integrationId: string,
   ): Promise<{ id: string; name: string; key?: string }[]> {
+    if (isDemoPotId(potId)) return [];
     const headers = await getHeaders();
     try {
       const response = await axios.get(
@@ -774,6 +826,10 @@ export default class PotService {
     potId: string,
     body: { integration_id: string; team_id: string; team_name?: string },
   ) {
+    if (isDemoPotId(potId)) {
+      const [source] = getDemoSources(potId);
+      return { id: source.id, source, already_attached: true };
+    }
     const headers = await getHeaders();
     try {
       const response = await axios.post(
@@ -794,6 +850,7 @@ export default class PotService {
   // ---- Integrations ------------------------------------------------
 
   static async listIntegrations(potId: string): Promise<PotIntegration[]> {
+    if (isDemoPotId(potId)) return getDemoIntegrations(potId);
     const headers = await getHeaders();
     try {
       const response = await axios.get(
@@ -821,6 +878,7 @@ export default class PotService {
       q?: string;
     } = {},
   ): Promise<PotEventPage> {
+    if (isDemoPotId(potId)) return getDemoEventPage(potId);
     const headers = await getHeaders();
     const params: Record<string, string | number | string[]> = {};
     if (options.limit != null) params.limit = options.limit;
@@ -858,6 +916,7 @@ export default class PotService {
   }
 
   static async getEvent(eventId: string): Promise<PotEvent> {
+    if (isDemoEventId(eventId)) return getDemoEvent(eventId);
     const headers = await getHeaders();
     try {
       const response = await axios.get(
@@ -873,6 +932,9 @@ export default class PotService {
   static async retryEvent(
     eventId: string,
   ): Promise<{ status: string; event_id: string; batch_id: string | null }> {
+    if (isDemoEventId(eventId)) {
+      return { status: "queued", event_id: eventId, batch_id: null };
+    }
     const headers = await getHeaders();
     try {
       const response = await axios.post(
@@ -893,6 +955,7 @@ export default class PotService {
   static async getIngestionConfig(
     potId: string,
   ): Promise<PotIngestionConfig> {
+    if (isDemoPotId(potId)) return getDemoIngestionConfig(potId);
     const headers = await getHeaders();
     try {
       const response = await axios.get(
@@ -913,6 +976,14 @@ export default class PotService {
       min_batch_size?: number | null;
     },
   ): Promise<PotIngestionConfig> {
+    if (isDemoPotId(potId)) {
+      return {
+        pot_id: potId,
+        mode: body.mode,
+        window_minutes: body.window_minutes,
+        min_batch_size: body.min_batch_size ?? null,
+      };
+    }
     const headers = await getHeaders();
     try {
       const response = await axios.put(
@@ -929,6 +1000,9 @@ export default class PotService {
   static async forceFlushPot(
     potId: string,
   ): Promise<{ pot_id: string; batch_id: string | null; status: string }> {
+    if (isDemoPotId(potId)) {
+      return { pot_id: potId, batch_id: `demo-flush-${potId.slice(0, 8)}`, status: "flushed" };
+    }
     const headers = await getHeaders();
     try {
       const response = await axios.post(
@@ -949,6 +1023,7 @@ export default class PotService {
   static async getIngestPipeline(
     potId: string,
   ): Promise<PotIngestPipeline> {
+    if (isDemoPotId(potId)) return getDemoIngestPipeline(potId);
     const headers = await getHeaders();
     try {
       const response = await axios.get(
@@ -971,6 +1046,15 @@ export default class PotService {
     event_ids: string[];
     count: number;
   }> {
+    if (isDemoPotId(potId)) {
+      return {
+        status: "queued",
+        pot_id: potId,
+        batch_id: `demo-batch-${potId.slice(0, 8)}`,
+        event_ids: eventIds,
+        count: eventIds.length,
+      };
+    }
     const headers = await getHeaders();
     try {
       const response = await axios.post(
@@ -1001,6 +1085,7 @@ export default class PotService {
       wait_for_terminal?: boolean;
     },
   ): Promise<RawIngestionResult> {
+    if (isDemoPotId(potId)) return getDemoRawIngestionResult(potId);
     const headers = await getHeaders();
     try {
       const response = await axios.post(
@@ -1018,6 +1103,7 @@ export default class PotService {
     potId: string,
     options: { top_entities_limit?: number } = {},
   ): Promise<GraphOverview> {
+    if (isDemoPotId(potId)) return getDemoGraphOverview(potId);
     const envelope = await this.queryContextGraph<GraphOverview>({
       pot_id: potId,
       goal: "aggregate",
@@ -1041,6 +1127,7 @@ export default class PotService {
       limit?: number;
     } = {},
   ): Promise<ProjectGraph> {
+    if (isDemoPotId(potId)) return getDemoProjectGraph(potId);
     // The Phase 3 reader registry treats `include` as reader-family routing;
     // prepend the `project_graph` family so the structural traversal reader
     // is invoked. The reader itself still consumes the remaining keys as
@@ -1108,6 +1195,7 @@ export default class PotService {
   static async queryContextGraph<T = unknown>(
     body: ContextGraphQuery,
   ): Promise<ContextGraphResult<T>> {
+    if (isDemoPotId(body.pot_id)) return getDemoContextGraphResult<T>(body);
     const headers = await getHeaders();
     try {
       const response = await axios.post(

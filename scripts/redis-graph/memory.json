@@ -1,0 +1,274 @@
+{
+  "subsystem": "memory",
+  "components": [
+    {
+      "slug": "zmalloc-layer",
+      "name": "zmalloc Allocation Layer",
+      "paths": ["src/zmalloc.c", "src/zmalloc.h"],
+      "summary": "Memory-accounting wrapper over malloc; routes to jemalloc/tcmalloc/libc and tracks used_memory.",
+      "description": "Allocator abstraction (zmalloc/zcalloc/zrealloc/zfree, ztrymalloc_usable, zmalloc_with_flags, zmalloc_no_tcache) that macro-redirects to je_malloc/tc_malloc/libc and keeps global used-memory accounting in cache-line-aligned per-thread used_memory_entry slots (DEDICATED_ENTRIES=8 single-writer atomics, overflow threads share hashed RMW slots). Also provides RSS/fragmentation introspection: zmalloc_get_rss, zmalloc_get_allocator_info (jemalloc stats.allocated/active/resident), zmalloc_get_smap_bytes_by_field, jemalloc_purge, set_jemalloc_bg_thread, zmadvise_dontneed, plus OOM handler hooks (zmalloc_set_oom_handler). Searchable as 'used_memory accounting', 'memory fragmentation ratio', 'RSS vs allocated', 'OOM allocating', 'INFO memory'; sets je_malloc_conf tcache tuning (lg_tcache_nslots_mul:3,tcache_nslots_small_max:1000) at compile time.",
+      "part_of": "service:redis-server",
+      "uses_deps": ["jemalloc"],
+      "uses_adapters": ["jemalloc-allocator"],
+      "loc": 1308
+    },
+    {
+      "slug": "eviction",
+      "name": "Maxmemory Eviction",
+      "paths": ["src/evict.c"],
+      "summary": "maxmemory enforcement via sampled LRU/LFU approximation with a 16-entry eviction pool.",
+      "description": "Implements the maxmemory directive: performEvictions() checks getMaxmemoryState() before command execution and evicts keys using an approximated LRU/LFU — evictionPoolPopulate() samples maxmemory-samples random keys per pass into the EVPOOL_SIZE=16 evictionPoolEntry array ordered by idle time (LRU_CLOCK/estimateObjectIdleTime) or inverse frequency (LFULogIncr/LFUDecrAndReturn, 16-bit minutes + 8-bit log counter packed in robj->lru). Eviction time is bounded by evictionTimeLimitUs() derived from maxmemory-eviction-tenacity, continuing via an ae timer (evictionTimeProc); freeMemoryGetNotCountedMemory() excludes AOF/replication buffers to avoid eviction feedback loops; deletes go async when lazyfree-lazy-eviction is set. Searchable as 'OOM command not allowed when used memory > maxmemory', 'evicted_keys', 'allkeys-lru vs volatile-lfu', 'eviction-cycle latency event', 'noeviction'; skips importing ASM slots and paused-evict states (isSafeToPerformEvictions).",
+      "part_of": "service:redis-server",
+      "depends_on": ["zmalloc-layer", "keyspace", "kvstore", "lazyfree", "latency-monitor", "atomic-slot-migration", "event-loop"],
+      "config_vars": ["maxmemory", "maxmemory-policy", "maxmemory-samples", "maxmemory-eviction-tenacity", "lazyfree-lazy-eviction", "replica-ignore-maxmemory"],
+      "loc": 764
+    },
+    {
+      "slug": "defrag",
+      "name": "Active Defragmentation",
+      "paths": ["src/defrag.c"],
+      "summary": "Stage-based active defrag that reallocates fragmented pointers using jemalloc defrag hints.",
+      "description": "Active memory defragmentation: activeDefragCycle() -> computeDefragCycles() -> beginDefragCycle() runs a list of StageDescriptor stages (defragStageDbKeys, expires, pubsub kvstores, Lua scripts, hash templates, module defrag callbacks) inside bounded ae timer slices (activeDefragTimeProc, DEFRAG_CYCLE_US=500us). Core primitive activeDefragAlloc()/activeDefragAllocWithoutFree() asks jemalloc's je_get_defrag_hint() whether moving a pointer helps, then reallocates via zmalloc_no_tcache; hits/misses tracked in stat_active_defrag_hits/misses and getAllocatorFragmentation() computes frag percent. Searchable as 'mem_fragmentation_ratio high', 'active-defrag-cycle latency spike', 'external fragmentation', 'CONFIG SET activedefrag yes'; compiled only when HAVE_DEFRAG (jemalloc builds); tuned by active-defrag-threshold-lower/upper, active-defrag-ignore-bytes, active-defrag-cycle-min/max.",
+      "part_of": "service:redis-server",
+      "depends_on": ["zmalloc-layer", "kvstore", "dict", "event-loop", "module-system", "eval-scripts"],
+      "uses_deps": ["jemalloc"],
+      "uses_adapters": ["jemalloc-allocator"],
+      "config_vars": ["activedefrag", "active-defrag-threshold-lower", "active-defrag-threshold-upper", "active-defrag-ignore-bytes", "active-defrag-cycle-min", "active-defrag-cycle-max", "active-defrag-max-scan-fields"],
+      "loc": 2176
+    },
+    {
+      "slug": "lazyfree",
+      "name": "Lazy Free (Async Reclaim)",
+      "paths": ["src/lazyfree.c"],
+      "summary": "Asynchronous freeing of big objects and whole databases on the bio lazyfree thread.",
+      "description": "Offloads expensive frees to the background: freeObjAsync() computes lazyfreeGetFreeEffort() (quicklist nodes, dict size, skiplist length, stream rax nodes + consumer-group PEL estimate, module free_effort) and hands objects exceeding LAZYFREE_THRESHOLD=64 with refcount==1 to the bio thread (lazyfreeFreeObject); emptyDbAsync()/kvsLazyfreeFree() free whole kvstores for FLUSHALL ASYNC plus estore subexpires and ASM trim histogram deltas, then flush jemalloc tcache and jemalloc_purge(). Also lazily frees the client-tracking rax, error-stats rax, lua_scripts dict, and functions lib; counters lazyfree_objects/lazyfreed_objects back INFO lazyfree_pending_objects. Searchable as 'UNLINK vs DEL', 'FLUSHALL ASYNC', 'lazyfree-lazy-expire', 'eviction-lazyfree latency event', 'big key delete blocking'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["background-io", "object-system", "kvstore", "expiration-store", "zmalloc-layer", "atomic-slot-migration"],
+      "uses_adapters": ["jemalloc-allocator"],
+      "config_vars": ["lazyfree-lazy-eviction", "lazyfree-lazy-expire", "lazyfree-lazy-server-del", "lazyfree-lazy-user-del", "lazyfree-lazy-user-flush"],
+      "loc": 409
+    },
+    {
+      "slug": "memory-prefetch",
+      "name": "Command Batch Memory Prefetch",
+      "paths": ["src/memory_prefetch.c", "src/memory_prefetch.h"],
+      "summary": "Software-pipelined dict-lookup prefetcher that batches commands to hide memory stalls.",
+      "description": "Amortizes cache-miss latency across a batch of parsed commands: a dictPrefetcher drives per-key dictPrefetchLookup state machines (PREFETCH_BUCKET -> PREFETCH_ENTRY -> PREFETCH_ENTRY_KEY -> PREFETCH_ENTRY_VALUE -> PREFETCH_DONE) issuing __builtin_prefetch-style loads while yielding between in-flight lookups, delegating payload prefetch to dictType->prefetchEntryKey/prefetchEntryValue. addCommandToBatch()/prefetchCommands() are called from the io-threads path (iothread.c) and networking.c before execution; determinePrefetchCount() sizes the window and prefetchCommandsBatchInit() allocates it. Searchable as 'memory access amortization', 'batch prefetch io-threads', 'dictFind cache miss', 'prefetch-batch-max-size' (hidden config, default 16, 0 disables); ported from Valkey contributors' work per file header.",
+      "part_of": "service:redis-server",
+      "depends_on": ["dict", "io-threads", "networking", "keyspace"],
+      "config_vars": ["prefetch-batch-max-size"],
+      "loc": 526
+    },
+    {
+      "slug": "hotkeys-tracking",
+      "name": "Hotkeys Tracking",
+      "paths": ["src/hotkeys.c", "src/hotkeys.h"],
+      "summary": "HOTKEYS command: per-key CPU-time and network-bytes top-K tracking via CuckooHeavyKeeper sketches.",
+      "description": "New (2026) hotkey detection: HOTKEYS START [METRICS CPU|NET] [COUNT k] [DURATION] [SAMPLE ratio] [SLOTS ...] creates a hotkeyStats (server.hotkeys) holding two chkTopK CuckooHeavyKeeper sketches (chkTopKCreate with count*10 tracked keys) — one for CPU microseconds, one for network bytes. hotkeyStatsPreCurrentCmd/UpdateCurrentCmd/PostCurrentCmd hook command execution in server.c, extract keys via getKeysFromCommandWithSpecs, split cost per key, and support probabilistic sampling and cluster slot filtering (slotRangeArray, clusterNodeCoversSlot, clusterGetLocalSlotRanges); HOTKEYS GET returns by-cpu-time-us/by-net-bytes rankings plus rusage-based totals, HOTKEYS STOP/RESET manage the session. Searchable as 'hot key detection', 'top keys by CPU', 'skewed workload single slot', 'HOTKEYS command', 'per-slot hotspot'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["topk-sketch", "command-table", "cluster-core", "server-core"],
+      "loc": 693
+    },
+    {
+      "slug": "rate-limiter",
+      "name": "GCRA Rate Limiter",
+      "paths": ["src/gcra.c"],
+      "summary": "GCRA command implementing leaky-bucket rate limiting with bursts; compile-gated behind ENABLE_GCRA.",
+      "description": "Generic Cell Rate Algorithm rate limiter modeled on brandur's redis-cell: gcraCommand() (GCRA key max_burst tokens_per_period period [TOKENS n]) stores the Theoretical Arrival Time (TaT) in a dedicated OBJ_GCRA object with microsecond math (emission_interval_us, variance_us, allow_at = new_tat - variance) and replies [limited, max_burst, remaining, retry_after_s, reset_after_s]. Keys self-expire at their TaT via setExpireByLink, fire NOTIFY_RATE_LIMIT ('r' class) keyspace events, and replicate deterministically by rewriting to the internal GCRASETVALUE command since GCRA reads commandTimeSnapshot. Searchable as 'rate limiting', 'leaky bucket', 'throttle command', 'redis-cell CL.THROTTLE equivalent', 'ACL_CATEGORY_RATE_LIMIT'; entire feature is disabled by default and compiled in with -DENABLE_GCRA (server.h comment).",
+      "part_of": "service:redis-server",
+      "depends_on": ["keyspace", "object-system", "keyspace-notifications"],
+      "loc": 284
+    },
+    {
+      "slug": "latency-monitor",
+      "name": "Latency Monitor",
+      "paths": ["src/latency.c", "src/latency.h"],
+      "summary": "Per-event latency time series (LATENCY command) with spike history, doctor analysis and sparklines.",
+      "description": "Event-based latency spike tracker: latencyAddSampleIfNeeded() (macro gated on latency-monitor-threshold ms) feeds latencyAddSample() into per-event latencyTimeSeries ring buffers (LATENCY_TS_LEN, 160 sec-resolution samples) stored in server.latency_events; instrumented events include eviction-cycle, eviction-lazyfree, expire-cycle, fork, aof-write, aof-fsync-always, active-defrag-cycle, command-unblocking, rdb-unlink-temp-file. latencyCommand() serves LATENCY HISTORY/LATEST/GRAPH (ASCII sparkline)/DOCTOR (human analysis incl. THPGetAnonHugePagesSize transparent-hugepage warning)/RESET, and hdr_histogram backs the LATENCY command percentile reporting (latency-tracking, latency-tracking-info-percentiles). Searchable as 'latency spikes', 'LATENCY DOCTOR', 'fork latency', 'transparent huge pages latency', 'latency-monitor-threshold'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["dict", "server-core", "zmalloc-layer"],
+      "uses_deps": ["hdr_histogram"],
+      "config_vars": ["latency-monitor-threshold", "latency-tracking", "latency-tracking-info-percentiles"],
+      "loc": 721
+    }
+  ],
+  "adapters": [
+    {
+      "slug": "jemalloc-allocator",
+      "name": "jemalloc Allocator",
+      "summary": "Bundled jemalloc (deps/jemalloc) with Redis-specific defrag-hint and usize patches.",
+      "description": "Default allocator on Linux, vendored in deps/jemalloc and bound via USE_JEMALLOC macro overrides in zmalloc.c (je_malloc/je_mallocx/je_dallocx, je_malloc_with_usize fast paths). Redis patches expose get_defrag_hint() (deps/jemalloc/src/jemalloc.c) which powers activeDefragAlloc's move-or-keep decision, plus je_mallctl hooks for stats.allocated/active/resident, thread.tcache.flush, arena purge (jemalloc_purge) and background_thread control (set_jemalloc_bg_thread). Compile-time je_malloc_conf raises tcache slots for small size classes. Searchable as 'USE_JEMALLOC', 'arena purge', 'tcache', 'allocator active vs resident'.",
+      "used_by": ["zmalloc-layer", "defrag", "lazyfree"]
+    }
+  ],
+  "config_vars": [
+    {
+      "name": "maxmemory",
+      "summary": "Memory usage limit in bytes; 0 means unlimited.",
+      "description": "Upper bound on dataset memory; when exceeded, performEvictions() frees keys per maxmemory-policy or rejects writes with OOM errors under noeviction. AOF/replication buffers are excluded from the accounting (freeMemoryGetNotCountedMemory) to avoid eviction feedback loops.",
+      "configures": "eviction",
+      "default": "0 (no limit)"
+    },
+    {
+      "name": "maxmemory-policy",
+      "summary": "Eviction strategy: noeviction, allkeys/volatile x lru/lfu/random, volatile-ttl.",
+      "description": "Selects the victim-picking strategy in evict.c: LRU policies use estimateObjectIdleTime over sampled keys, LFU uses the 8-bit logarithmic counter (LFULogIncr/LFUDecrAndReturn with lfu-log-factor/lfu-decay-time), random and ttl variants bypass the idle ranking.",
+      "configures": "eviction",
+      "default": "noeviction"
+    },
+    {
+      "name": "maxmemory-samples",
+      "summary": "Keys sampled per eviction pass to approximate LRU/LFU.",
+      "description": "Sample size used by evictionPoolPopulate(); 5 is a good tradeoff per redis.conf, 10 approximates true LRU closely at higher CPU cost.",
+      "configures": "eviction",
+      "default": "5"
+    },
+    {
+      "name": "maxmemory-eviction-tenacity",
+      "summary": "0-100 knob converting to a per-call eviction time budget.",
+      "description": "evictionTimeLimitUs() maps tenacity linearly to 0-500us up to 10, then a 15% geometric progression (~2min at 99), ULONG_MAX at 100; controls latency impact of eviction bursts.",
+      "configures": "eviction",
+      "default": "10"
+    },
+    {
+      "name": "activedefrag",
+      "summary": "Enables active defragmentation (requires jemalloc build).",
+      "description": "Gates activeDefragCycle(); when on, defrag stages run in ae timer slices whenever fragmentation exceeds active-defrag-threshold-lower and active-defrag-ignore-bytes. Only compiled under HAVE_DEFRAG (zmalloc.h, jemalloc builds).",
+      "configures": "defrag",
+      "default": "no"
+    },
+    {
+      "name": "lazyfree-lazy-eviction",
+      "summary": "Free evicted keys asynchronously on the lazyfree bio thread.",
+      "description": "When yes, maxmemory eviction deletes use dbAsyncDelete/freeObjAsync so big-object reclamation does not block the main thread; one of five lazyfree-lazy-* flags (expire, server-del, user-del, user-flush).",
+      "configures": "lazyfree",
+      "default": "no"
+    },
+    {
+      "name": "latency-monitor-threshold",
+      "summary": "Minimum event duration in ms to record a latency spike; 0 disables.",
+      "description": "Gate for latencyAddSampleIfNeeded(); events at or above the threshold are logged into per-event ring buffers consumed by LATENCY HISTORY/LATEST/DOCTOR/GRAPH.",
+      "configures": "latency-monitor",
+      "default": "0"
+    },
+    {
+      "name": "prefetch-batch-max-size",
+      "summary": "Max commands batched for memory prefetching (hidden config; 0 disables).",
+      "description": "Sizes the dictPrefetcher command batch used by addCommandToBatch()/prefetchCommands() on the io-threads read path; declared MODIFIABLE|HIDDEN in config.c.",
+      "configures": "memory-prefetch",
+      "default": "16"
+    }
+  ],
+  "features": [
+    {
+      "slug": "hotkey-detection",
+      "name": "Hotkey Detection (HOTKEYS command)",
+      "summary": "On-demand per-key CPU/network top-K profiling sessions with cluster slot filtering.",
+      "description": "HOTKEYS START/STOP/GET/RESET sessions rank the hottest keys by CPU microseconds and network bytes using CuckooHeavyKeeper top-K sketches, with optional sampling ratio and slot selection for diagnosing skewed cluster workloads; results aggregate cleanly across nodes (array-of-map reply).",
+      "lifecycle": "active",
+      "implemented_in": ["hotkeys-tracking", "topk-sketch"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "gcra-rate-limiting",
+      "name": "GCRA Rate Limiting",
+      "summary": "Native GCRA/leaky-bucket rate-limit command with burst support, off by default (-DENABLE_GCRA).",
+      "description": "The GCRA command provides redis-cell-style rate limiting in core: TaT-based allowance checks with burst capacity, self-expiring OBJ_GCRA keys, an 'r' keyspace-notification class, and GCRASETVALUE-based deterministic replication/AOF rewrite. Compile-gated behind ENABLE_GCRA.",
+      "lifecycle": "in_progress",
+      "implemented_in": ["rate-limiter"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "active-defragmentation",
+      "name": "Active Defragmentation",
+      "summary": "Online compaction of fragmented allocations without restart.",
+      "description": "Incremental, latency-bounded defrag of keys, expires, pubsub state, Lua scripts and module data driven by jemalloc utilization hints; monitored via INFO stats active_defrag_hits/misses and the active-defrag-cycle latency event.",
+      "lifecycle": "active",
+      "implemented_in": ["defrag"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "async-memory-reclaim",
+      "name": "Asynchronous Memory Reclaim (UNLINK / lazy free)",
+      "summary": "Background freeing of large objects and databases to keep the main thread responsive.",
+      "description": "UNLINK, FLUSHALL/FLUSHDB ASYNC and the lazyfree-lazy-* pathways move O(N) frees to the bio lazyfree thread when free effort exceeds 64 allocations, covering data objects, whole kvstores, tracking tables, error stats and Lua script dicts.",
+      "lifecycle": "active",
+      "implemented_in": ["lazyfree", "background-io"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "batch-memory-prefetching",
+      "name": "Command Batch Memory Prefetching",
+      "summary": "Overlaps dict-lookup memory stalls across batched commands from io-threads.",
+      "description": "A dict-pure prefetch state machine walks bucket/entry/key/value cache lines for a batch of pending commands before execution, hiding DRAM latency; active on the io-threads path and tunable via hidden prefetch-batch-max-size.",
+      "lifecycle": "active",
+      "implemented_in": ["memory-prefetch"],
+      "provided_by": "service:redis-server"
+    }
+  ],
+  "decisions": [
+    {
+      "slug": "approximate-lru-eviction-pool",
+      "title": "Approximate LRU/LFU via sampling into a shared eviction pool",
+      "statement": "Redis approximates LRU/LFU by sampling N keys per eviction pass into a 16-entry pool of best candidates instead of maintaining exact recency ordering.",
+      "rationale": "Runs in constant memory and avoids per-access bookkeeping; pool persistence across performEvictions() calls improves approximation quality over pure random sampling.",
+      "description": "evict.c defines EVPOOL_SIZE=16 evictionPoolEntry entries ordered by idle time (or inverse LFU frequency) and documents that sampled keys enter the pool only if better than current candidates; stale pool entries trigger repopulation.",
+      "affects": ["eviction"],
+      "evidence": "src/evict.c comment block 'LRU approximation algorithm ... Redis uses an approximation of the LRU algorithm that runs in constant memory' above evictionPoolAlloc(), and the evictionPoolEntry struct comment."
+    },
+    {
+      "slug": "exclude-buffers-from-maxmemory",
+      "title": "Exclude AOF and replication buffers from eviction accounting",
+      "statement": "Used-memory checks for eviction subtract AOF buffers and the shared replication buffer beyond backlog size.",
+      "rationale": "Counting DEL-propagation buffers as used memory creates a feedback loop: evictions grow the buffers, which forces more evictions, potentially evicting every key.",
+      "description": "freeMemoryGetNotCountedMemory() returns the overhead subtracted by getMaxmemoryState() so eviction pressure reflects data size, not propagation buffers.",
+      "affects": ["eviction"],
+      "evidence": "src/evict.c comment above freeMemoryGetNotCountedMemory(): 'it can cause feedback-loop when we push DELs into them ... maybe cause massive eviction loop, even all keys are evicted'."
+    },
+    {
+      "slug": "gcra-compile-gated",
+      "title": "GCRA rate limiting is compiled out by default",
+      "statement": "The GCRA command, OBJ_GCRA type, NOTIFY_RATE_LIMIT class and ACL_CATEGORY_RATE_LIMIT only exist when built with -DENABLE_GCRA.",
+      "rationale": "Keeps the experimental rate-limiter out of default binaries while preserving the code path for opt-in builds.",
+      "description": "All GCRA code in gcra.c, server.h object/ACL/notification definitions and config.c event-class strings are wrapped in #ifdef ENABLE_GCRA.",
+      "affects": ["rate-limiter"],
+      "evidence": "src/server.h comment: 'Code related to GCRA is disabled by default. Build with -DENABLE_GCRA to compile it back in.'"
+    },
+    {
+      "slug": "gcra-deterministic-replication",
+      "title": "GCRA replicates as GCRASETVALUE with self-expiring keys",
+      "statement": "Allowed GCRA requests rewrite the client command to internal GCRASETVALUE key tat for replication/AOF, and each key implicitly expires at its TaT.",
+      "rationale": "GCRA uses commandTimeSnapshot so replaying the verb on replicas would compute different TaTs; implicit expiry avoids requiring DEL for numerous short-lived limiter keys (idea from redis-cell).",
+      "description": "gcraCommand() calls setExpireByLink(when = new_tat_us/1000) and rewriteClientCommandVector to GCRASETVALUE; gcraSetValueCommand() applies the stored TaT identically on replicas and during AOF rewrite.",
+      "affects": ["rate-limiter"],
+      "evidence": "src/gcra.c comments: 'Replicating the command directly would mess up TaT as we use commandTimeSnapshot' and 'The key implicitly sets its own expiry time ... NOTE: idea is same as in redis-cell.'"
+    },
+    {
+      "slug": "lazyfree-effort-threshold",
+      "title": "Async free only for objects with effort > 64 and refcount 1",
+      "statement": "freeObjAsync() hands objects to the bio thread only when lazyfreeGetFreeEffort() exceeds LAZYFREE_THRESHOLD=64 and the object is not shared; small objects free synchronously.",
+      "rationale": "Queueing tiny frees to a background thread costs more than freeing inline; effort is estimated per type (quicklist len, dict size, stream rax nodes + consumer-group PEL) to keep the estimate O(1).",
+      "description": "The same 64-allocation threshold gates lazy freeing of the tracking rax, error stats, lua_scripts dict and function libraries.",
+      "affects": ["lazyfree"],
+      "evidence": "src/lazyfree.c: '#define LAZYFREE_THRESHOLD 64' and freeObjAsync() condition 'free_effort > LAZYFREE_THRESHOLD && obj->refcount == 1'; lazyfreeGetFreeEffort() comment on proportional effort."
+    },
+    {
+      "slug": "defrag-bounded-stages",
+      "title": "Defrag runs as latency-bounded stages on the event loop",
+      "statement": "Defragmentation is decomposed into StageDescriptor stage functions executed in ~500us timer slices with an explicit endtime, rather than one blocking sweep.",
+      "rationale": "Bounds the latency contributed by defrag while allowing CPU usage to scale between active-defrag-cycle-min and -max; timeproc_overage_us corrects when a slice exceeds the target CPU percent.",
+      "description": "defrag.c defines defragStageFn(ctx, endtime) returning DEFRAG_DONE/DEFRAG_NOT_DONE, DEFRAG_CYCLE_US=500, and a DefragContext with timeproc bookkeeping driven by activeDefragTimeProc.",
+      "affects": ["defrag"],
+      "evidence": "src/defrag.c: 'Defragmentation is performed in stages ... endtime - This ensures a bounded latency due to defrag' and '#define DEFRAG_CYCLE_US 500'."
+    },
+    {
+      "slug": "per-thread-memory-accounting",
+      "title": "Sharded per-thread used_memory accounting in zmalloc",
+      "statement": "used_memory is tracked in cache-line-aligned per-thread slots: the first 8 threads get private single-writer atomic slots, extra threads share hashed slots with full atomic RMW.",
+      "rationale": "Avoids a globally contended atomic counter on every allocation in the io-threads era while keeping zmalloc_used_memory() a cheap sum.",
+      "description": "zmalloc.c defines DEDICATED_ENTRIES=8, used_memory_entry aligned to CACHE_LINE_SIZE, and zmalloc_reserve_thread_slots()/zmalloc_register_reserved_slot() for io-thread registration.",
+      "affects": ["zmalloc-layer"],
+      "evidence": "src/zmalloc.c comment: 'Per-thread memory accounting slots. The first DEDICATED_ENTRIES threads ... use the cheap single-writer atomic operation ... Threads beyond that share a pool hashed by thread index and pay the cost of a full atomic RMW.'"
+    }
+  ]
+}

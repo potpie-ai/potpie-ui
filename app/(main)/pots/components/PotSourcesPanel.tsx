@@ -2,42 +2,41 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
 import {
-  GitBranch,
+  AlertCircle,
+  ChevronRight,
+  FolderGit2,
   Pause,
   Play,
   Plus,
   RefreshCcw,
   Search,
+  SquareKanban,
+  Star,
   Trash2,
-  Users,
 } from "lucide-react";
 
-function GithubIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
-      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12z" />
-    </svg>
-  );
-}
-
-function LinearIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
-      <path d="M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.886 4.18ZM1.06 6.811a11.95 11.95 0 0 0-.973 3.207l13.89 13.888a11.95 11.95 0 0 0 3.206-.973L1.06 6.81ZM.002 12.066l11.93 11.931c-.642-.057-1.27-.166-1.879-.323L.325 13.945a11.96 11.96 0 0 1-.323-1.879Zm.467 4.528a12.06 12.06 0 0 0 6.937 6.937L.469 16.594Z" />
-    </svg>
-  );
-}
 import PotService, { PotSource } from "@/services/PotService";
 import BranchAndRepositoryService from "@/services/BranchAndRepositoryService";
 import IntegrationService, {
   ConnectedIntegration,
 } from "@/services/IntegrationService";
+import {
+  getDemoConnectedIntegrations,
+  isDemoPotId,
+} from "@/lib/mock/demoPots";
+import {
+  EmptyState,
+  MonoChip,
+  PageHeader,
+  StatusDot,
+  type StatusTone,
+} from "@/app/(main)/pots/components/kit";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -53,11 +52,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
+import { cn } from "@/lib/utils";
 
 type Props = {
   potId: string;
   isOwner: boolean;
   onPrimaryRepoChanged: () => void;
+  /** "owner/repo" of the pot's primary repository, if any (display only). */
+  primaryRepoName?: string | null;
 };
 
 type GithubRepo = {
@@ -78,7 +80,7 @@ type SourceTypeOption = {
   provider: string;
   label: string;
   description: string;
-  icon: React.ReactNode;
+  icon: LucideIcon;
   // True when no extra credential beyond the user's OAuth login is needed.
   alwaysAvailable?: boolean;
   // For integration-backed types, integration row picked here (one connection per provider for now).
@@ -91,7 +93,7 @@ const SOURCE_TYPES: SourceTypeOption[] = [
     provider: "github",
     label: "GitHub repository",
     description: "Pick a repo from your GitHub account.",
-    icon: <GitBranch className="h-4 w-4" />,
+    icon: FolderGit2,
     alwaysAvailable: true,
   },
   {
@@ -99,7 +101,7 @@ const SOURCE_TYPES: SourceTypeOption[] = [
     provider: "linear",
     label: "Linear team",
     description: "Pull issues from a team in your Linear workspace.",
-    icon: <Users className="h-4 w-4" />,
+    icon: SquareKanban,
     requiresIntegrationType: "linear",
   },
 ];
@@ -133,56 +135,113 @@ function extractRepoIdentity(repo: GithubRepo): {
   };
 }
 
-function describeSource(s: PotSource): { title: string; subtitle: string | null; url: string | null; avatarUrl: string | null } {
+function describeSource(s: PotSource): {
+  title: string;
+  ref: string | null;
+  url: string | null;
+} {
   if (s.source_kind === "repository" && s.provider === "github") {
     const owner = (s.scope.owner as string | undefined) || "";
     const repo = (s.scope.repo as string | undefined) || "";
     const branch = (s.scope.default_branch as string | undefined) || null;
     const remoteUrl = (s.scope.remote_url as string | undefined) || null;
-    const url = remoteUrl || (owner && repo ? `https://github.com/${owner}/${repo}` : null);
-    const avatarUrl = owner ? `https://avatars.githubusercontent.com/${owner}?s=40` : null;
-    return { title: owner && repo ? `${owner}/${repo}` : s.id, subtitle: branch, url, avatarUrl };
+    const url =
+      remoteUrl ||
+      (owner && repo ? `https://github.com/${owner}/${repo}` : null);
+    return { title: owner && repo ? `${owner}/${repo}` : s.id, ref: branch, url };
   }
   if (s.source_kind === "issue_tracker_team" && s.provider === "linear") {
     const teamName = (s.scope.team_name as string | undefined) || null;
     const teamId = (s.scope.team_id as string | undefined) || null;
-    return { title: teamName || teamId || s.id, subtitle: null, url: null, avatarUrl: null };
+    return { title: teamName || teamId || s.id, ref: null, url: null };
   }
-  return { title: s.id, subtitle: null, url: null, avatarUrl: null };
+  return { title: s.id, ref: null, url: null };
 }
 
-function sourceIcon(s: PotSource) {
-  if (s.provider === "linear") return <LinearIcon className="h-4 w-4 text-[#5E6AD2]" />;
-  return <GithubIcon className="h-4 w-4 text-foreground" />;
+function sourceKindIcon(s: PotSource): LucideIcon {
+  if (s.source_kind === "issue_tracker_team") return SquareKanban;
+  return FolderGit2;
 }
 
-function SourceProviderBadge({ s }: { s: PotSource }) {
-  if (s.provider === "github") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700">
-        {s.source_kind === "repository" ? "repository" : s.source_kind.replace(/_/g, " ")}
-      </span>
-    );
+function formatRelativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return iso;
+  const minutes = Math.floor((Date.now() - then) / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function syncStatus(s: PotSource): {
+  tone: StatusTone;
+  label: string;
+  detail?: string;
+} {
+  if (s.last_error) {
+    return { tone: "error", label: "Sync failed", detail: s.last_error };
   }
-  if (s.provider === "linear") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-        <Users className="h-3 w-3" />
-        {s.source_kind === "issue_tracker_team" ? "Team" : s.source_kind.replace(/_/g, " ")}
-      </span>
-    );
+  if (!s.sync_enabled) {
+    return { tone: "idle", label: "Paused" };
   }
+  if (s.last_sync_at) {
+    return {
+      tone: "ok",
+      label: `Synced ${formatRelativeTime(s.last_sync_at)}`,
+      detail: new Date(s.last_sync_at).toLocaleString(),
+    };
+  }
+  return { tone: "warn", label: "Waiting for first sync" };
+}
+
+function PrimaryChip() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground border border-border">
-      <GitBranch className="h-3 w-3" />
-      {s.provider} / {s.source_kind.replace(/_/g, " ")}
+    <span
+      title="Primary repository for this pot"
+      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+    >
+      <Star className="h-2.5 w-2.5 fill-current" />
+      Primary
     </span>
   );
 }
 
-export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }: Props) {
+function RowSkeleton() {
+  return (
+    <div className="flex items-center gap-3 py-3.5">
+      <Skeleton className="h-4 w-4 rounded bg-muted" />
+      <div className="flex-1 space-y-2">
+        <Skeleton className="h-4 w-52 max-w-full bg-muted" />
+        <Skeleton className="h-3 w-32 bg-muted" />
+      </div>
+    </div>
+  );
+}
+
+function DialogRowSkeleton() {
+  return (
+    <div className="flex items-center gap-3 py-2.5">
+      <div className="flex-1 space-y-1.5">
+        <Skeleton className="h-4 w-44 max-w-full bg-muted" />
+        <Skeleton className="h-3 w-24 bg-muted" />
+      </div>
+      <Skeleton className="h-8 w-16 bg-muted" />
+    </div>
+  );
+}
+
+export default function PotSourcesPanel({
+  potId,
+  isOwner,
+  onPrimaryRepoChanged,
+  primaryRepoName,
+}: Props) {
   const [sources, setSources] = useState<PotSource[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerType, setPickerType] = useState<SourceTypeId | null>(null);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
@@ -218,7 +277,9 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
     try {
       const data = await PotService.listSources(potId);
       setSources(data);
+      setLoadFailed(false);
     } catch (e) {
+      setLoadFailed(true);
       toast.error(e instanceof Error ? e.message : "Failed to load sources");
     } finally {
       setLoading(false);
@@ -227,6 +288,13 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
 
   const refreshIntegrations = useCallback(async () => {
     setIntegrationsLoading(true);
+    // Demo pots never touch the backend — resolve to synthetic connections so
+    // the add-source picker stays consistent with the demo's attached sources.
+    if (isDemoPotId(potId)) {
+      setIntegrations(getDemoConnectedIntegrations(potId));
+      setIntegrationsLoading(false);
+      return;
+    }
     try {
       const data = await IntegrationService.getConnectedIntegrations();
       setIntegrations(data);
@@ -236,7 +304,7 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
     } finally {
       setIntegrationsLoading(false);
     }
-  }, []);
+  }, [potId]);
 
   useEffect(() => {
     void refresh();
@@ -261,6 +329,33 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
       }
     });
     return set;
+  }, [sources]);
+
+  // Quiet grouping by source kind — headers only when more than one kind
+  // is actually attached.
+  const sourceGroups = useMemo(() => {
+    const groups: { key: string; label: string; items: PotSource[] }[] = [
+      {
+        key: "repositories",
+        label: "Repositories",
+        items: sources.filter((s) => s.source_kind === "repository"),
+      },
+      {
+        key: "trackers",
+        label: "Issue trackers",
+        items: sources.filter((s) => s.source_kind === "issue_tracker_team"),
+      },
+      {
+        key: "other",
+        label: "Other sources",
+        items: sources.filter(
+          (s) =>
+            s.source_kind !== "repository" &&
+            s.source_kind !== "issue_tracker_team"
+        ),
+      },
+    ];
+    return groups.filter((g) => g.items.length > 0);
   }, [sources]);
 
   // ---- Picker open/close + per-type bootstrapping --------------------
@@ -442,128 +537,174 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
     return { ...t, available: false, missing: true };
   });
 
+  const renderSourceRow = (s: PotSource) => {
+    const { title, ref, url } = describeSource(s);
+    const Icon = sourceKindIcon(s);
+    const status = syncStatus(s);
+    const isPrimary =
+      Boolean(primaryRepoName) &&
+      s.source_kind === "repository" &&
+      title.toLowerCase() === (primaryRepoName as string).toLowerCase();
+    const pending = pendingActionId === s.id;
+    const paused = !s.sync_enabled;
+    return (
+      <div key={s.id} className="group flex items-center gap-3 py-3.5">
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            {url ? (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={title}
+                className="truncate text-sm font-medium hover:underline"
+              >
+                {title}
+              </a>
+            ) : (
+              <span className="truncate text-sm font-medium" title={title}>
+                {title}
+              </span>
+            )}
+            {ref ? <MonoChip className="shrink-0">{ref}</MonoChip> : null}
+            {isPrimary ? <PrimaryChip /> : null}
+          </div>
+          <div className="mt-1 flex min-w-0 items-center gap-1.5">
+            <StatusDot tone={status.tone} />
+            <span
+              title={status.detail}
+              className={cn(
+                "truncate text-[13px] text-muted-foreground",
+                status.tone === "error" && "text-rose-600 dark:text-rose-400"
+              )}
+            >
+              {status.label}
+              {status.tone === "error" && status.detail
+                ? ` · ${status.detail}`
+                : null}
+            </span>
+          </div>
+        </div>
+        {isOwner ? (
+          <div
+            className={cn(
+              "flex shrink-0 items-center gap-1 transition-opacity",
+              "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100",
+              pending && "[@media(hover:hover)]:opacity-100"
+            )}
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              disabled={pending}
+              onClick={() => handleTogglePause(s)}
+              title={paused ? "Resume sync" : "Pause sync"}
+              aria-label={paused ? "Resume sync" : "Pause sync"}
+            >
+              {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              onClick={() => setConfirmDelete(s)}
+              title="Remove source"
+              aria-label="Remove source"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="text-base font-semibold">Sources</CardTitle>
-          <div className="flex gap-2">
-            <Button size="sm" variant="ghost" onClick={refresh}>
-              <RefreshCcw className="h-3.5 w-3.5" />
+    <div className="space-y-6">
+      <PageHeader
+        title="Sources"
+        description="Repositories and trackers this pot ingests context from."
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground"
+              onClick={() => void refresh()}
+              title="Refresh sources"
+              aria-label="Refresh sources"
+            >
+              <RefreshCcw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
             {isOwner ? (
               <Button size="sm" onClick={() => setPickerOpen(true)}>
-                <Plus className="h-3.5 w-3.5 mr-1" />
+                <Plus className="mr-1.5 h-4 w-4" />
                 Add source
               </Button>
             ) : null}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : sources.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">
-              No sources attached yet. Add a GitHub repo or Linear team to start ingestion.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {sources.map((s) => {
-                const { title, subtitle, url, avatarUrl } = describeSource(s);
-                const paused = !s.sync_enabled;
-                return (
-                  <div
-                    key={s.id}
-                    className="group flex flex-col rounded-xl border border-border bg-card hover:border-border/80 hover:shadow-sm transition-all"
-                  >
-                    {/* Card body */}
-                    <div className="flex-1 px-4 pt-4 pb-3 space-y-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        {avatarUrl ? (
-                          <span className="relative inline-flex shrink-0 items-center w-7 h-5">
-                            <span className="absolute left-0 text-muted-foreground z-0">{sourceIcon(s)}</span>
-                            <img
-                              src={avatarUrl}
-                              alt=""
-                              className="absolute left-2 h-5 w-5 rounded-full border-2 border-background z-10"
-                            />
-                          </span>
-                        ) : (
-                          <span className="shrink-0 text-muted-foreground">{sourceIcon(s)}</span>
-                        )}
-                        {url ? (
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="truncate text-sm font-semibold leading-tight hover:underline"
-                          >
-                            {title}
-                          </a>
-                        ) : (
-                          <span className="truncate text-sm font-semibold leading-tight">{title}</span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-1 items-center">
-                        <SourceProviderBadge s={s} />
-                        {subtitle ? (
-                          <Badge variant="secondary" className="text-[10px] font-normal">
-                            {subtitle}
-                          </Badge>
-                        ) : null}
-                        {paused ? (
-                          <Badge variant="outline" className="text-[10px] font-normal text-amber-600 border-amber-300 bg-amber-50">
-                            Paused
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <p className="text-[11px] text-muted-foreground/70 leading-tight">
-                        {s.last_sync_at
-                          ? `Synced ${new Date(s.last_sync_at).toLocaleString()}`
-                          : "No sync yet"}
-                        {s.last_error ? (
-                          <span className="text-destructive"> · {s.last_error}</span>
-                        ) : null}
-                      </p>
-                    </div>
-                    {/* Card footer */}
-                    {isOwner ? (
-                      <div className="flex items-center justify-end gap-1 px-3 py-2 border-t border-border/50 bg-muted/20 rounded-b-xl">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                          disabled={pendingActionId === s.id}
-                          onClick={() => handleTogglePause(s)}
-                          title={paused ? "Resume" : "Pause"}
-                        >
-                          {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => setConfirmDelete(s)}
-                          title="Remove"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
+          </>
+        }
+      />
+
+      {loading ? (
+        <div className="divide-y divide-border/60 border-t border-border/70">
+          <RowSkeleton />
+          <RowSkeleton />
+          <RowSkeleton />
+        </div>
+      ) : loadFailed && sources.length === 0 ? (
+        <EmptyState
+          icon={AlertCircle}
+          title="Couldn't load sources"
+          description="Something went wrong while fetching this pot's sources. Try again in a moment."
+        >
+          <Button variant="outline" size="sm" onClick={() => void refresh()}>
+            Try again
+          </Button>
+        </EmptyState>
+      ) : sources.length === 0 ? (
+        <EmptyState
+          icon={FolderGit2}
+          title="No sources yet"
+          description="Attach a GitHub repository or a Linear team and this pot will start ingesting context from it."
+        >
+          {isOwner ? (
+            <Button size="sm" onClick={() => setPickerOpen(true)}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add your first source
+            </Button>
+          ) : null}
+        </EmptyState>
+      ) : (
+        <div className="space-y-6">
+          {sourceGroups.map((group) => (
+            <div key={group.key}>
+              {sourceGroups.length > 1 ? (
+                <p className="border-b border-border/70 pb-2 text-[13px] font-medium text-muted-foreground">
+                  {group.label}
+                </p>
+              ) : null}
+              <div
+                className={cn(
+                  "divide-y divide-border/60",
+                  sourceGroups.length === 1 && "border-t border-border/70"
+                )}
+              >
+                {group.items.map(renderSourceRow)}
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          ))}
+        </div>
+      )}
 
       {/* Add source dialog — type picker + per-type scope picker */}
       <Dialog
         open={pickerOpen}
         onOpenChange={(open) => (open ? setPickerOpen(true) : closePicker())}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="pot-theme max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {pickerType === "github_repository"
@@ -575,80 +716,101 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
           </DialogHeader>
 
           {pickerType === null ? (
-            <div className="space-y-2 py-2">
-              <p className="text-xs text-muted-foreground">
-                Choose a source type. Source types come from{" "}
-                <Link href="/integrations" className="underline text-primary">
-                  your integrations
+            <div className="py-1">
+              <p className="text-[13px] text-muted-foreground">
+                Pick where this pot should ingest context from. More source
+                types unlock as you connect{" "}
+                <Link
+                  href="/integrations"
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  integrations
                 </Link>
                 .
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {sourceTypeAvailability.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    disabled={!t.available || integrationsLoading}
-                    onClick={() => openPicker(t.id)}
-                    className="text-left rounded-lg border border-border/60 p-3 hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                  >
-                    <div className="flex items-center gap-2">
-                      {t.icon}
-                      <span className="text-sm font-medium">{t.label}</span>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{t.description}</p>
-                    {!t.available && t.missing ? (
-                      <p className="mt-1 text-[11px] text-amber-600">
-                        Connect {t.label.split(" ")[0]} on the{" "}
-                        <Link
-                          href="/integrations"
-                          className="underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          integrations page
-                        </Link>{" "}
-                        first.
-                      </p>
-                    ) : null}
-                  </button>
-                ))}
+              <div className="mt-3 divide-y divide-border/60">
+                {sourceTypeAvailability.map((t) => {
+                  const TypeIcon = t.icon;
+                  if (!t.available && t.missing) {
+                    return (
+                      <div
+                        key={t.id}
+                        className="flex items-center gap-3 py-3 opacity-70"
+                      >
+                        <TypeIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">{t.label}</p>
+                          <p className="text-[13px] text-muted-foreground">
+                            Connect {t.label.split(" ")[0]} on the{" "}
+                            <Link
+                              href="/integrations"
+                              className="underline underline-offset-2 hover:text-foreground"
+                            >
+                              integrations page
+                            </Link>{" "}
+                            first.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      disabled={!t.available || integrationsLoading}
+                      onClick={() => openPicker(t.id)}
+                      className="flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                    >
+                      <TypeIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">{t.label}</p>
+                        <p className="text-[13px] text-muted-foreground">
+                          {t.description}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    </button>
+                  );
+                })}
               </div>
-              <div className="flex justify-between pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    closePicker();
-                    setManualOpen(true);
-                  }}
-                >
-                  Add manually (owner/repo)
-                </Button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  closePicker();
+                  setManualOpen(true);
+                }}
+                className="mt-3 text-[13px] text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
+              >
+                Or add a repository manually (owner/repo)
+              </button>
             </div>
           ) : pickerType === "github_repository" ? (
-            <div className="space-y-3 py-2">
+            <div className="space-y-3 py-1">
               <div className="flex items-center gap-2">
-                <Search className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Filter your GitHub repositories"
-                  value={githubSearch}
-                  onChange={(e) => setGithubSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void loadGithubPage(true);
-                  }}
-                />
-                <Button size="sm" variant="outline" onClick={() => loadGithubPage(true)}>
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="h-9 pl-8"
+                    placeholder="Search your repositories"
+                    value={githubSearch}
+                    onChange={(e) => setGithubSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void loadGithubPage(true);
+                    }}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => loadGithubPage(true)}
+                >
                   Search
                 </Button>
               </div>
-              <div className="max-h-96 overflow-y-auto space-y-1 border border-border/60 rounded-lg p-2">
-                {githubRepos.length === 0 && !githubLoading ? (
-                  <p className="text-xs text-muted-foreground italic px-2 py-4">
-                    No matching repositories.
-                  </p>
-                ) : (
-                  githubRepos.map((repo, idx) => {
+              <div className="max-h-80 overflow-y-auto border-y border-border/60">
+                <div className="divide-y divide-border/60">
+                  {githubRepos.map((repo, idx) => {
                     const identity = extractRepoIdentity(repo);
                     if (!identity) return null;
                     const key = `${identity.owner}/${identity.repo}`;
@@ -656,34 +818,46 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
                     return (
                       <div
                         key={`${key}-${idx}`}
-                        className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-muted/50"
+                        className="flex items-center gap-3 py-2.5"
                       >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{key}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium" title={key}>
+                            {key}
+                          </p>
                           {identity.default_branch ? (
-                            <p className="text-[11px] text-muted-foreground">
-                              default: {identity.default_branch}
-                            </p>
+                            <MonoChip className="mt-1">
+                              {identity.default_branch}
+                            </MonoChip>
                           ) : null}
                         </div>
                         <Button
                           size="sm"
                           variant={alreadyAttached ? "ghost" : "outline"}
+                          className="h-8"
                           disabled={alreadyAttached || attachingRepoKey === key}
                           onClick={() => handleAttachGithub(repo)}
                         >
                           {alreadyAttached
                             ? "Attached"
                             : attachingRepoKey === key
-                              ? "Adding…"
+                              ? "Attaching…"
                               : "Attach"}
                         </Button>
                       </div>
                     );
-                  })
-                )}
-                {githubLoading ? (
-                  <p className="text-xs text-muted-foreground px-2 py-2">Loading…</p>
+                  })}
+                  {githubLoading ? (
+                    <>
+                      <DialogRowSkeleton />
+                      <DialogRowSkeleton />
+                      <DialogRowSkeleton />
+                    </>
+                  ) : null}
+                </div>
+                {githubRepos.length === 0 && !githubLoading ? (
+                  <p className="py-8 text-center text-[13px] text-muted-foreground">
+                    No matching repositories.
+                  </p>
                 ) : null}
               </div>
               {githubHasMore ? (
@@ -700,10 +874,10 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
               ) : null}
             </div>
           ) : pickerType === "linear_team" ? (
-            <div className="space-y-3 py-2">
+            <div className="space-y-3 py-1">
               {linearIntegrations.length > 1 ? (
-                <div className="space-y-1">
-                  <Label>Linear workspace</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-[13px]">Linear workspace</Label>
                   <Select
                     value={linearIntegrationId ?? undefined}
                     onValueChange={(v) => {
@@ -711,10 +885,10 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
                       void loadLinearTeams(v);
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-9">
                       <SelectValue placeholder="Pick a Linear workspace" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="pot-theme">
                       {linearIntegrations.map((i) => (
                         <SelectItem key={i.integration_id} value={i.integration_id}>
                           {i.instanceName || i.name}
@@ -724,44 +898,56 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
                   </Select>
                 </div>
               ) : null}
-              <div className="max-h-96 overflow-y-auto space-y-1 border border-border/60 rounded-lg p-2">
+              <div className="max-h-80 overflow-y-auto border-y border-border/60">
                 {linearLoading ? (
-                  <p className="text-xs text-muted-foreground px-2 py-2">Loading teams…</p>
+                  <div className="divide-y divide-border/60">
+                    <DialogRowSkeleton />
+                    <DialogRowSkeleton />
+                    <DialogRowSkeleton />
+                  </div>
                 ) : linearTeams.length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic px-2 py-4">
+                  <p className="py-8 text-center text-[13px] text-muted-foreground">
                     {linearIntegrationId
                       ? "No teams found in this workspace."
                       : "Pick a Linear workspace above to load teams."}
                   </p>
                 ) : (
-                  linearTeams.map((team) => {
-                    const alreadyAttached = attachedScopeKeys.has(`linear:${team.id}`);
-                    return (
-                      <div
-                        key={team.id}
-                        className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-muted/50"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{team.name}</p>
-                          {team.key ? (
-                            <p className="text-[11px] text-muted-foreground">{team.key}</p>
-                          ) : null}
-                        </div>
-                        <Button
-                          size="sm"
-                          variant={alreadyAttached ? "ghost" : "outline"}
-                          disabled={alreadyAttached || attachingTeamId === team.id}
-                          onClick={() => handleAttachLinearTeam(team)}
+                  <div className="divide-y divide-border/60">
+                    {linearTeams.map((team) => {
+                      const alreadyAttached = attachedScopeKeys.has(`linear:${team.id}`);
+                      return (
+                        <div
+                          key={team.id}
+                          className="flex items-center gap-3 py-2.5"
                         >
-                          {alreadyAttached
-                            ? "Attached"
-                            : attachingTeamId === team.id
-                              ? "Adding…"
-                              : "Attach"}
-                        </Button>
-                      </div>
-                    );
-                  })
+                          <div className="min-w-0 flex-1">
+                            <p
+                              className="truncate text-sm font-medium"
+                              title={team.name}
+                            >
+                              {team.name}
+                            </p>
+                            {team.key ? (
+                              <MonoChip className="mt-1">{team.key}</MonoChip>
+                            ) : null}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant={alreadyAttached ? "ghost" : "outline"}
+                            className="h-8"
+                            disabled={alreadyAttached || attachingTeamId === team.id}
+                            onClick={() => handleAttachLinearTeam(team)}
+                          >
+                            {alreadyAttached
+                              ? "Attached"
+                              : attachingTeamId === team.id
+                                ? "Attaching…"
+                                : "Attach"}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>
@@ -782,22 +968,27 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
 
       {/* Manual repo entry */}
       <Dialog open={manualOpen} onOpenChange={setManualOpen}>
-        <DialogContent>
+        <DialogContent className="pot-theme">
           <DialogHeader>
             <DialogTitle>Add repository manually</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="space-y-1">
-              <Label>Repository (owner/repo)</Label>
+          <div className="space-y-4 py-1">
+            <p className="text-[13px] text-muted-foreground">
+              Use this if the repository doesn&apos;t show up in the picker.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-[13px]">Repository (owner/repo)</Label>
               <Input
+                className="h-9"
                 placeholder="acme/my-service"
                 value={manualRepo}
                 onChange={(e) => setManualRepo(e.target.value)}
               />
             </div>
-            <div className="space-y-1">
-              <Label>Default branch (optional)</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[13px]">Default branch (optional)</Label>
               <Input
+                className="h-9"
                 placeholder="main"
                 value={manualBranch}
                 onChange={(e) => setManualBranch(e.target.value)}
@@ -809,7 +1000,7 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
               Cancel
             </Button>
             <Button onClick={handleManualAdd} disabled={addingManual}>
-              {addingManual ? "Adding…" : "Attach"}
+              {addingManual ? "Attaching…" : "Attach"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -820,18 +1011,22 @@ export default function PotSourcesPanel({ potId, isOwner, onPrimaryRepoChanged }
         open={confirmDelete !== null}
         onOpenChange={(open) => (!open ? setConfirmDelete(null) : null)}
       >
-        <DialogContent>
+        <DialogContent className="pot-theme">
           <DialogHeader>
             <DialogTitle>Remove source?</DialogTitle>
           </DialogHeader>
           {confirmDelete ? (
-            <div className="space-y-2 py-2 text-sm">
+            <div className="space-y-2 py-1 text-sm">
               <p>
                 You&apos;re about to remove{" "}
-                <strong>{describeSource(confirmDelete).title}</strong> from this pot.
+                <span className="font-medium">
+                  {describeSource(confirmDelete).title}
+                </span>{" "}
+                from this pot.
               </p>
-              <p className="text-xs text-muted-foreground">
-                Ingestion from this source will stop. Already-ingested data is kept.
+              <p className="text-[13px] text-muted-foreground">
+                Ingestion from this source will stop. Already-ingested data is
+                kept.
               </p>
             </div>
           ) : null}

@@ -11,14 +11,19 @@ export const LIFECYCLE_LABELS: Record<string, string> = {
 };
 
 // Tailwind classes per status. Kept here so badge + row indicator agree.
+// Palette discipline: emerald = done, amber = pending, rose = failed, and
+// the lime accent only for the live/processing state.
 export const STATUS_COLORS: Record<string, string> = {
-  done: "bg-green-500/15 text-green-700 border-green-400/40",
-  reconciled: "bg-green-500/15 text-green-700 border-green-400/40",
-  queued: "bg-yellow-500/15 text-yellow-700 border-yellow-400/40",
-  received: "bg-yellow-500/15 text-yellow-700 border-yellow-400/40",
-  processing: "bg-blue-500/15 text-blue-700 border-blue-400/40",
-  error: "bg-red-500/15 text-red-700 border-red-400/40",
-  failed: "bg-red-500/15 text-red-700 border-red-400/40",
+  done: "border-emerald-600/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  reconciled:
+    "border-emerald-600/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  queued:
+    "border-amber-600/25 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  received:
+    "border-amber-600/25 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  processing: "border-accent/60 bg-accent/15 text-foreground",
+  error: "border-rose-600/25 bg-rose-500/10 text-rose-700 dark:text-rose-400",
+  failed: "border-rose-600/25 bg-rose-500/10 text-rose-700 dark:text-rose-400",
 };
 
 export const SOURCE_LABELS: Record<string, string> = {

@@ -1,10 +1,16 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Bot, FileSearch, Loader2, Search, Sparkles } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import type { LucideIcon } from "lucide-react";
+import {
+  Bot,
+  FileSearch,
+  Loader2,
+  RotateCcw,
+  Search,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -13,9 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
+import { MonoChip, SectionHeader } from "@/app/(main)/pots/components/kit";
 import PotService, {
   ContextAnswerEnvelope,
   ContextGraphResult,
@@ -124,6 +131,38 @@ const INTENT_INCLUDE: Record<string, string[]> = {
   unknown: ["semantic_search", "recent_changes", "decisions", "source_status"],
 };
 
+const MODES: Array<{
+  value: QueryMode;
+  label: string;
+  icon: LucideIcon;
+  hint: string;
+}> = [
+  {
+    value: "answer",
+    label: "Resolve",
+    icon: Sparkles,
+    hint: "One-shot answer assembled from the graph",
+  },
+  {
+    value: "agentic",
+    label: "Agentic",
+    icon: Bot,
+    hint: "An agent investigates with graph tools before answering",
+  },
+  {
+    value: "retrieve",
+    label: "Evidence",
+    icon: FileSearch,
+    hint: "Raw semantic search results, no synthesis",
+  },
+];
+
+const IDLE_SUGGESTIONS = [
+  "What changed recently?",
+  "Which decisions shaped the current architecture?",
+  "Who owns the ingestion pipeline?",
+];
+
 function compactJson(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "string") return value;
@@ -131,6 +170,17 @@ function compactJson(value: unknown): string {
     return String(value);
   }
   return JSON.stringify(value, null, 2);
+}
+
+/** Single-line JSON for truncating inline spans (pretty JSON goes in title). */
+function inlineJson(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
 
 function titleForEvidence(item: Record<string, unknown>, fallback: string) {
@@ -178,6 +228,7 @@ export default function PotContextQueryCard({ potId }: Props) {
   const [limit, setLimit] = useState(12);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<QueryResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const include = useMemo(() => INTENT_INCLUDE[intent] ?? [], [intent]);
 
@@ -185,6 +236,7 @@ export default function PotContextQueryCard({ potId }: Props) {
     const q = query.trim();
     if (!q) return;
     setLoading(true);
+    setError(null);
     try {
       const scope = repoName.trim() ? { repo_name: repoName.trim() } : {};
       let data: QueryResult;
@@ -242,42 +294,50 @@ export default function PotContextQueryCard({ potId }: Props) {
       }
       setResult(data);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to query context");
+      const message =
+        e instanceof Error ? e.message : "Failed to query context";
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <CardTitle className="text-base font-semibold">
-              Context query
-            </CardTitle>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Runs the unified context graph read API for this pot.
-            </p>
+    <section className="space-y-5">
+      <SectionHeader
+        title="Query this pot's memory"
+        description="Ask the context graph what this pot knows — decisions, fixes, owners, recent changes."
+        actions={
+          <div
+            role="group"
+            aria-label="Query mode"
+            className="inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5"
+          >
+            {MODES.map(({ value, label, icon: Icon, hint }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setMode(value)}
+                aria-pressed={mode === value}
+                title={hint}
+                className={cn(
+                  "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors",
+                  mode === value
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </button>
+            ))}
           </div>
-          <div className="inline-flex rounded-md border bg-background p-1">
-            <ModeButton active={mode === "answer"} onClick={() => setMode("answer")}>
-              <Sparkles className="h-3.5 w-3.5" />
-              Resolve
-            </ModeButton>
-            <ModeButton active={mode === "agentic"} onClick={() => setMode("agentic")}>
-              <Bot className="h-3.5 w-3.5" />
-              Agentic
-            </ModeButton>
-            <ModeButton active={mode === "retrieve"} onClick={() => setMode("retrieve")}>
-              <FileSearch className="h-3.5 w-3.5" />
-              Evidence
-            </ModeButton>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 gap-2 lg:grid-cols-[1fr_150px_170px_120px]">
+        }
+      />
+
+      <div className="space-y-2.5">
+        <div className="flex items-center gap-2">
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -289,9 +349,33 @@ export default function PotContextQueryCard({ potId }: Props) {
             }}
             placeholder="Ask about decisions, fixes, owners, or project context"
             disabled={loading}
+            className="h-9"
           />
-          <Select value={intent} onValueChange={setIntent} disabled={mode === "retrieve"}>
-            <SelectTrigger className="h-10">
+          <Button
+            onClick={handleQuery}
+            disabled={loading || !query.trim()}
+            className="h-9 shrink-0"
+          >
+            {loading ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <Search className="mr-1.5 h-4 w-4" />
+            )}
+            Run
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={intent}
+            onValueChange={setIntent}
+            disabled={mode === "retrieve"}
+          >
+            <SelectTrigger
+              aria-label="Intent"
+              title="Intent — picks which context sections the answer draws from"
+              className="h-8 w-[130px] text-xs"
+            >
               <SelectValue placeholder="Intent" />
             </SelectTrigger>
             <SelectContent>
@@ -303,7 +387,11 @@ export default function PotContextQueryCard({ potId }: Props) {
             </SelectContent>
           </Select>
           <Select value={sourcePolicy} onValueChange={setSourcePolicy}>
-            <SelectTrigger className="h-10">
+            <SelectTrigger
+              aria-label="Source policy"
+              title="Source policy — how much source content is returned with results"
+              className="h-8 w-[150px] text-xs"
+            >
               <SelectValue placeholder="Source policy" />
             </SelectTrigger>
             <SelectContent>
@@ -314,22 +402,12 @@ export default function PotContextQueryCard({ potId }: Props) {
               <SelectItem value="deep">Deep</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={handleQuery} disabled={loading || !query.trim()}>
-            {loading ? (
-              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-            ) : (
-              <Search className="mr-1 h-4 w-4" />
-            )}
-            Run
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_120px]">
           <Input
             value={repoName}
             onChange={(e) => setRepoName(e.target.value)}
-            placeholder="Optional repo_name scope, e.g. potpie-ai/potpie"
+            placeholder="Scope to repo, e.g. potpie-ai/potpie"
             disabled={loading}
+            className="h-8 w-64 font-mono text-xs"
           />
           <Input
             type="number"
@@ -341,47 +419,124 @@ export default function PotContextQueryCard({ potId }: Props) {
             }
             disabled={loading}
             title="Max items"
+            aria-label="Max items"
+            className="h-8 w-20 font-mono text-xs"
           />
         </div>
 
         {mode !== "retrieve" ? (
-          <div className="flex flex-wrap gap-1">
-            {include.slice(0, 9).map((item) => (
-              <Badge key={item} variant="secondary" className="text-[10px] font-normal">
-                {item}
-              </Badge>
-            ))}
-          </div>
+          <p className="text-[11px] leading-relaxed text-muted-foreground/80">
+            <span className="font-medium">Includes</span>{" "}
+            <span className="font-mono">
+              {include.slice(0, 9).join(" · ")}
+              {include.length > 9 ? ` · +${include.length - 9} more` : ""}
+            </span>
+          </p>
         ) : null}
+      </div>
 
-        {result ? <QueryResultView result={result} /> : null}
-      </CardContent>
-    </Card>
+      <div className="border-t border-border/60 pt-5">
+        {loading ? (
+          <ResultSkeleton />
+        ) : error ? (
+          <QueryError message={error} onRetry={handleQuery} />
+        ) : result ? (
+          <QueryResultView result={result} />
+        ) : (
+          <QueryIdle onPick={setQuery} />
+        )}
+      </div>
+    </section>
   );
 }
 
-function ModeButton({
-  active,
-  onClick,
-  children,
+function ResultSkeleton() {
+  return (
+    <div className="space-y-3" aria-hidden>
+      <div className="flex gap-1.5">
+        <Skeleton className="h-5 w-16 rounded-md" />
+        <Skeleton className="h-5 w-24 rounded-md" />
+      </div>
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-11/12" />
+        <Skeleton className="h-4 w-2/3" />
+      </div>
+      <div className="space-y-2 pt-2">
+        <Skeleton className="h-4 w-1/3" />
+        <Skeleton className="h-4 w-1/2" />
+      </div>
+    </div>
+  );
+}
+
+function QueryError({
+  message,
+  onRetry,
 }: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+  message: string;
+  onRetry: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded px-3 text-xs font-medium transition-colors",
-        active
-          ? "bg-primary text-primary-foreground"
-          : "text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {children}
-    </button>
+    <div className="border-l-2 border-rose-400/80 pl-3">
+      <p className="text-sm font-medium text-rose-600 dark:text-rose-400">
+        Query failed
+      </p>
+      <p className="mt-0.5 text-[13px] text-muted-foreground">{message}</p>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onRetry}
+        className="mt-2 h-7 px-2 text-xs"
+      >
+        <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+        Try again
+      </Button>
+    </div>
+  );
+}
+
+function QueryIdle({ onPick }: { onPick: (q: string) => void }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-[13px] text-muted-foreground">
+        Results appear here. Try one of these to see what the pot remembers:
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {IDLE_SUGGESTIONS.map((suggestion) => (
+          <button
+            key={suggestion}
+            type="button"
+            onClick={() => onPick(suggestion)}
+            className="rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+          >
+            {suggestion}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SourceRefChips({
+  refs,
+  max,
+}: {
+  refs: Array<string | Record<string, unknown>>;
+  max: number;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {refs.slice(0, max).map((ref, idx) => (
+        <span
+          key={sourceRefKey(ref, idx)}
+          title={compactJson(ref)}
+          className="inline-flex max-w-full"
+        >
+          <MonoChip className="max-w-full">{sourceRefLabel(ref)}</MonoChip>
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -403,26 +558,26 @@ function QueryResultView({ result }: { result: QueryResult }) {
         : null;
 
     return (
-      <div className="rounded-md border bg-background p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{result.kind}</Badge>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <MonoChip>{result.kind}</MonoChip>
           {envelope.coverage?.status ? (
-            <Badge variant="secondary">Coverage {envelope.coverage.status}</Badge>
+            <MonoChip>coverage {envelope.coverage.status}</MonoChip>
           ) : null}
           {envelope.quality?.status ? (
-            <Badge variant="secondary">Quality {envelope.quality.status}</Badge>
+            <MonoChip>quality {envelope.quality.status}</MonoChip>
           ) : null}
           {typeof envelope.confidence !== "undefined" ? (
-            <Badge variant="secondary">Confidence {String(envelope.confidence)}</Badge>
+            <MonoChip>confidence {String(envelope.confidence)}</MonoChip>
           ) : null}
         </div>
 
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
+        <p className="whitespace-pre-wrap text-sm leading-6">
           {envelope.answer?.summary || "No answer summary returned."}
         </p>
 
         {fallbackReason ? (
-          <p className="mt-2 text-xs text-amber-700">
+          <p className="text-xs text-amber-700 dark:text-amber-400">
             Agent unavailable ({fallbackReason}) — fell back to the
             deterministic resolve path.
           </p>
@@ -430,36 +585,27 @@ function QueryResultView({ result }: { result: QueryResult }) {
 
         {agent ? <AgentTrace agent={agent} /> : null}
 
-        <Separator className="my-3" />
-
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          <CountTile label="Changes" value={envelope.answer?.recent_changes} />
-          <CountTile label="Decisions" value={envelope.answer?.decisions} />
-          <CountTile label="Owners" value={envelope.answer?.owners} />
-          <CountTile label="Evidence" value={evidence} />
-        </div>
+        <p className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
+          <CountStat label="changes" value={envelope.answer?.recent_changes} />
+          <CountStat label="decisions" value={envelope.answer?.decisions} />
+          <CountStat label="owners" value={envelope.answer?.owners} />
+          <CountStat label="evidence" value={evidence} />
+        </p>
 
         <EvidenceList items={evidence} />
 
         {sourceRefs.length > 0 ? (
-          <div className="mt-3">
-            <p className="text-xs font-medium text-muted-foreground">Source refs</p>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {sourceRefs.slice(0, 12).map((ref, idx) => (
-                <Badge
-                  key={sourceRefKey(ref, idx)}
-                  variant="outline"
-                  className="max-w-full truncate font-mono text-[10px]"
-                  title={compactJson(ref)}
-                >
-                  {sourceRefLabel(ref)}
-                </Badge>
-              ))}
-            </div>
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">
+              Source refs
+            </p>
+            <SourceRefChips refs={sourceRefs} max={12} />
           </div>
         ) : null}
 
-        <Fallbacks fallbacks={[...metaFallbacks, ...(envelope.fallbacks ?? [])]} />
+        <Fallbacks
+          fallbacks={[...metaFallbacks, ...(envelope.fallbacks ?? [])]}
+        />
       </div>
     );
   }
@@ -469,32 +615,39 @@ function QueryResultView({ result }: { result: QueryResult }) {
     : [];
 
   return (
-    <div className="rounded-md border bg-background p-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <Badge variant="outline">{result.kind}</Badge>
-        <span className="text-xs text-muted-foreground">{rows.length} result(s)</span>
+        <MonoChip>{result.kind}</MonoChip>
+        <span className="font-mono text-[11px] text-muted-foreground">
+          {rows.length} result{rows.length === 1 ? "" : "s"}
+        </span>
       </div>
       {rows.length === 0 ? (
-        <p className="mt-3 text-sm italic text-muted-foreground">
-          No matching graph evidence returned.
-        </p>
+        <div className="py-2">
+          <p className="text-sm text-muted-foreground">
+            No matching graph evidence returned.
+          </p>
+          <p className="mt-0.5 text-[13px] text-muted-foreground/80">
+            Try a broader query, raise the limit, or drop the repo scope.
+          </p>
+        </div>
       ) : (
-        <ul className="mt-3 space-y-2">
+        <ul className="divide-y divide-border/60">
           {rows.map((row, idx) => {
             const body = row.fact || row.summary;
             return (
-              <li
-                key={row.uuid || idx}
-                className="rounded-md border border-border/60 bg-muted/20 p-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="min-w-0 truncate text-sm font-medium" title={row.name || row.uuid}>
+              <li key={row.uuid || idx} className="py-3 first:pt-0 last:pb-0">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p
+                    className="min-w-0 truncate text-sm font-medium"
+                    title={row.name || row.uuid}
+                  >
                     {row.name || row.uuid}
                   </p>
                   {typeof row.score === "number" ? (
-                    <Badge variant="secondary" className="font-mono text-[10px]">
+                    <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
                       {row.score.toFixed(2)}
-                    </Badge>
+                    </span>
                   ) : null}
                 </div>
                 {body ? (
@@ -503,17 +656,8 @@ function QueryResultView({ result }: { result: QueryResult }) {
                   </p>
                 ) : null}
                 {row.source_refs?.length ? (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {row.source_refs.slice(0, 4).map((ref, refIdx) => (
-                      <Badge
-                        key={sourceRefKey(ref, refIdx)}
-                        variant="outline"
-                        className="font-mono text-[10px]"
-                        title={compactJson(ref)}
-                      >
-                        {sourceRefLabel(ref)}
-                      </Badge>
-                    ))}
+                  <div className="mt-2">
+                    <SourceRefChips refs={row.source_refs} max={4} />
                   </div>
                 ) : null}
               </li>
@@ -526,15 +670,15 @@ function QueryResultView({ result }: { result: QueryResult }) {
   );
 }
 
-function CountTile({ label, value }: { label: string; value: unknown }) {
+function CountStat({ label, value }: { label: string; value: unknown }) {
   const count = Array.isArray(value) ? value.length : value ? 1 : 0;
   return (
-    <div className="rounded-md border bg-muted/20 p-2">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p className="text-lg font-semibold">{count}</p>
-    </div>
+    <span>
+      <span className="font-mono text-xs font-semibold text-foreground">
+        {count}
+      </span>{" "}
+      {label}
+    </span>
   );
 }
 
@@ -542,28 +686,36 @@ function EvidenceList({ items }: { items: Array<Record<string, unknown>> }) {
   if (items.length === 0) return null;
 
   return (
-    <ul className="mt-3 space-y-2">
-      {items.slice(0, 6).map((item, idx) => {
-        const title = titleForEvidence(item, `Evidence ${idx + 1}`);
-        const summary = summaryForEvidence(item);
-        return (
-          <li key={`${title}-${idx}`} className="rounded-md border bg-muted/20 p-3">
-            <p className="truncate text-sm font-medium" title={title}>
-              {title}
-            </p>
-            {summary ? (
-              <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
-                {summary}
+    <div>
+      <p className="text-xs font-medium text-muted-foreground">Evidence</p>
+      <ul className="mt-1 divide-y divide-border/60">
+        {items.slice(0, 6).map((item, idx) => {
+          const title = titleForEvidence(item, `Evidence ${idx + 1}`);
+          const summary = summaryForEvidence(item);
+          return (
+            <li key={`${title}-${idx}`} className="py-2.5">
+              <p className="truncate text-sm font-medium" title={title}>
+                {title}
               </p>
-            ) : (
-              <pre className="mt-1 max-h-28 overflow-auto text-xs text-muted-foreground">
-                {compactJson(item)}
-              </pre>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+              {summary ? (
+                <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
+                  {summary}
+                </p>
+              ) : (
+                <pre className="mt-1 max-h-28 overflow-auto font-mono text-[11px] leading-relaxed text-muted-foreground">
+                  {compactJson(item)}
+                </pre>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {items.length > 6 ? (
+        <p className="mt-1 text-[11px] text-muted-foreground/70">
+          Showing 6 of {items.length} evidence items.
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -573,41 +725,39 @@ function AgentTrace({
   agent: NonNullable<ContextAnswerEnvelope["agent"]>;
 }) {
   const steps = Array.isArray(agent.steps) ? agent.steps : [];
+  const calls = agent.iterations ?? steps.length;
   return (
-    <div className="mt-3 rounded-md border border-border/60 bg-muted/20 p-3">
+    <div>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-muted-foreground">
-          Agent trace
-        </p>
-        <Badge variant="secondary" className="text-[10px]">
-          {agent.iterations ?? steps.length} tool call
-          {(agent.iterations ?? steps.length) === 1 ? "" : "s"}
-        </Badge>
+        <p className="text-xs font-medium text-muted-foreground">Agent trace</p>
+        <span className="font-mono text-[11px] text-muted-foreground">
+          {calls} tool call{calls === 1 ? "" : "s"}
+        </span>
       </div>
       {steps.length === 0 ? (
-        <p className="mt-2 text-xs italic text-muted-foreground">
+        <p className="mt-1.5 text-xs text-muted-foreground">
           The agent answered without calling any tools.
         </p>
       ) : (
-        <ol className="mt-2 space-y-1.5">
+        <ol className="mt-2 space-y-1.5 border-l border-border/60 pl-3">
           {steps.map((step, idx) => (
             <li
               key={`${step.tool}-${idx}`}
-              className="flex flex-wrap items-center gap-1.5 text-xs"
+              className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs"
             >
-              <Badge variant="outline" className="font-mono text-[10px]">
+              <span className="font-mono text-[11px] text-muted-foreground/70">
                 {idx + 1}
-              </Badge>
+              </span>
               <span className="font-medium">{step.tool}</span>
               {step.arguments && Object.keys(step.arguments).length > 0 ? (
                 <span
-                  className="truncate font-mono text-[10px] text-muted-foreground"
+                  className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground"
                   title={compactJson(step.arguments)}
                 >
-                  {compactJson(step.arguments)}
+                  {inlineJson(step.arguments)}
                 </span>
               ) : null}
-              <span className="ml-auto text-[10px] text-muted-foreground">
+              <span className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">
                 {step.result_kind ?? "result"} · {step.result_count ?? 0}
               </span>
             </li>
@@ -621,9 +771,11 @@ function AgentTrace({
 function Fallbacks({ fallbacks }: { fallbacks: unknown[] }) {
   if (!fallbacks.length) return null;
   return (
-    <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
-      <p className="text-xs font-medium text-amber-900">Fallbacks</p>
-      <pre className="mt-1 max-h-28 overflow-auto text-xs text-amber-900">
+    <div className="border-l-2 border-amber-400/70 pl-3">
+      <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+        Fallbacks
+      </p>
+      <pre className="mt-1 max-h-28 overflow-auto font-mono text-[11px] leading-relaxed text-muted-foreground">
         {compactJson(fallbacks)}
       </pre>
     </div>

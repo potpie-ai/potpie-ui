@@ -1,33 +1,22 @@
 "use client";
 
-// Live activity feed for one event. Polished surface (Phase 2):
-//   - Per-kind cards: plan, tool_call (with paired tool_result), model_messages, error, status
-//   - Running tools show shimmer + live elapsed timer
-//   - Completed tools show duration + result preview
-//   - Sticky "follow latest" auto-scroll that releases on user scroll-up
-//   - Empty / loading / error states
+// Live activity feed for one event, drawn as a clean vertical timeline:
+// a hairline spine with one dot per entry (accent pulse while running,
+// emerald when resolved, rose on error), mono timestamps, mono blocks for
+// call/result payloads.
+//
+// Behavior (unchanged):
+//   - tool_call rows fold in their paired tool_result (by tool_call_id,
+//     name-FIFO fallback) — running tools show a live elapsed timer
+//   - sticky "follow latest" auto-scroll that releases on user scroll-up
+//   - empty / loading / error states
 //
 // The timeline is presentational only — its inputs are the ActivityStreamState
 // from `useEventActivityStream` and a `live` flag.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  AlertCircle,
-  Brain,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  ClipboardList,
-  Layers,
-  Loader2,
-  MessageSquare,
-  Network,
-  Play,
-  Sparkles,
-  Wrench,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { StatusDot, type StatusTone } from "../kit";
 import {
   formatDuration,
   formatRelative,
@@ -52,103 +41,38 @@ type TimelineRow = {
   result?: ActivityEntry;
 };
 
-const KIND_META: Record<
-  string,
-  {
-    icon: typeof Wrench;
-    label: string;
-    border: string;
-    iconColor: string;
-  }
-> = {
-  prompt: {
-    icon: ClipboardList,
-    label: "Prompt",
-    border: "border-border/40",
-    iconColor: "text-muted-foreground",
-  },
-  plan_output: {
-    icon: Sparkles,
-    label: "Plan",
-    border: "border-emerald-300/60",
-    iconColor: "text-emerald-700",
-  },
-  model_messages: {
-    icon: MessageSquare,
-    label: "Thinking",
-    border: "border-violet-300/60",
-    iconColor: "text-violet-700",
-  },
-  thinking: {
-    icon: Brain,
-    label: "Thinking",
-    border: "border-violet-300/60",
-    iconColor: "text-violet-700",
-  },
-  text: {
-    icon: Sparkles,
-    label: "Response",
-    border: "border-violet-300/60",
-    iconColor: "text-violet-700",
-  },
-  run_started: {
-    icon: Play,
-    label: "Run started",
-    border: "border-border/40",
-    iconColor: "text-muted-foreground",
-  },
-  chunk_marker: {
-    icon: Layers,
-    label: "Chunk",
-    border: "border-border/40",
-    iconColor: "text-muted-foreground",
-  },
-  mutation_applied: {
-    icon: Network,
-    label: "Graph updated",
-    border: "border-emerald-300/60",
-    iconColor: "text-emerald-700",
-  },
-  event_processed: {
-    icon: CheckCircle2,
-    label: "Event reconciled",
-    border: "border-emerald-300/60",
-    iconColor: "text-emerald-700",
-  },
-  tool_call: {
-    icon: Wrench,
-    label: "Tool",
-    border: "border-blue-300/60",
-    iconColor: "text-blue-700",
-  },
-  tool_result: {
-    icon: Wrench,
-    label: "Tool result",
-    border: "border-blue-300/60",
-    iconColor: "text-blue-700",
-  },
-  status: {
-    icon: Loader2,
-    label: "Status",
-    border: "border-amber-300/60",
-    iconColor: "text-amber-700",
-  },
-  error: {
-    icon: AlertCircle,
-    label: "Error",
-    border: "border-red-300/60",
-    iconColor: "text-red-700",
-  },
+const KIND_META: Record<string, { label: string; tone: StatusTone }> = {
+  prompt: { label: "Prompt", tone: "idle" },
+  plan_output: { label: "Plan", tone: "ok" },
+  model_messages: { label: "Thinking", tone: "idle" },
+  thinking: { label: "Thinking", tone: "idle" },
+  text: { label: "Response", tone: "idle" },
+  run_started: { label: "Run started", tone: "idle" },
+  chunk_marker: { label: "Chunk", tone: "idle" },
+  mutation_applied: { label: "Graph updated", tone: "ok" },
+  event_processed: { label: "Event reconciled", tone: "ok" },
+  tool_call: { label: "Tool", tone: "busy" },
+  tool_result: { label: "Tool result", tone: "idle" },
+  status: { label: "Status", tone: "warn" },
+  error: { label: "Error", tone: "error" },
 };
 
 function metaFor(kind: string) {
+  return KIND_META[kind] ?? { label: kind, tone: "idle" as StatusTone };
+}
+
+// Marker dot sitting on the timeline spine.
+function Marker({
+  tone,
+  pulse = false,
+}: {
+  tone: StatusTone;
+  pulse?: boolean;
+}) {
   return (
-    KIND_META[kind] ?? {
-      icon: ClipboardList,
-      label: kind,
-      border: "border-border/40",
-      iconColor: "text-muted-foreground",
-    }
+    <span aria-hidden className="absolute left-0 top-[5px]">
+      <StatusDot tone={tone} pulse={pulse} />
+    </span>
   );
 }
 
@@ -276,24 +200,22 @@ export function LiveActivityTimeline({ state, live }: Props) {
   if (rows.length === 0 && !live) return null;
 
   return (
-    <div className="rounded-md border border-border/50 bg-muted/15">
-      <div className="flex items-center justify-between border-b border-border/40 px-3 py-2">
-        <div className="flex items-center gap-2">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Activity
-          </p>
+    <div>
+      <div className="flex items-center justify-between gap-2 pb-3">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <h3 className="text-sm font-semibold text-foreground">Activity</h3>
           {live ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-1.5 py-0 text-[10px] font-medium text-blue-700">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+            <span className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">
+              <StatusDot tone="busy" pulse />
               live
             </span>
           ) : state.ended ? (
-            <span className="text-[10px] text-muted-foreground">ended</span>
+            <span className="text-[13px] text-muted-foreground">ended</span>
           ) : null}
           {toolCount > 0 ? (
-            <span className="text-[10px] text-muted-foreground">
-              · {toolCount} tool{toolCount === 1 ? "" : "s"}
-              {runningCount > 0 ? ` (${runningCount} running)` : ""}
+            <span className="font-mono text-xs text-muted-foreground">
+              {toolCount} tool{toolCount === 1 ? "" : "s"}
+              {runningCount > 0 ? ` · ${runningCount} running` : ""}
             </span>
           ) : null}
         </div>
@@ -305,9 +227,9 @@ export function LiveActivityTimeline({ state, live }: Props) {
               const el = scrollRef.current;
               if (el) el.scrollTop = el.scrollHeight;
             }}
-            className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-700 hover:text-blue-900"
+            className="inline-flex items-center gap-1 text-[13px] font-medium text-primary transition-colors hover:text-primary/80"
           >
-            <ChevronDown className="h-3 w-3" />
+            <ChevronDown className="h-3.5 w-3.5" />
             Jump to latest
           </button>
         ) : null}
@@ -316,20 +238,31 @@ export function LiveActivityTimeline({ state, live }: Props) {
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="max-h-[460px] space-y-1.5 overflow-y-auto px-3 py-3"
+        className="max-h-[460px] overflow-y-auto"
       >
-        {rows.map((row) => (
-          <TimelineRowView key={row.id} row={row} ended={state.ended} />
-        ))}
-        {state.error && !live ? (
-          <div className="rounded-md border border-red-300/40 bg-red-50/40 px-2 py-1.5 text-[11px] text-red-700">
-            {state.error}
+        {rows.length > 0 ? (
+          <div className="relative">
+            {/* the spine */}
+            <div
+              aria-hidden
+              className="absolute bottom-2 left-[3.5px] top-2 w-px bg-border/70"
+            />
+            <div className="space-y-4">
+              {rows.map((row) => (
+                <TimelineRowView key={row.id} row={row} ended={state.ended} />
+              ))}
+            </div>
           </div>
         ) : null}
+        {state.error && !live ? (
+          <p className="mt-3 pl-5 text-[13px] text-rose-600 dark:text-rose-400">
+            {state.error}
+          </p>
+        ) : null}
         {rows.length === 0 && live ? (
-          <div className="rounded-md border border-dashed border-border/60 bg-background/40 px-3 py-6 text-center text-[11px] text-muted-foreground">
+          <p className="py-8 text-center text-[13px] text-muted-foreground">
             Waiting for the agent to start…
-          </div>
+          </p>
         ) : null}
       </div>
     </div>
@@ -349,7 +282,6 @@ function TimelineRowView({
 
 function ToolCallRow({ row, ended }: { row: TimelineRow; ended: boolean }) {
   const [expanded, setExpanded] = useState(false);
-  const meta = metaFor("tool_call");
   // The result landed → resolved. No result yet but the run is still going
   // → running. No result and the run ended → resolved without a recorded
   // result (the agent finished; we just never streamed/persisted the
@@ -381,42 +313,34 @@ function ToolCallRow({ row, ended }: { row: TimelineRow; ended: boolean }) {
 
   const rawToolName = toolNameFromEntry(row.entry) ?? "tool";
   const toolLabel = getToolLabel(rawToolName);
-  const Icon = running ? Loader2 : CheckCircle2;
-  const iconColor = running
-    ? "text-blue-600"
-    : unresolved
-      ? "text-muted-foreground"
-      : "text-emerald-600";
 
   return (
-    <div className={cn("rounded-md border bg-background/70 px-2.5 py-2", meta.border)}>
-      <div className="flex flex-wrap items-center gap-2">
-        <Icon
-          className={cn("h-3.5 w-3.5 shrink-0", iconColor, running && "animate-spin")}
-        />
-        <span className="text-xs font-medium">{toolLabel}</span>
-        <span className="font-mono text-[10px] text-muted-foreground">
+    <div className="relative pl-5">
+      <Marker
+        tone={running ? "busy" : unresolved ? "idle" : "ok"}
+        pulse={running}
+      />
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className="text-sm font-medium text-foreground">{toolLabel}</span>
+        <span className="font-mono text-xs text-muted-foreground">
           {rawToolName}
         </span>
         {duration != null ? (
-          <Badge variant="outline" className="text-[10px]">
+          <span className="font-mono text-xs tabular-nums text-muted-foreground">
             {formatDuration(duration)}
-          </Badge>
+          </span>
         ) : null}
         {running ? (
-          <Badge
-            variant="outline"
-            className="border-blue-300/60 bg-blue-50/40 text-[10px] text-blue-700"
-          >
+          <span className="text-xs font-medium text-muted-foreground">
             running
-          </Badge>
+          </span>
         ) : unresolved ? (
-          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             no result recorded
-          </Badge>
+          </span>
         ) : null}
         {row.entry.sequence != null ? (
-          <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+          <span className="ml-auto font-mono text-xs text-muted-foreground/60">
             #{row.entry.sequence}
           </span>
         ) : null}
@@ -424,7 +348,7 @@ function ToolCallRow({ row, ended }: { row: TimelineRow; ended: boolean }) {
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+        className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
         {expanded ? (
           <ChevronDown className="h-3 w-3" />
@@ -434,14 +358,14 @@ function ToolCallRow({ row, ended }: { row: TimelineRow; ended: boolean }) {
         {expanded ? "Hide" : "Show"} call & result
       </button>
       {expanded ? (
-        <div className="mt-1.5 space-y-1.5">
+        <div className="mt-1.5 space-y-2">
           <KvBlock label="Arguments" entry={row.entry} preferBody />
           {row.result ? (
             <KvBlock label="Result" entry={row.result} preferBody />
           ) : (
-            <div className="rounded bg-muted/40 px-2 py-1 text-[11px] italic text-muted-foreground">
+            <p className="text-xs italic text-muted-foreground">
               {running ? "awaiting result…" : "No result recorded."}
-            </div>
+            </p>
           )}
         </div>
       ) : null}
@@ -456,31 +380,25 @@ function MutationCounts({ payload }: { payload: Record<string, unknown> | null }
     (Number(counts.edge_upserts_applied ?? 0) || 0) +
     (Number(counts.edge_deletes_applied ?? 0) || 0);
   const episodes = Number(counts.episodes_written ?? 0) || 0;
-  const chips: Array<[string, number, string]> = [
-    ["nodes", nodes, "text-violet-700 bg-violet-500/10 border-violet-300/50"],
-    ["edges", edges, "text-blue-700 bg-blue-500/10 border-blue-300/50"],
-    ["episodes", episodes, "text-emerald-700 bg-emerald-500/10 border-emerald-300/50"],
-  ];
   return (
-    <div className="mt-1.5 flex flex-wrap gap-1.5">
-      {chips.map(([label, n, tone]) => (
-        <span
-          key={label}
-          className={cn(
-            "rounded border px-1.5 py-0.5 text-[10px] font-medium tabular-nums",
-            tone,
-          )}
-        >
-          +{n} {label}
-        </span>
-      ))}
-    </div>
+    <p className="mt-1 font-mono text-xs text-muted-foreground">
+      <span className="text-emerald-700 dark:text-emerald-400">
+        +{nodes} nodes
+      </span>
+      {" · "}
+      <span className="text-emerald-700 dark:text-emerald-400">
+        +{edges} edges
+      </span>
+      {" · "}
+      <span className="text-emerald-700 dark:text-emerald-400">
+        +{episodes} episodes
+      </span>
+    </p>
   );
 }
 
 function SimpleRow({ entry, kind }: { entry: ActivityEntry; kind: string }) {
   const meta = metaFor(kind);
-  const Icon = meta.icon;
   const isStreamingPart =
     (kind === "text" || kind === "thinking") && entry.done === false;
   // The backend flattens every reasoning chunk to one `thinking` record
@@ -493,41 +411,32 @@ function SimpleRow({ entry, kind }: { entry: ActivityEntry; kind: string }) {
       ? pickThinkingLabel(entry.partId ?? entry.id)
       : meta.label;
   return (
-    <div className={cn("rounded-md border bg-background/70 px-2.5 py-2", meta.border)}>
-      <div className="flex flex-wrap items-center gap-2">
-        <Icon
-          className={cn(
-            "h-3.5 w-3.5 shrink-0",
-            meta.iconColor,
-            isStreamingPart && "animate-pulse",
-          )}
-        />
-        <Badge variant="outline" className="text-[10px]">
+    <div className="relative pl-5">
+      <Marker tone={meta.tone} pulse={isStreamingPart} />
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className="text-xs font-medium text-muted-foreground">
           {label}
-        </Badge>
+        </span>
         {entry.title ? (
-          <span className="min-w-0 flex-1 truncate text-xs font-medium">
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
             {entry.title}
           </span>
         ) : null}
         {isStreamingPart ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-1.5 text-[10px] font-medium text-violet-700">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
-            streaming
-          </span>
+          <span className="text-xs text-muted-foreground">streaming</span>
         ) : null}
         {entry.status ? (
-          <Badge variant="outline" className="text-[10px] capitalize">
+          <span className="text-xs capitalize text-muted-foreground">
             {entry.status}
-          </Badge>
+          </span>
         ) : null}
         {entry.sequence != null ? (
-          <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+          <span className="ml-auto font-mono text-xs text-muted-foreground/60">
             #{entry.sequence}
           </span>
         ) : null}
         {entry.createdAt ? (
-          <span className="text-[10px] text-muted-foreground">
+          <span className="font-mono text-xs text-muted-foreground">
             {formatRelative(entry.createdAt)}
           </span>
         ) : null}
@@ -535,10 +444,10 @@ function SimpleRow({ entry, kind }: { entry: ActivityEntry; kind: string }) {
       {kind === "mutation_applied" ? (
         <MutationCounts payload={entry.payload} />
       ) : entry.body ? (
-        <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-[11px] leading-4 text-foreground">
+        <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-muted/50 p-2.5 font-mono text-xs leading-5 text-foreground">
           {entry.body}
           {isStreamingPart ? (
-            <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-violet-500 align-middle" />
+            <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-accent align-middle" />
           ) : null}
         </pre>
       ) : null}
@@ -557,26 +466,15 @@ function KvBlock({
 }) {
   // Prefer body text when present (short summary) — fall back to payload
   // JSON. Long bodies are clipped via max-h on the <pre>.
-  if (preferBody && entry.body) {
-    return (
-      <div>
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-          {label}
-        </p>
-        <pre className="mt-0.5 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-[11px] leading-4 text-foreground">
-          {entry.body}
-        </pre>
-      </div>
-    );
-  }
-  const text = stringifyPayload(entry.payload);
+  const text =
+    preferBody && entry.body ? entry.body : stringifyPayload(entry.payload);
   if (!text || text === "{}") return null;
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
         {label}
       </p>
-      <pre className="mt-0.5 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-[11px] leading-4 text-foreground">
+      <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-muted/50 p-2.5 font-mono text-xs leading-5 text-foreground">
         {text}
       </pre>
     </div>

@@ -45,6 +45,7 @@ export {
   getEventIdentifier,
   getEffectiveStatus,
   getKindLabel,
+  getPayloadPreview,
   getSourceLabel,
   getStatusLabel,
   getToolLabel,

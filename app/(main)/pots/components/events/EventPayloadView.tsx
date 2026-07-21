@@ -1,16 +1,70 @@
+"use client";
+
 // Renders the variable-shape event payload. Three payload families:
 //   - Raw episodes: episode_body holds the actual ingested text.
 //   - Decision/record: payload.record nests the agent's structured facts.
-//   - Anything else: collapsed raw JSON.
+//   - Anything else: raw JSON.
+// Everything renders flat — labels + mono blocks with copy buttons, no
+// nested boxes.
 
-import React from "react";
-import { Badge } from "@/components/ui/badge";
+import React, { useCallback, useState } from "react";
+import { Check, Copy } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { PotEvent } from "@/services/PotService";
+import { DefItem, DefList, MonoChip } from "../kit";
 import { formatDate, stringifyPayload } from "./format";
+
+function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(() => {
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {});
+  }, [text]);
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="ghost"
+      className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+      onClick={handleCopy}
+      aria-label={label}
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
+      {copied ? "Copied" : label}
+    </Button>
+  );
+}
+
+function MonoBlock({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <pre
+      className={
+        "max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-muted/50 p-3 font-mono text-xs leading-5 text-foreground " +
+        (className ?? "")
+      }
+    >
+      {children}
+    </pre>
+  );
+}
 
 export function EventPayloadView({ event }: { event: PotEvent }) {
   const payload = (event.payload ?? {}) as Record<string, unknown>;
-  const fields: Array<{ label: string; value: React.ReactNode }> = [];
 
   const episodeBody =
     typeof payload.episode_body === "string" ? payload.episode_body : null;
@@ -25,62 +79,57 @@ export function EventPayloadView({ event }: { event: PotEvent }) {
       ? (payload.record as Record<string, unknown>)
       : null;
 
-  if (sourceDescription) {
-    fields.push({
-      label: "Source",
-      value: (
-        <span className="font-mono text-[11px]">{sourceDescription}</span>
-      ),
-    });
-  }
-  if (referenceTime) {
-    fields.push({
-      label: "Reference time",
-      value: (
-        <span className="text-[11px] text-muted-foreground">
-          {formatDate(referenceTime)}
-        </span>
-      ),
-    });
-  }
+  const rawText = stringifyPayload(event.payload);
+  const hasRaw = rawText.length > 0 && rawText !== "{}";
 
-  const recordBlock = record ? <RecordBlock record={record} /> : null;
-  const hasContent = !!episodeBody || !!recordBlock || fields.length > 0;
-  if (!hasContent) return null;
+  if (!episodeBody && !record && !sourceDescription && !referenceTime && !hasRaw) {
+    return (
+      <p className="text-[13px] text-muted-foreground">
+        No payload recorded for this event.
+      </p>
+    );
+  }
 
   return (
-    <div className="space-y-2 rounded-md border border-border/50 bg-muted/15 px-3 py-3">
-      {fields.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          {fields.map((f) => (
-            <span key={f.label} className="flex items-center gap-1.5">
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                {f.label}
-              </span>
-              {f.value}
-            </span>
-          ))}
-        </div>
+    <div className="space-y-6">
+      {sourceDescription || referenceTime ? (
+        <DefList columns={2}>
+          {sourceDescription ? (
+            <DefItem label="Source" mono>
+              {sourceDescription}
+            </DefItem>
+          ) : null}
+          {referenceTime ? (
+            <DefItem label="Reference time">{formatDate(referenceTime)}</DefItem>
+          ) : null}
+        </DefList>
       ) : null}
-      {recordBlock}
+
+      {record ? <RecordBlock record={record} /> : null}
+
       {episodeBody ? (
-        <div>
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            Episode body
-          </p>
-          <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded bg-background/70 p-3 text-[11px] leading-5 text-foreground">
-            {episodeBody}
-          </pre>
-        </div>
+        <section>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-foreground">
+              Episode body
+            </h3>
+            <CopyButton text={episodeBody} />
+          </div>
+          <MonoBlock className="mt-1.5">{episodeBody}</MonoBlock>
+        </section>
       ) : null}
-      <details>
-        <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground hover:text-foreground">
-          Raw payload
-        </summary>
-        <pre className="mt-1.5 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-background/70 p-2 text-[11px] leading-4 text-foreground">
-          {stringifyPayload(event.payload)}
-        </pre>
-      </details>
+
+      {hasRaw ? (
+        <section>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-foreground">
+              Raw payload
+            </h3>
+            <CopyButton text={rawText} />
+          </div>
+          <MonoBlock className="mt-1.5 max-h-72">{rawText}</MonoBlock>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -102,53 +151,46 @@ function RecordBlock({ record }: { record: Record<string, unknown> }) {
       )
     : [];
 
+  const detailEntries = details
+    ? Object.entries(details).filter(
+        ([, v]) => typeof v === "string" && (v as string).length > 0,
+      )
+    : [];
+
   return (
-    <div className="space-y-2 rounded-md border border-border/50 bg-background/60 p-3">
+    <section className="space-y-3">
       <div className="flex flex-wrap items-center gap-1.5">
         {recordType ? (
-          <Badge variant="secondary" className="text-[10px] capitalize">
-            {recordType}
-          </Badge>
+          <MonoChip className="capitalize">{recordType}</MonoChip>
         ) : null}
         {visibility ? (
-          <Badge variant="outline" className="text-[10px] capitalize">
-            {visibility}
-          </Badge>
+          <MonoChip className="capitalize">{visibility}</MonoChip>
         ) : null}
         {confidence != null ? (
-          <Badge variant="outline" className="text-[10px]">
-            confidence {Math.round(confidence * 100)}%
-          </Badge>
+          <MonoChip>confidence {Math.round(confidence * 100)}%</MonoChip>
         ) : null}
       </div>
       {summary ? (
-        <p className="text-sm font-medium leading-snug">{summary}</p>
+        <p className="text-sm font-medium leading-snug text-foreground">
+          {summary}
+        </p>
       ) : null}
-      {details
-        ? Object.entries(details)
-            .filter(([, v]) => typeof v === "string" && v.length > 0)
-            .map(([k, v]) => (
-              <div key={k}>
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {k}
-                </p>
-                <p className="text-xs leading-snug">{String(v)}</p>
-              </div>
-            ))
-        : null}
+      {detailEntries.length > 0 ? (
+        <DefList columns={1} className="gap-y-3">
+          {detailEntries.map(([k, v]) => (
+            <DefItem key={k} label={k}>
+              {String(v)}
+            </DefItem>
+          ))}
+        </DefList>
+      ) : null}
       {sourceRefs.length > 0 ? (
-        <div className="flex flex-wrap gap-1 pt-1">
+        <div className="flex flex-wrap gap-1.5">
           {sourceRefs.map((ref) => (
-            <Badge
-              key={ref}
-              variant="outline"
-              className="font-mono text-[10px] font-normal"
-            >
-              {ref}
-            </Badge>
+            <MonoChip key={ref}>{ref}</MonoChip>
           ))}
         </div>
       ) : null}
-    </div>
+    </section>
   );
 }

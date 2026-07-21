@@ -1,0 +1,193 @@
+{
+  "subsystem": "cluster",
+  "components": [
+    {
+      "slug": "cluster-core",
+      "name": "Cluster Core (implementation-agnostic layer)",
+      "paths": ["src/cluster.c", "src/cluster.h"],
+      "summary": "Shared clustering layer: key-to-slot hashing, MOVED/ASK redirects, MIGRATE/RESTORE, CLUSTER dispatch",
+      "description": "Implementation-agnostic half of Redis Cluster (cluster.c header says it holds 'the common parts of a clustering implementation'). Maps keys to 16384 slots via keyHashSlot/patternHashSlot (crc16 & 0x3FFF, honoring {hashtag} braces), routes commands with getNodeByQuery/clusterRedirectClient producing -MOVED, -ASK, -CROSSSLOT, -TRYAGAIN and -CLUSTERDOWN errors (CLUSTER_REDIR_* codes, including the new CLUSTER_REDIR_TRIMMING for slots being trimmed), and implements migrateCommand/restoreCommand with cached sockets (migrateCachedSocket, migrateCloseTimedoutSockets) plus ASKING/READONLY/READWRITE. Also dispatches the CLUSTER command (NODES, SLOTS, SHARDS, KEYSLOT, COUNTKEYSINSLOT, GETKEYSINSLOT, MIGRATION, SYNCSLOTS), provides the slotRangeArray utility family, and exports the clusterAsmProcess/clusterAsmOnEvent hook API so alternative cluster implementations (e.g. module-based) can drive Atomic Slot Migration. Searchable as 'hash slot', 'hash tag', 'CROSSSLOT error', 'MOVED redirect', 'ASK redirect', 'cluster redirection'.",
+      "part_of": "service:redis-server",
+      "depends_on": ["cluster-bus", "atomic-slot-migration", "cluster-slot-stats", "checksums", "keyspace", "kvstore", "networking", "server-core"],
+      "config_vars": ["cluster-enabled"],
+      "loc": 2403
+    },
+    {
+      "slug": "cluster-bus",
+      "name": "Cluster Bus (legacy gossip implementation)",
+      "paths": ["src/cluster_legacy.c", "src/cluster_legacy.h"],
+      "summary": "Gossip-based cluster bus: clusterMsg protocol, PING/PONG/MEET, epochs, PFAIL->FAIL, failover voting",
+      "description": "The standard cluster-bus clustering mechanism (cluster_legacy.c): binary clusterMsg packets on the bus port (cluster-port, default client port +10000) carrying message types PING/PONG/MEET/FAIL/PUBLISH/PUBLISHSHARD/FAILOVER_AUTH_REQUEST/FAILOVER_AUTH_ACK/UPDATE/MFSTART/MODULE, each with currentEpoch/configEpoch and a 16384-bit myslots bitmap; clusterSendPing gossips ~1/10 of known nodes (min 3) per packet and clusterProcessPacket applies them. Failure detection promotes PFAIL to FAIL via markNodeAsFailingIfNeeded quorum of failure reports; replica failover runs in clusterHandleSlaveFailover with epoch-based master voting (clusterRequestFailoverAuth/clusterSendFailoverAuthIfNeeded, quorum = size/2+1, data_age validity gated by cluster-replica-validity-factor) and clusterFailoverReplaceYourMaster; epoch conflicts resolved by clusterHandleConfigEpochCollision/clusterBumpConfigEpochWithoutConsensus, slot ownership updates by clusterUpdateSlotsConfigWith. Persists topology in nodes.conf (clusterLoadConfig/clusterSaveConfig); clusterCron drives reconnects and timeouts. Searchable as 'cluster gossip', 'node PFAIL FAIL', 'failover election', 'config epoch collision', 'split brain', 'CLUSTERDOWN', 'nodes.conf corruption'; tuned by cluster-node-timeout, cluster-ping-interval, cluster-migration-barrier, cluster-require-full-coverage, cluster-link-sendbuf-limit.",
+      "part_of": "service:redis-server",
+      "depends_on": ["cluster-core", "connection-layer", "tls-layer", "event-loop", "dict", "sds", "server-core"],
+      "uses_adapters": ["openssl-tls"],
+      "exposes_interfaces": ["cluster-bus-protocol"],
+      "config_vars": ["cluster-node-timeout", "cluster-port", "cluster-config-file", "cluster-migration-barrier", "cluster-replica-validity-factor", "cluster-require-full-coverage", "cluster-replica-no-failover", "cluster-allow-replica-migration", "cluster-announce-ip", "cluster-link-sendbuf-limit"],
+      "loc": 6693
+    },
+    {
+      "slug": "atomic-slot-migration",
+      "name": "Atomic Slot Migration (ASM)",
+      "paths": ["src/cluster_asm.c", "src/cluster_asm.h"],
+      "summary": "Destination-driven atomic slot migration: snapshot + repl stream over dual channels, atomic handoff, trim",
+      "description": "New atomic slot migration engine (cluster_asm.c, 2025): destination runs CLUSTER MIGRATION IMPORT <slots>, source forks and sends a slot snapshot as RESTORE commands over a dedicated RDB channel (CLUSTER SYNCSLOTS RDBCHANNEL) while streaming incremental writes over the main channel; when the destination catches up the source pauses slot writes (ASM_HANDOFF_PREP/ASM_HANDOFF), the destination drains its sync_buffer, takes ownership, and the config flips atomically via the cluster bus, after which the source trims migrated keys in background (BIO) or active-cron mode. Core structs/functions: asmTask (state machine ASM_SEND_SYNCSLOTS -> ASM_ACCUMULATE_BUF -> ASM_STREAMING_BUF -> ASM_TAKEOVER on import; ASM_WAIT_BGSAVE_START -> ASM_SEND_BULK_AND_STREAM -> ASM_HANDOFF -> ASM_STREAM_EOF on migrate), global asmManager singleton with tasks/archived_tasks/trim jobs, clusterMigrationCommand (IMPORT/STATUS/CANCEL), clusterSyncSlotsCommand, asmCron/asmBeforeSleep, clusterAsmProcess/clusterAsmOnEvent events for external cluster implementations and module notifications (REDISMODULE_EVENT_CLUSTER_SLOT_MIGRATION). Replaces the old per-key MIGRATE/SETSLOT resharding dance with no ASK-redirect window. Searchable as 'ASM', 'slot migration stuck', 'CLUSTER MIGRATION', 'SYNCSLOTS', 'write pause during migration', 'slot trimming', '-TRYAGAIN trimming'; tuned by cluster-slot-migration-handoff-max-lag-bytes, cluster-slot-migration-write-pause-timeout, cluster-slot-migration-sync-buffer-drain-timeout.",
+      "part_of": "service:redis-server",
+      "depends_on": ["cluster-core", "cluster-bus", "replication-core", "background-io", "rdb-persistence", "module-system", "connection-layer"],
+      "config_vars": ["cluster-slot-migration-handoff-max-lag-bytes", "cluster-slot-migration-write-pause-timeout", "cluster-slot-migration-sync-buffer-drain-timeout", "cluster-slot-migration-max-archived-tasks"],
+      "loc": 3888
+    },
+    {
+      "slug": "cluster-slot-stats",
+      "name": "Per-Slot Statistics (CLUSTER SLOT-STATS)",
+      "paths": ["src/cluster_slot_stats.c", "src/cluster_slot_stats.h"],
+      "summary": "CLUSTER SLOT-STATS: per-slot key-count, cpu-usec, memory-bytes, network-bytes-in/out metrics",
+      "description": "Implements CLUSTER SLOT-STATS with SLOTSRANGE <start> <end> and ORDERBY <metric> [LIMIT n] [ASC|DESC] variants (clusterSlotStatsCommand), reporting per-slot key-count plus opt-in cpu-usec, memory-bytes and network-bytes-in/out stored in kvstoreDictMetadata attached to each slot's dict in the kvstore. Accumulators clusterSlotStatsAddCpuDuration, clusterSlotStatsAddNetworkBytesInForUserClient/OutForUserClient and the replication/sharded-pubsub variants guard against double counting inside MULTI/EXEC, EVAL/FCALL nesting and blocked clients (canAddCpuDuration/canAddNetworkBytesIn); clusterSlotStatReset clears metrics on slot ownership change. Useful for finding hot slots before resharding; searchable as 'hot slot', 'slot-level metrics', 'per-slot cpu', 'slot key count'; gated by cluster-slot-stats-enabled (cpu/net/mem flags, memory also needs memory tracking) because extra metrics carry a performance trade-off.",
+      "part_of": "service:redis-server",
+      "depends_on": ["cluster-core", "cluster-bus", "kvstore"],
+      "config_vars": ["cluster-slot-stats-enabled"],
+      "loc": 373
+    }
+  ],
+  "interfaces": [
+    {
+      "slug": "cluster-bus-protocol",
+      "name": "Cluster Bus Protocol",
+      "summary": "Binary clusterMsg gossip protocol between nodes on the bus port (client port +10000 by default)",
+      "description": "Node-to-node wire protocol defined by struct clusterMsg in cluster_legacy.h: 'RCmb' signature, protocol version, sender name/shard-id, currentEpoch/configEpoch, replication offset, 2048-byte myslots bitmap (16384 slots), and a union payload of gossip sections (clusterMsgDataGossip), FAIL, PUBLISH/PUBLISHSHARD, UPDATE and module messages; field offsets are frozen with static_assert so wire-format breakage fails at compile time. Message types: PING(0) PONG(1) MEET(2) FAIL(3) PUBLISH(4) FAILOVER_AUTH_REQUEST(5) FAILOVER_AUTH_ACK(6) UPDATE(7) MFSTART(8) MODULE(9) PUBLISHSHARD(10). Modules can piggyback on it via clusterSendModuleMessageToTarget and can disable failover/redirection with CLUSTER_MODULE_FLAG_NO_FAILOVER/NO_REDIRECTION. Runs over TCP or TLS (tls-cluster); searchable as 'cluster bus port', 'gossip packet', 'MEET handshake', 'bus message version mismatch'.",
+      "exposed_by": "service:redis-server",
+      "implemented_by": ["cluster-bus"]
+    }
+  ],
+  "config_vars": [
+    {
+      "name": "cluster-enabled",
+      "summary": "Immutable switch that starts the node in Redis Cluster mode",
+      "description": "createBoolConfig in config.c, IMMUTABLE_CONFIG, default off. When enabled the server initializes clusterInit/clusterCommonInit, opens the cluster bus port and enforces slot-based key routing; commands touching keys outside owned slots return -MOVED/-ASK. Most CLUSTER subcommands and CLUSTER SLOT-STATS reply 'This instance has cluster support disabled' when off.",
+      "configures": "cluster-core",
+      "default": "no"
+    },
+    {
+      "name": "cluster-node-timeout",
+      "summary": "Milliseconds a node can be unreachable before being flagged PFAIL; baseline for most cluster timing",
+      "description": "createLongLongConfig, default 15000 ms. Drives failure detection (PFAIL flagging in clusterCron), FAIL promotion report validity (node_timeout*2), failover auth_timeout (MAX(node_timeout*2,2000)) and retry (2x that) in clusterHandleSlaveFailover, and replica data-age validity together with cluster-replica-validity-factor. Too low causes spurious failovers; too high delays recovery.",
+      "configures": "cluster-bus",
+      "default": "15000"
+    },
+    {
+      "name": "cluster-port",
+      "summary": "Explicit cluster bus listen port; 0 means client port + 10000",
+      "description": "createIntConfig, IMMUTABLE_CONFIG, default 0 (bus port derived as base port +10000). The bus carries the clusterMsg gossip protocol; cluster-announce-bus-port overrides what is advertised to peers behind NAT/containers.",
+      "configures": "cluster-bus",
+      "default": "0"
+    },
+    {
+      "name": "cluster-migration-barrier",
+      "summary": "Minimum replicas a master must keep before donating one to an orphaned master",
+      "description": "createIntConfig, default 1. Controls replica migration: a replica only migrates to an orphaned master if its own master retains at least this many working replicas. Related to cluster-allow-replica-migration (default yes).",
+      "configures": "cluster-bus",
+      "default": "1"
+    },
+    {
+      "name": "cluster-replica-validity-factor",
+      "summary": "Multiplier of node-timeout bounding how stale a replica's data may be to still attempt failover",
+      "description": "createIntConfig (alias cluster-slave-validity-factor), default 10. In clusterHandleSlaveFailover a replica aborts election if data_age exceeds repl-ping-replica-period*1000 + node_timeout*factor; 0 disables the check. Bypassed for manual failover.",
+      "configures": "cluster-bus",
+      "default": "10"
+    },
+    {
+      "name": "cluster-require-full-coverage",
+      "summary": "Whether the cluster refuses queries unless all 16384 slots are covered",
+      "description": "createBoolConfig, default yes. When set, any unbound slot puts the cluster state to fail (-CLUSTERDOWN on queries); when off, nodes keep serving the subset of slots they own. cluster-allow-reads-when-down (default no) separately permits reads while the cluster is down.",
+      "configures": "cluster-bus",
+      "default": "yes"
+    },
+    {
+      "name": "cluster-slot-stats-enabled",
+      "summary": "Enum flags enabling optional per-slot cpu/net/mem metrics for CLUSTER SLOT-STATS",
+      "description": "createEnumConfig with MULTI_ARG_CONFIG in config.c, default 0 (only key-count reported). Flags CLUSTER_SLOT_STATS_CPU/NET/MEM enable cpu-usec, network-bytes-in/out and memory-bytes aggregation into kvstoreDictMetadata; memory-bytes additionally requires memory tracking (updateMemoryTrackingEnabled hook). Extra metrics carry a per-command accounting cost.",
+      "configures": "cluster-slot-stats",
+      "default": "0 (key-count only)"
+    },
+    {
+      "name": "cluster-slot-migration-handoff-max-lag-bytes",
+      "summary": "Replication lag threshold below which ASM pauses source writes to hand off slots",
+      "description": "createLongLongConfig (server.asm_handoff_max_lag_bytes), default 1MB. During atomic slot migration the source waits until the destination is within this many bytes of the stream before entering ASM_HANDOFF_PREP and pausing slot writes, bounding the write-pause window.",
+      "configures": "atomic-slot-migration",
+      "default": "1mb"
+    },
+    {
+      "name": "cluster-slot-migration-write-pause-timeout",
+      "summary": "Max milliseconds ASM keeps source slot writes paused before failing the handoff",
+      "description": "createLongLongConfig (server.asm_write_pause_timeout), default 10000 ms. If the destination does not complete takeover within this window while writes are paused on the source, the ASM task is failed/retried, protecting availability. Companion hidden knob cluster-slot-migration-sync-buffer-drain-timeout (60s) bounds destination buffer drain.",
+      "configures": "atomic-slot-migration",
+      "default": "10000"
+    }
+  ],
+  "features": [
+    {
+      "slug": "cluster-failover",
+      "name": "Cluster Failover (automatic and manual)",
+      "summary": "Replica promotion via epoch-based master voting when a master FAILs, plus CLUSTER FAILOVER manual mode",
+      "description": "When gossip marks a master FAIL (markNodeAsFailingIfNeeded quorum of failure reports), its replicas run clusterHandleSlaveFailover: rank by replication offset, delay election accordingly, bump currentEpoch, broadcast FAILOVER_AUTH_REQUEST, and win with votes from a majority of slot-owning masters (needed_quorum = size/2+1); the winner runs clusterFailoverReplaceYourMaster and claims slots under its new configEpoch. Manual failover (CLUSTER FAILOVER, MFSTART packet, clusterSendMFStart) does a coordinated no-data-loss switchover; FORCE/TAKEOVER variants relax safety. Data-staleness gate via cluster-replica-validity-factor; disabled per node by cluster-replica-no-failover. Failure symptoms: 'election timed out', 'cant_failover_reason' in logs, stuck CLUSTERDOWN.",
+      "lifecycle": "active",
+      "implemented_in": ["cluster-bus"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "atomic-slot-migration-feature",
+      "name": "Atomic Slot Migration",
+      "summary": "Recently landed slot rebalancing that moves whole slot ranges atomically without per-key MIGRATE or ASK windows",
+      "description": "Operator runs CLUSTER MIGRATION IMPORT <ranges> on the destination; the engine snapshots slots on the source (fork + RESTORE stream over an RDB channel), streams live writes, briefly pauses source writes when lag < cluster-slot-migration-handoff-max-lag-bytes, drains, and flips slot ownership atomically via the cluster bus — clients see a clean -MOVED cutover instead of the legacy SETSLOT IMPORTING/MIGRATING + per-key MIGRATE + ASK redirect dance. CLUSTER MIGRATION STATUS/CANCEL manage tasks; migrated keys are trimmed on the source in background or active mode; module notifications and the clusterAsmProcess/clusterAsmOnEvent API let external cluster managers drive the same flow.",
+      "lifecycle": "active",
+      "implemented_in": ["atomic-slot-migration", "cluster-core"],
+      "provided_by": "service:redis-server"
+    }
+  ],
+  "decisions": [
+    {
+      "slug": "crc16-16384-slots",
+      "title": "16384 hash slots addressed by CRC16/XMODEM low 14 bits with {hashtag} override",
+      "statement": "Key placement uses the least significant 14 bits of CRC16 (XMODEM variant) of the key — or of the substring between the first {...} braces — giving exactly 16384 slots.",
+      "rationale": "14 bits keeps the per-message slot bitmap at 2KB inside every gossip packet while allowing multi-key operations to be forced onto one node via hash tags; XMODEM CRC16 parameters are documented so alternative clients can reimplement routing identically.",
+      "description": "keyHashSlot in cluster.h implements 'crc16(key) & 0x3FFF' with brace extraction; CLUSTER_SLOT_MASK_BITS 14 defines CLUSTER_SLOTS 16384; crc16.c documents the exact CRC parameters (poly 1021, init 0000, 'XMODEM').",
+      "affects": ["cluster-core"],
+      "evidence": "src/cluster.h lines 22-25 and 54-79 (keyHashSlot comment); src/crc16.c header note ('this is actually the XMODEM CRC 16 algorithm') with full parameter table"
+    },
+    {
+      "slug": "gossip-fanout-tenth",
+      "title": "Gossip 1/10 of nodes per PING (min 3), plus all PFAIL nodes",
+      "statement": "Each PING/PONG carries gossip sections for ~10% of known nodes with a floor of 3, and always includes every PFAIL node.",
+      "rationale": "The in-code probability analysis shows that with N/10 entries and ~8 packets exchanged per node pair in the node_timeout*2 failure-report validity window, a PFAIL node is expected to be reported to ~80% of the cluster — safely above the majority needed to promote PFAIL to FAIL — while keeping packet size bounded.",
+      "description": "clusterSendPing computes wanted = floor(nodes/10), clamps to >=3, and adds pfail_wanted sections so failure reports propagate fast.",
+      "affects": ["cluster-bus", "cluster-failover"],
+      "evidence": "src/cluster_legacy.c clusterSendPing (~lines 3752-3784): long comment 'How many gossip sections we want to add? 1/10 of the number of nodes and anyway at least 3. Why 1/10? ...'"
+    },
+    {
+      "slug": "clustermsg-abi-static-assert",
+      "title": "Freeze clusterMsg wire layout with compile-time offset asserts",
+      "statement": "Every field offset of clusterMsg is pinned by static_assert so any struct change that would break cross-version bus compatibility fails the build.",
+      "rationale": "clusterMsg is a raw binary wire format exchanged between heterogeneous node versions; silent padding or reordering changes would corrupt the gossip protocol, so incompatible edits are caught at compile time instead of at runtime in mixed clusters.",
+      "description": "cluster_legacy.h asserts offsets for sig/totlen/ver/type/currentEpoch/configEpoch/myslots/data etc. immediately after the struct definition, with a comment that clusterMsg 'defines the gossip wire protocol' and changes must be caught at compile time.",
+      "affects": ["cluster-bus"],
+      "evidence": "src/cluster_legacy.h lines 260-289: comment above static_assert block on offsetof(clusterMsg, ...) fields"
+    },
+    {
+      "slug": "asm-dual-channel-handoff",
+      "title": "ASM: destination-initiated dual-channel sync with bounded write pause and atomic config flip",
+      "statement": "Atomic slot migration is initiated by the destination, transfers a fork-based slot snapshot as RESTORE commands over a dedicated RDB channel while live writes stream over the main channel, pauses source writes only when the destination is nearly caught up, then flips ownership atomically via the cluster bus and trims source keys afterwards.",
+      "rationale": "Separating snapshot (RDB channel) from incremental stream (main channel) lets the destination buffer live writes while loading the snapshot; deferring the write pause until lag is under a byte threshold keeps unavailability to a short bounded window; a single atomic config change removes the long ASK/MOVED inconsistency window of legacy per-key MIGRATE resharding.",
+      "description": "The eight-step flow is spelled out in the cluster_asm.c file header (SOURCE/DESTINATION terminology, 'Config updated atomically via cluster bus', 'SOURCE trims migrated keys'); cluster.h carries the full ASM sequence diagram and event contract (ASM_EVENT_IMPORT_START ... ASM_EVENT_DONE).",
+      "affects": ["atomic-slot-migration", "atomic-slot-migration-feature"],
+      "evidence": "src/cluster_asm.c lines 9-44 header comment 'Migration Flow: 1..8'; src/cluster.h lines 226-291 ASM API sequence diagram and ASM_EVENT_* definitions"
+    },
+    {
+      "slug": "slot-stats-opt-in",
+      "title": "Per-slot metrics beyond key-count are opt-in via cluster-slot-stats-enabled",
+      "statement": "CLUSTER SLOT-STATS always reports key-count, but cpu-usec, memory-bytes and network-bytes-in/out are only aggregated when explicitly enabled.",
+      "rationale": "The accumulation hooks run on every command completion and reply flush, so the extra metrics carry a measurable performance trade-off; nested-command and blocked-client guards (canAddCpuDuration/canAddNetworkBytesIn) exist to avoid double counting under EXEC/EVAL/FCALL.",
+      "description": "addReplySlotStat comments that 'Any additional metrics aside from key-count come with a performance trade-off, and are aggregated and returned based on its server config'; per-metric enable bits CLUSTER_SLOT_STATS_CPU/NET/MEM checked throughout cluster_slot_stats.c.",
+      "affects": ["cluster-slot-stats"],
+      "evidence": "src/cluster_slot_stats.c lines 113-114 performance trade-off comment; lines 238-249 canAddCpuDuration nesting rationale; config.c cluster-slot-stats-enabled enum with updateMemoryTrackingEnabled hook"
+    }
+  ]
+}

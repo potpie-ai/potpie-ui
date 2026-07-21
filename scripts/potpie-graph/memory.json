@@ -1,0 +1,1354 @@
+{
+  "preferences": [
+    {
+      "slug": "strict-typescript-no-suppressions",
+      "name": "Strict TypeScript, never suppress the compiler",
+      "policy_kind": "code_style_policy",
+      "prescription": "Keep `\"strict\": true` in tsconfig.json for every TypeScript surface. Do not silence the type checker: no `as any`, no `@ts-ignore`, no bare `@ts-expect-error`. Narrow the type, add a discriminated union, or fix the model — a suppression is only acceptable with an inline comment naming the upstream library bug.",
+      "lifecycle": "active",
+      "summary": "strict:true everywhere in potpie-ui; no `as any`, no @ts-ignore, no type: ignore.",
+      "description": "The frontend and extension codebases compile under TypeScript strict mode (`tsconfig.json` sets `strict: true`, `forceConsistentCasingInFileNames: true`, `isolatedModules: true`, `noEmit: true`). CLAUDE.md states 'TypeScript: Use strict mode' and potpie-workflows' AGENTS.md restates the same rule for Python as 'NEVER suppress type errors: no `as any`, `@ts-ignore`, or `@type: ignore`'. Searchable as: type suppression, ts-ignore ban, any escape hatch, strict null checks, 'Type error: Property does not exist on type', pnpm run build failing on tsc."
+    },
+    {
+      "slug": "pascalcase-components-camelcase-utils",
+      "name": "PascalCase components, camelCase utilities",
+      "policy_kind": "naming_policy",
+      "prescription": "Name React component files and exported components in PascalCase (`PotGraphExplorer.tsx`, `EventDetailSheet.tsx`). Name hooks `useThing.ts`, services `ThingService.ts`, and every other utility/helper in camelCase. Never export a component under a camelCase identifier or a helper under PascalCase.",
+      "lifecycle": "active",
+      "summary": "React components are PascalCase; hooks/utilities/helpers are camelCase.",
+      "description": "Naming convention enforced by review across potpie-ui and the VS Code extension, written down in CLAUDE.md under Code Style Guidelines: 'Component Naming: PascalCase for components, camelCase for utilities'. In practice this shows up as `app/(main)/pots/components/PotOverview.tsx` and `EventStatusBadge.tsx` next to `lib/hooks/usePots.ts`, `lib/utils.ts`, and `services/EventStreamService.ts`. Search terms: file naming, component casing, hook naming convention, useXxx, XxxService, kebab-case vs PascalCase."
+    },
+    {
+      "slug": "feature-based-app-router-structure",
+      "name": "Feature-based folders under the Next.js App Router",
+      "policy_kind": "code_structure_policy",
+      "prescription": "Organize potpie-ui by feature, not by file type. A feature owns its route segment plus a colocated `components/` folder (`app/(main)/pots/[potId]/events/page.tsx` with `app/(main)/pots/components/events/*`). Only genuinely cross-feature primitives go in `components/ui/`, shared logic in `lib/`, and network access in `services/`.",
+      "lifecycle": "active",
+      "summary": "Colocate feature components under their App Router segment; only shared primitives live in components/ui.",
+      "description": "CLAUDE.md specifies 'File Structure: Feature-based organization using Next.js App Router'. The pots surface is the reference implementation: route groups `app/(main)/pots/[potId]/{overview,events,graph,sources,users}/page.tsx` with colocated panels under `app/(main)/pots/components/` and a barrel `events/index.ts`. Searchable as: where do I put a new component, folder layout, colocation, route groups, (main) and (auth) segments, barrel exports, App Router conventions."
+    },
+    {
+      "slug": "import-order-react-first",
+      "name": "Import ordering: React/Next, then components, then utilities",
+      "policy_kind": "code_style_policy",
+      "prescription": "Order imports in three blocks with no blank-line noise between members: (1) React and Next.js, (2) third-party packages, (3) local components then local utilities/types via the `@/` alias. In Python, use stdlib, then third-party, then absolute `src.`-prefixed local imports.",
+      "lifecycle": "active",
+      "summary": "React/Next imports first, then components, then utilities — mirrored by stdlib/third-party/local in Python.",
+      "description": "CLAUDE.md: 'Imports: React/Next imports first, then components, then utilities'. potpie-workflows' AGENTS.md gives the Python mirror — standard library, then third-party (`pydantic`, `fastapi`), then local imports which must always be absolute from `src.`. Relative imports like `from ..core import x` are rejected in review. Search terms: import order, isort profile, ruff I rules, absolute imports, `@/` path alias, module resolution bundler."
+    },
+    {
+      "slug": "tailwind-cn-utility-not-inline-styles",
+      "name": "Tailwind classes composed with cn(), not inline styles",
+      "policy_kind": "code_style_policy",
+      "prescription": "Style with Tailwind utility classes and compose conditionals through `cn()` from `lib/utils.ts` (clsx + tailwind-merge). Do not write `style={{...}}` objects, do not string-concatenate class names, and do not reach for Emotion `styled` in new code — `cn` exists so later classes win the merge deterministically.",
+      "lifecycle": "active",
+      "summary": "Use Tailwind + the cn() helper for conditional classes; no inline style objects or manual class concatenation.",
+      "description": "CLAUDE.md: 'Styling: Use Tailwind CSS with `cn` utility for conditional classes'. `lib/utils.ts` defines `export function cn(...inputs: ClassValue[]) { return twMerge(clsx(inputs)) }` backed by `clsx@^2.1.1` and `tailwind-merge@^2.6.0`. Using raw template strings loses tailwind-merge's conflict resolution, so `p-2` and `p-4` both survive and the visual result depends on stylesheet order. Search terms: conditional className, clsx, twMerge, class conflict, inline style, styled-components, variant styling, class-variance-authority."
+    },
+    {
+      "slug": "functional-components-destructured-props",
+      "name": "Functional components with props destructured at the signature",
+      "policy_kind": "code_style_policy",
+      "prescription": "Write every React component as a typed function component and destructure props in the parameter list (`function EventRow({ event, onSelect }: EventRowProps)`). No class components, no `props.x` access chains inside the body, and no untyped `props: any`.",
+      "lifecycle": "active",
+      "summary": "Functional components only, props destructured at the component level with an explicit props interface.",
+      "description": "CLAUDE.md's Component Patterns section: 'Use functional components with TypeScript FC types' and 'Prefer destructuring props at the component level'. Every panel under `app/(main)/pots/components/` follows this — `PotMembersPanel`, `EventFilters`, `AgentActivityTimeline` all take a named `Props` interface and destructure. Class components exist nowhere in the tree. Search terms: React.FC, component signature, props interface, destructuring, defaultProps, class component migration."
+    },
+    {
+      "slug": "use-client-directive-at-the-boundary",
+      "name": "\"use client\" only at the interactive boundary",
+      "policy_kind": "code_structure_policy",
+      "prescription": "Put `\"use client\"` at the top of a file only when it actually needs browser state, effects, event handlers, or context. Keep page shells and data-fetch layers as server components and push the directive down to the smallest interactive leaf, so client bundle size does not grow with the whole route.",
+      "lifecycle": "active",
+      "summary": "Mark client components explicitly with \"use client\", as low in the tree as possible.",
+      "description": "CLAUDE.md: 'Use \"use client\" directive for client components'. In practice route `page.tsx` files under `app/(main)/pots/[potId]/` stay thin and the directive lives on the interactive panels (`PotGraphExplorer.tsx`, `EventList.tsx`, `PotAddContextPanel.tsx`) that use hooks, Redux, or reactflow. Getting this wrong produces the Next.js build error 'You're importing a component that needs useState. It only works in a Client Component'. Search terms: server component, client boundary, useState in server component, hydration error, RSC, bundle size."
+    },
+    {
+      "slug": "redux-toolkit-persist-for-global-state",
+      "name": "Redux Toolkit + redux-persist for global state, hooks for local state",
+      "policy_kind": "state_management_policy",
+      "prescription": "Cross-route or session-durable state goes in a Redux Toolkit slice registered with redux-persist. Everything scoped to one screen stays in `useState`/`useReducer`, and server data goes through TanStack Query hooks in `lib/hooks/`. Do not add a third global store for state that a slice or a query already owns.",
+      "lifecycle": "active",
+      "summary": "Global state = Redux Toolkit slices + redux-persist; local state = React hooks; server state = TanStack Query.",
+      "description": "CLAUDE.md: 'State Management: Redux Toolkit with Redux Persist for global state, React hooks for local state'. package.json carries `@reduxjs/toolkit@^2.6.1`, `react-redux@^9.2.0`, `redux-persist@^6.0.0` alongside `@tanstack/react-query@^5.68.0` and a legacy `zustand@^5.0.8`. The recurring review comment is 'this belongs in a slice, not a context' or the inverse. Search terms: createSlice, configureStore, persistReducer, store rehydration, zustand vs redux, useQuery, cache invalidation."
+    },
+    {
+      "slug": "defensive-null-handling-and-error-boundaries",
+      "name": "Optional chaining, nullish coalescing, and route error boundaries",
+      "policy_kind": "error_handling_policy",
+      "prescription": "Use `?.` and `??` at every API/response boundary instead of assuming shape, and give each route segment an `error.tsx` boundary rather than letting a render throw blank the app. Never use `||` for defaulting when `0`/`\"\"`/`false` are legitimate values.",
+      "lifecycle": "active",
+      "summary": "Optional chaining + nullish coalescing at data boundaries; Next.js error boundaries per route segment.",
+      "description": "CLAUDE.md: 'Error Handling: Use Next.js error boundaries, optional chaining, and nullish coalescing.' Backend payloads from the potpie API and the events SSE stream are frequently partial, so panels like `EventPayloadView.tsx` and `PotOverview.tsx` defensively read nested fields. The classic failure this prevents is 'TypeError: Cannot read properties of undefined (reading map)' rendering a whole pot page white. Search terms: undefined is not an object, blank screen, error.tsx, fallback UI, default value, `||` vs `??`."
+    },
+    {
+      "slug": "emotion-styled-components-for-new-ui",
+      "name": "Emotion styled-components for new UI (deprecated)",
+      "policy_kind": "code_style_policy",
+      "prescription": "DEPRECATED — do not follow. New UI must use Tailwind utility classes composed with `cn()`. `@emotion/react` and `@emotion/styled` remain in package.json only because a few third-party chart and editor wrappers still pull them in transitively; do not author new `styled.div` blocks.",
+      "lifecycle": "deprecated",
+      "summary": "Deprecated: Emotion styled-components are no longer the styling path for new potpie-ui code — Tailwind + cn() replaced it.",
+      "description": "Early potpie-ui screens used `@emotion/styled` for component-scoped CSS. That approach was retired in favor of Tailwind utility classes plus the `cn()` merge helper, so styling is greppable and design tokens live in `app/globals.css` rather than in TypeScript template literals. `@emotion/react@^11.14.0` and `@emotion/styled@^11.14.0` are still installed for transitive consumers, which is why the pattern keeps reappearing in copy-pasted code. Search terms: styled.div, css prop, emotion, CSS-in-JS, why is this component not using Tailwind, deprecated styling approach."
+    },
+    {
+      "slug": "python-absolute-src-imports",
+      "name": "Absolute `src.`-prefixed imports in Python services",
+      "policy_kind": "code_style_policy",
+      "prescription": "In potpie-workflows always import local modules by absolute path from the package root — `from src.core.agents.qa import create_qa_agent`, `from src.utils.url_validation import validate_http_url`. Relative imports (`from ..core import x`) are rejected because Celery workers, the FastAPI app, and the test runner each load modules under different roots.",
+      "lifecycle": "active",
+      "summary": "Local Python imports are always absolute from `src.`; relative imports are rejected in review.",
+      "description": "potpie-workflows AGENTS.md lists 'Use absolute imports: Always import from `src.` prefix' under Important Constraints, and the Import Organization section shows the three-block ordering with local imports last. The concrete failure mode from relative imports is `ImportError: attempted relative import beyond top-level package` when `start_celery_worker.py` boots the worker versus `uvicorn src.rest_server:app`. Search terms: ImportError, ModuleNotFoundError src, relative import, package root, celery worker import failure."
+    },
+    {
+      "slug": "python-naming-conventions",
+      "name": "PascalCase classes, snake_case functions, UPPER_CASE constants",
+      "policy_kind": "naming_policy",
+      "prescription": "Python: classes in PascalCase (`WorkflowsService`, `SQLAlchemyStore`), functions and variables in snake_case (`get_recipe`, `user_id`), module constants in UPPER_CASE (`DEFAULT_TIMEOUT`, `MAX_RETRIES`), and private members prefixed with a single underscore (`_internal_method`).",
+      "lifecycle": "active",
+      "summary": "Standard Python casing: PascalCase classes, snake_case callables, UPPER_CASE constants, _private members.",
+      "description": "Written down verbatim in potpie-workflows' AGENTS.md under Naming Conventions and followed across potpie's context-core and context-engine packages (`SemanticMutationRequest`, `validate_semantic_request`, `APPLICABLE_MUTATION_OPS`, `_run_import_time_checks`). Ruff's `N` and `RUF` rule families catch most drift in CI. Search terms: naming convention Python, private method underscore, constant naming, ruff N rules, class naming."
+    },
+    {
+      "slug": "modern-python-union-type-hints",
+      "name": "Modern `X | None` type hints, no typing.Optional",
+      "policy_kind": "code_style_policy",
+      "prescription": "Annotate with builtin generics and PEP 604 unions — `Workflow | None`, `list[dict[str, Any]]` — not `Optional[Workflow]` or `List[Dict[str, Any]]`. Annotate every public function signature; `Any` needs a comment justifying it.",
+      "lifecycle": "active",
+      "summary": "Use `X | None` and `list[...]`/`dict[...]` builtins, never typing.Optional/List/Dict.",
+      "description": "potpie-workflows AGENTS.md Type Hints section shows `async def get_workflow(self, workflow_id: str) -> Workflow | None` and `result: list[dict[str, Any]] = []` as the house style. Both Python repos target modern interpreters — potpie requires `>=3.12,<3.15` in pyproject.toml and pie targets `py311` in `[tool.ruff]` — so the older `typing` aliases have no compatibility justification. Ruff's `UP` (pyupgrade) rules are enabled in pie and auto-rewrite them. Search terms: Optional deprecated, PEP 604, pyupgrade UP007, type annotation style, from __future__ import annotations."
+    },
+    {
+      "slug": "pydantic-models-at-layer-boundaries",
+      "name": "Pydantic models for anything crossing a layer",
+      "policy_kind": "api_compatibility_policy",
+      "prescription": "Every API input/output and every payload passed between layers must be a Pydantic `BaseModel`, not a bare dict or TypedDict. Route handlers accept and return models; services take models; only tool return shapes use `TypedDict`. This is what keeps the OpenAPI schema and the client types honest.",
+      "lifecycle": "active",
+      "summary": "All API and inter-layer payloads are Pydantic BaseModels — never raw dicts.",
+      "description": "potpie-workflows AGENTS.md: 'Pydantic for data: All API inputs/outputs must use Pydantic models' and 'Always use Pydantic models for data passing between layers', illustrated with `class CreateWorkflowRequest(BaseModel)`. potpie follows the same rule via `pydantic-settings>=2.14.2` for config and frozen DTOs in `potpie/context-core/src/potpie_context_core/semantic_mutations.py`. Passing dicts silently drops FastAPI validation and produces 500s instead of 422s. Search terms: request model, response_model, validation error 422, BaseModel, model_dump, dict payload."
+    },
+    {
+      "slug": "async-first-io",
+      "name": "Async everywhere for I/O",
+      "policy_kind": "code_style_policy",
+      "prescription": "All I/O — database, HTTP, filesystem, queue — must be `async`/`await`. Never call a blocking client from inside an async handler; if a sync library is unavoidable, wrap it explicitly and document why. New service methods are declared `async def` even when the body is currently sync, so the signature does not have to churn later.",
+      "lifecycle": "active",
+      "summary": "potpie-workflows is an async-first codebase: every DB, HTTP, and file operation is awaited.",
+      "description": "potpie-workflows AGENTS.md Async Patterns: 'This is an async-first codebase. Always use `async/await` for I/O operations', restated under Important Constraints as 'Async everywhere: All I/O must be async (DB, HTTP, file operations)'. The known wrinkle documented in the same file is SQLAlchemy — sessions are still sync `Session` objects wrapped in async methods, with `AsyncSession` + asyncpg named as the migration target. Blocking calls inside the FastAPI event loop are the usual cause of 'request stalls while another request runs'. Search terms: event loop blocked, asyncio, await, blocking call, asyncpg, run_in_executor, pytest-asyncio."
+    },
+    {
+      "slug": "module-logger-with-exception-context",
+      "name": "Module-level logger, log with exc_info at boundaries",
+      "policy_kind": "observability_policy",
+      "prescription": "Declare `logger = logging.getLogger(__name__)` at module level. Log exceptions at the boundary before re-raising, always with `exc_info=True`, and re-raise with `raise HTTPException(...) from e` so the cause chain survives. Never swallow an exception silently and never log a bearer token, API key, or full request body.",
+      "lifecycle": "active",
+      "summary": "Module-level `logging.getLogger(__name__)`; log with exc_info at boundaries and re-raise with `from e`.",
+      "description": "potpie-workflows AGENTS.md Error Handling shows the exact pattern — `logger.error(f\"Operation failed: {e}\", exc_info=True)` followed by `raise HTTPException(status_code=500, detail=\"Internal error\") from e` — and Important Constraints repeats 'Log with context: Use structured logging with exception info'. The redaction rule is reinforced by potpie-workflows SECURITY.md ('Bearer tokens should be kept secure and never logged') and by pie's observability redaction tests. Search terms: structured logging, exc_info, stack trace missing, swallowed exception, secret in logs, logger name, traceback."
+    },
+    {
+      "slug": "domain-specific-exceptions",
+      "name": "Raise domain exceptions, not bare Exception",
+      "policy_kind": "error_handling_policy",
+      "prescription": "Define and raise named domain exceptions (`WorkflowNotFoundError`, `SemanticMutationParseError`, `OntologyCoherenceError`, `MutationBatchValidationError`) instead of `Exception` or `ValueError` with a string. Map them to HTTP status codes at the API boundary only — domain code must not import `HTTPException`.",
+      "lifecycle": "active",
+      "summary": "Typed domain exceptions per failure mode; HTTP mapping happens only at the boundary.",
+      "description": "potpie-workflows AGENTS.md shows `class WorkflowNotFoundError(Exception)` under 'Define domain-specific exceptions', and potpie's context-core follows the same discipline with `SemanticMutationParseError` for shape errors, `MutationBatchValidationError` carrying structured issues, `OntologyCoherenceError` from `coherence.py`, and `CapabilityNotImplemented` for absent optional ports. Catching bare `Exception` in a service makes a 404 indistinguishable from a database outage. Search terms: custom exception, error taxonomy, except Exception, HTTPException leak, errors.py, exception hierarchy."
+    },
+    {
+      "slug": "ruff-check-changed-files-before-done",
+      "name": "Run ruff on changed files before calling work complete",
+      "policy_kind": "code_style_policy",
+      "prescription": "After editing any Python file, run `ruff check <path>` (and `ruff format` where configured) and resolve every error before marking the task complete. Do not close out work with outstanding lint or type errors, and do not add `# type: ignore` or `Any` to make the check pass.",
+      "lifecycle": "active",
+      "summary": "MANDATORY: ruff check on every changed Python file before a task is considered done.",
+      "description": "potpie-workflows AGENTS.md has a section literally titled 'Linter Verification (MANDATORY before completion)' — 'ALWAYS run linter on changed files before marking task complete', with `ruff check /path/to/changed_file.py` and an lsp_diagnostics severity=error follow-up, and an explicit 'Do NOT mark task complete if any errors remain'. potpie enforces the same at commit time via `.pre-commit-config.yaml` (ruff + ruff-format, `ruff>=0.14.3`), and pie runs `ruff check --output-format=github .` plus `ruff format --check .` as a required CI job. Search terms: lint failed, ruff error, formatting check, pre-commit hook, CI lint job, definition of done."
+    },
+    {
+      "slug": "uv-for-python-dependency-management",
+      "name": "uv is the Python dependency and run tool",
+      "policy_kind": "dependency_policy",
+      "prescription": "Use `uv sync`, `uv run`, and `uv tool install` for Python work in potpie, potpie-workflows, and pie — not bare pip or a hand-managed venv. Commit `uv.lock` and keep it in sync; the `uv-lock --check` pre-commit hook fails the commit if pyproject and lockfile disagree.",
+      "lifecycle": "active",
+      "summary": "uv (sync/run/tool install) is the sanctioned Python toolchain; uv.lock is committed and check-gated.",
+      "description": "potpie-workflows AGENTS.md marks `uv sync` and `uv run` as '(recommended)' for install, tests, migrations, and lint, with pip shown only as the alternative. potpie's Makefile installs the CLI via `uv tool install --python '>=3.12,<3.14' --force --editable \".\"` and hard-fails with 'uv not installed' otherwise; its pyproject declares a `[tool.uv.workspace]` over context-core/context-engine/integrations/parsing/sandbox plus `override-dependencies` for CVE floors. `.pre-commit-config.yaml` pins `uv-pre-commit` rev 0.10.7 with `uv-lock --args ['--check']`. Search terms: uv sync, uv.lock out of date, editable install, workspace members, pip install -e, virtualenv setup."
+    },
+    {
+      "slug": "conventional-commits-with-scope-and-ticket",
+      "name": "Conventional commits with a scope and the POT ticket id",
+      "policy_kind": "vcs_policy",
+      "prescription": "Write commit and PR titles as `type(scope): summary` — e.g. `fix(cli): normalize --json parse-time errors to structured JSON envelope`. Use `feat`, `fix`, `chore`, `docs`, `refactor`, `test`. Append the Linear ticket when one exists (`(POT-1770)`) and let the merge tooling append `(#PR)`. Never merge a commit titled just 'fixes' or 'update'.",
+      "lifecycle": "active",
+      "summary": "type(scope): summary commit titles, with the POT-#### Linear id and the PR number appended.",
+      "description": "The convention is visible across every repo's history: `fix(cli): add config list and no-key get for non-secret config inspection (#966)`, `feat(cli): source status no-ID summary and doctor effective repo pot (POT-1763 and POT-1779) (#929)`, `fix: remediate Vanta dependency CVEs and bump torch to 2.12.1 (#1000)`, `feat(demo): enable redis DLQ demo flow for all accounts`, `Fix include-family/graph-view vocabulary boundary (POT-1770) (#985)`. Linear team POT is the ticket namespace (POT-1397 through POT-1990 appear in real commit subjects). Scoped titles are what makes `git log --oneline` and Potpie's own change-timeline ingestion readable. Search terms: commit message format, conventional commits, PR title lint, POT ticket, changelog generation, squash merge title."
+    },
+    {
+      "slug": "pytest-marker-taxonomy",
+      "name": "Tag every test with the right pytest marker",
+      "policy_kind": "testing_policy",
+      "prescription": "Register markers in pyproject and tag every test: `unit` for pure logic, `integration` for real third-party libs but no external services, `cli_auth_e2e` for live OAuth journeys (opt-in behind `RUN_CLI_AUTH_E2E=1`), `premerge_journey` for the Rust-requiring CLI journey that runs only in its dedicated job. Never let a test that needs network or credentials run unmarked in the default suite.",
+      "lifecycle": "active",
+      "summary": "Markers unit/integration/cli_auth_e2e/premerge_journey gate which suite a test runs in; unmarked network tests are rejected.",
+      "description": "potpie's `[tool.pytest.ini_options]` declares exactly these four markers with descriptive help text, sets `asyncio_mode = \"auto\"`, `testpaths = [\"tests\"]`, and `addopts = \"-v --tb=short\"`. pie sets `addopts = \"--strict-markers\"` so an unregistered marker is a hard error rather than a warning. potpie-workflows uses `@pytest.mark.asyncio`, `@pytest.mark.e2e`, `@pytest.mark.unit` and requires `python run_tests.py --test <file>` for correct environment setup. Search terms: pytest marker, strict-markers, flaky test in CI, opt-in e2e, RUN_CLI_AUTH_E2E, asyncio_mode auto, test selection -m."
+    },
+    {
+      "slug": "deterministic-agent-temperatures",
+      "name": "Low temperature for search and code generation agents",
+      "policy_kind": "agent_design_policy",
+      "prescription": "Set `ModelSettings(temperature=0.1)` for explore/librarian agents and all code generation; allow at most `temperature=0.3` for oracle/consulting agents that need reasoning variance. Create agents through `create_*_agent` factories with `defer_model_check=True`, `end_strategy=\"exhaustive\"`, `retries=3`, and register them in `src/core/agents/__init__.py`.",
+      "lifecycle": "active",
+      "summary": "temperature=0.1 for searching and codegen, 0.3 max for reasoning agents; agents are built by factory and registered.",
+      "description": "potpie-workflows AGENTS.md 'Temperature Settings': Explore/Librarian agents 0.1 (deterministic searching), Oracle/Consulting 0.3 max, Code generation 0.1 ('consistency is critical'). The same file gives the canonical `create_my_agent` factory shape over `pydantic_ai.Agent` and the delegation tool wrapper that forwards `ctx.deps` and `ctx.usage`. High temperature in the specgen/plangen pipelines shows up as non-reproducible specs and grounding-validator failures on `file_changes.path`. Search terms: model settings, temperature, nondeterministic agent output, pydantic-ai Agent, agent factory, retries, end_strategy."
+    },
+    {
+      "slug": "retrieval-grade-entity-descriptions",
+      "name": "Every graph entity carries a retrieval-grade description",
+      "policy_kind": "graph_writing_policy",
+      "prescription": "When writing to the context graph, author a `description` for every entity as a retrieval card: 2-4 sentences containing the symptoms, synonyms, file paths, error strings, and phrasings someone would actually search for. A one-line `summary` is not enough. Recall depends entirely on this text — the validator only warns, but skills treat it as mandatory.",
+      "lifecycle": "active",
+      "summary": "Entity descriptions must be retrieval cards with symptoms, paths, and error strings — not one-line labels.",
+      "description": "docs/context-graph/writing.md §3 states the rule precisely: 'A missing description is only a warning, never a reject — but recall depends on the agent-authored retrieval card, so skills treat it as mandatory'. The lowering tier derives summaries only from authored material via `compact_entity_summary`, so a bare re-reference never clobbers a stored summary but also never improves it. Thin descriptions are the single biggest cause of 'the graph has the fact but search does not find it'. Search terms: description quality, semantic search recall, embedding text, entity summary, retrieval card, graph quality low-confidence, orphan entities."
+    },
+    {
+      "slug": "flat-semantic-dsl-operations",
+      "name": "Semantic mutation ops are flat — no nested wrappers",
+      "policy_kind": "graph_writing_policy",
+      "prescription": "Emit graph mutations as flat operations: every field sits top-level on the op (`op`, `subject`, `predicate`, `object`, `truth`, `confidence`, `evidence[]`, `description`, `valid_from`, `observed_at`; `append_event` adds `verb`, `occurred_at`, `actor`, `targets[]`, `mentions[]`). Never emit nested `{\"event\":{...}}`, `{\"claim\":{...}}`, or `{\"field\"/\"from\"/\"to\"}` wrappers, and never hand-author Cypher or `EntityUpsert` DTOs.",
+      "lifecycle": "active",
+      "summary": "The semantic DSL is flat: nested claim/event wrappers from old docs will not parse.",
+      "description": "docs/context-graph/writing.md §2.2 'Op fields are FLAT' says nested shapes as in the old graphv2.md examples 'will not parse' and raise `SemanticMutationParseError` at the DSL tier in `domain/semantic_mutations.py`. Agents emit semantic ops only; Cypher and the structural `EntityUpsert`/`EdgeUpsert`/`EdgeDelete`/`InvalidationOp` DTOs in `domain/graph_mutations.py` are internal and are what the flat ops lower into. Use `graph mutation-template --kind <bug-fix|decision|preference-policy|timeline-event|...>` to get the correct skeleton. Search terms: mutation shape error, parse error, operations array, propose payload, mutation-template, why did my mutation reject, nested payload."
+    },
+    {
+      "slug": "pnpm-overrides-for-transitive-cves",
+      "name": "Pin transitive CVE fixes through the pnpm overrides block",
+      "policy_kind": "dependency_policy",
+      "prescription": "When a vulnerability lands in a transitive npm dependency that no direct dependency has bumped yet, add a pinned entry to the `pnpm.overrides` block in package.json (range-scoped where possible, e.g. `\"minimatch@>=9.0.0 <9.0.7\": \"9.0.9\"`), commit the refreshed pnpm-lock.yaml in the same PR, and remove the override once the direct dependency ships the fix.",
+      "lifecycle": "active",
+      "summary": "Transitive npm CVEs are patched via pnpm.overrides with a pinned floor plus a refreshed lockfile.",
+      "description": "potpie-ui's package.json carries a substantial `pnpm.overrides` map — `protobufjs 7.5.8`, `follow-redirects 1.16.0`, `axios 1.17.0`, `glob 10.5.0`, `undici ^6.21.2`, `brace-expansion ^2.0.2`, `js-yaml ^4.1.1`, `dompurify ^3.4.2`, `form-data ^4.0.4`, `uuid@<11.1.1 -> 11.1.1` — each entry the residue of a specific advisory. The remediation PRs land as 'High, med & low vulns fixed' and 'Fixed low Vulnerablities' from shmbhvi101. `glob 10.5.0` is exactly the fixed floor documented for the glob CLI command-injection advisory in potpie-workflows' SECURITY.md. Search terms: npm audit, transitive dependency, override, resolutions field, dependabot alert, pnpm-lock.yaml, advisory GHSA."
+    },
+    {
+      "slug": "graph-mutate-command-for-writes",
+      "name": "Use `graph mutate` to write the graph (deprecated)",
+      "policy_kind": "graph_writing_policy",
+      "prescription": "DEPRECATED — do not follow. `potpie graph mutate --file ...` is a legacy wrapper that internally calls propose+commit and prints a deprecation warning. Write through `graph propose --file mutation.json` then `graph commit <plan_id> --verify` instead, so the plan is persisted, version-conflict checked, and read-back verified.",
+      "lifecycle": "deprecated",
+      "summary": "Deprecated: `graph mutate` is a legacy wrapper — propose → commit --verify is the canonical write door.",
+      "description": "docs/context-graph/writing.md §6 is explicit: 'graph mutate is a legacy wrapper, not Spine B' — the CLI command in `commands/graph.py` calls the workbench propose→commit path and 'emits a legacy warning steering you to propose/commit'. The immediate-apply `DefaultGraphService.mutate` is now reachable only through `record` / `context_record`. Using the deprecated command loses plan persistence, the TTL, the optimistic-concurrency conflict guard, and `--verify` read-back. Search terms: graph mutate deprecated, legacy warning, how do I write to the graph, propose commit, plan_id, mutation applied but not verified."
+    }
+  ],
+  "policies": [
+    {
+      "slug": "agent-safe-cli-output",
+      "name": "Agent-safe CLI output — structured envelope in, honest exit code out",
+      "policy_kind": "interface_policy",
+      "prescription": "Every `potpie --json` invocation must emit exactly one structured JSON envelope on stdout, including for parse-time and argument errors that Typer would otherwise print as human text on stderr. A command that failed must exit non-zero: `ok:false` bodies, `code:not_implemented` responses and domain errors are failures, not successes. Human-readable Rich output is for TTYs only and must never be the sole channel for an error an automation needs to detect.",
+      "lifecycle": "active",
+      "summary": "The CLI is an agent interface first: --json always returns a structured envelope, and failures always exit non-zero.",
+      "description": "The contract that makes `potpie` safe to put inside a shell chain or a coding harness. It is the policy behind PR #964, which normalized parse-time errors into the structured JSON envelope instead of letting Typer write plain text to stderr, and behind issue #992, where `potpie --json cloud status` printed `code:not_implemented` and `potpie --json graph status` printed `ok:false` while both exited 0, so `&&` chains treated failures as success. The two recurring violations are tracked as bug_pattern cli-parse-time-json-envelope-drift and bug_pattern cli-domain-error-exit-zero. Search terms: --json envelope, CLI exit code, automation cannot detect failure, structured error output, agent-facing CLI, ok:false exit 0."
+    },
+    {
+      "slug": "no-secrets-in-code-gitleaks",
+      "name": "No secrets in code — gitleaks gates every push",
+      "policy_kind": "security_policy",
+      "prescription": "Never commit a credential, token, private key, or API secret. Secrets come from environment variables loaded at runtime; repos ship `.env.template` / `.env.example` with empty or obviously-fake placeholders. gitleaks runs as a required CI job with `fetch-depth: 0` over full history, and the only permitted exceptions are narrow path/regex entries in `.gitleaks.toml` for deliberately fake test fixtures — never a blanket `useDefault = false` or a wildcard path.",
+      "lifecycle": "active",
+      "summary": "Zero secrets in git; gitleaks scans full history in CI and allowlists must be narrow and justified.",
+      "description": "pie runs a required `secret-scan` job (gitleaks 8.21.2, full-history checkout) in `.github/workflows/ci.yml`, and `.gitleaks.toml` extends the default ruleset with an allowlist described as 'Intentional fake secrets in tests and documented placeholders in templates' — scoped to `\\.env\\.example$`, `scripts/check-collector-redaction\\.sh$`, and the single literal fake AWS key `AKIAABCDEFGHIJKLMN12` used by the OTel redaction tests. potpie's `.pre-commit-config.yaml` adds `detect-private-key`, and the CLI disabled keyring credential storage in commit d64f5182. potpie-workflows SECURITY.md adds 'Bearer tokens should be kept secure and never logged'. Search terms: leaked credential, gitleaks finding, rotate key, .env committed, allowlist, secret scanning, pre-commit detect-private-key."
+    },
+    {
+      "slug": "no-public-secret-env-vars",
+      "name": "No secret-like NEXT_PUBLIC_* environment variables",
+      "policy_kind": "security_policy",
+      "prescription": "Never name an environment variable `NEXT_PUBLIC_*SECRET*`, `NEXT_PUBLIC_*PASSWORD*`, or `NEXT_PUBLIC_*HMAC*`. Anything prefixed `NEXT_PUBLIC_` is inlined into the browser bundle and is therefore public by construction — move the value to a server-side env name and read it in a route handler or server component.",
+      "lifecycle": "active",
+      "summary": "CI hard-fails any NEXT_PUBLIC_ variable whose name contains SECRET, PASSWORD, or HMAC.",
+      "description": "Enforced mechanically by the `env-policy-check` job in potpie-ui's `.github/workflows/ci-policy-check.yaml`, which git-greps the tree for `NEXT_PUBLIC_[A-Z0-9_]*(SECRET|PASSWORD|HMAC)[A-Z0-9_]*` and exits non-zero with '::error::Forbidden NEXT_PUBLIC secret-like variable detected. Use server-side env names instead.' It runs on every pull request and on pushes to main, excluding only the policy file itself. Search terms: NEXT_PUBLIC leak, client bundle secret, env var naming, CI policy check failed, forbidden environment variable, Firebase config vs secret."
+    },
+    {
+      "slug": "vanta-cve-remediation-cadence",
+      "name": "Vanta CVE remediation cadence",
+      "policy_kind": "dependency_policy",
+      "prescription": "Vanta-surfaced dependency vulnerabilities are burned down on a recurring cadence across every repo, severity-first (critical/high, then medium, then low), each batch landing as its own PR titled for the severity tier it clears. Bump to the first patched release, record the CVE id and the reason in the commit or in SECURITY.md, and refresh the lockfile in the same PR.",
+      "lifecycle": "active",
+      "summary": "Recurring severity-ordered dependency CVE sweeps driven by Vanta findings, one PR per severity batch, every repo.",
+      "description": "The cadence is visible in history across the org: potpie's `fix: remediate Vanta dependency CVEs and bump torch to 2.12.1 (#1000)`, `fixed vanta vulnerabilities (#983)`, `fix: upgrade MCP past high-severity advisories (#1014)`; potpie-ui's `High, med & low vulns fixed`, `Med Vanta vulns fixed`, `Fixed low Vulnerablities`. shmbhvi101 drives it across potpie, potpie-ui, potpie-workflows, pie, the VS Code extension and the Slack bot. potpie's pyproject encodes the results as `[tool.uv] override-dependencies` with inline CVE comments — `# CVE-2025-3000: torch <= 2.12.0; 2.12.1 is the first patched release on PyPI` and a note that litellm>=1.83.10 clears CVE-2026-40217 but conflicts with the pydantic-ai stack. Search terms: Vanta finding, CVE remediation, security patch sweep, dependency upgrade PR, compliance, SOC2, advisory backlog."
+    },
+    {
+      "slug": "pinned-dependency-floors-in-package-metadata",
+      "name": "Patched dependency floors must be visible in package metadata",
+      "policy_kind": "dependency_policy",
+      "prescription": "A CVE fix is not done until the patched floor is declared in the shipped package metadata, not only in a lockfile. Put the constraint in `[project].dependencies` or `[tool.uv].override-dependencies` in pyproject.toml (npm: `pnpm.overrides` in package.json) with a comment naming the CVE, so GitHub's dependency graph and downstream installers see the floor.",
+      "lifecycle": "active",
+      "summary": "Patched version floors live in pyproject/package.json metadata — a lockfile-only bump does not count as remediated.",
+      "description": "Landed as potpie PR #1015, `fix: expose patched dependency floors in package metadata`. A lockfile pin protects only the repo's own resolved tree; consumers installing the published `potpie` wheel and GitHub's dependency graph both read declared metadata, so a lock-only fix leaves the advisory open externally. The resulting floors are visible in potpie's pyproject: `aiohttp>=3.14.1`, `starlette>=1.3.1`, `pyjwt>=2.13.0`, `cryptography>=48.0.1`, `idna>=3.15`, `torch>=2.12.1`, `sentry-sdk>=2.61.1,<3.0.0`. potpie-workflows SECURITY.md documents the same shape for `werkzeug>=3.0.3`, `python-multipart>=0.0.18`, and `starlette>=0.49.1`. Search terms: dependency graph still flagging, floor not published, lockfile only, constraint in pyproject, wheel metadata, uv override-dependencies."
+    },
+    {
+      "slug": "pre-commit-gate-required",
+      "name": "The pre-commit gate must pass before a PR is reviewable",
+      "policy_kind": "code_style_policy",
+      "prescription": "Install and run the repo's pre-commit hooks; the same set runs as a PR gate. potpie's stack: check-yaml/toml/json/ast, trailing-whitespace, end-of-file-fixer, mixed-line-ending, check-merge-conflict, check-case-conflict, check-added-large-files (25 MB cap), detect-private-key, debug-statements, ruff + ruff-format (excluding `legacy/`), `uv lock --check`, and `cargo fmt --check` for the Rust parsing crate. potpie-ui runs lint-staged from a husky pre-push hook.",
+      "lifecycle": "active",
+      "summary": "pre-commit (formatting, ruff, uv-lock check, cargo fmt, private-key detection) is a required PR gate.",
+      "description": "Added by potpie commit 43e545ae 'Add pre-commit PR gate (#989)'; the hook set is `.pre-commit-config.yaml` pinning pre-commit-hooks v5.0.0, ruff-pre-commit v0.14.3, and uv-pre-commit 0.10.7. Typical failure output is 'files were modified by this hook' from ruff-format or end-of-file-fixer, or 'The lockfile is not up-to-date with pyproject.toml' from `uv lock --check`. potpie-ui's equivalent is `.husky/pre-push` running `npm run lint-staged` over staged files. Search terms: pre-commit failed, hook modified files, uv lock check, cargo fmt, trailing whitespace CI, debug statement left in, husky pre-push, lint-staged."
+    },
+    {
+      "slug": "mypy-strict-typecheck-gate",
+      "name": "mypy --strict is a required CI gate in pie",
+      "policy_kind": "code_style_policy",
+      "prescription": "pie compiles clean under `[tool.mypy] strict = true` over `packages = [\"pie\"]` with `mypy_path = \"src\"`, and the `typecheck` job must pass before merge. Fix the types rather than adding `# type: ignore`; a targeted ignore requires an inline comment naming the upstream library that lacks stubs.",
+      "lifecycle": "active",
+      "summary": "pie runs mypy in strict mode as a blocking CI job; type: ignore needs a named justification.",
+      "description": "pie's pyproject sets `[tool.mypy] strict = true`, and `.github/workflows/ci.yml` runs a dedicated `typecheck` job ('Type check (mypy)') on Python 3.12 alongside separate `lint`, `test`, `coverage-gate`, and `secret-scan` jobs. Ruff there selects `E, F, W, I, B, UP, SIM, RUF` at line-length 100 targeting py311. This is the strictest static gate in the org and is the reason enterprise pie code is annotated end-to-end. Search terms: mypy error, strict mode, missing type annotation, untyped def, disallow_untyped_defs, type: ignore, CI typecheck failed, stubs missing."
+    },
+    {
+      "slug": "coverage-gate-80-percent",
+      "name": "80% coverage floor with a max 5-point drop per PR",
+      "policy_kind": "testing_policy",
+      "prescription": "pie pull requests must keep total branch coverage at or above 80% and must not drop coverage by more than 5 percentage points versus the base branch. Ship tests with the change; do not merge behind a coverage waiver. Coverage is measured over `src/pie` with `branch = true`.",
+      "lifecycle": "active",
+      "summary": "pie's coverage-gate job enforces >=80% coverage and a max 5-point regression against the PR base.",
+      "description": "Implemented by the `coverage-gate` job in pie's `.github/workflows/ci.yml` — named 'Coverage gate (>=80%, max 5pt drop)' — which downloads the PR's `coverage.xml` artifact, recomputes base-branch coverage from a second checkout, and runs `.github/scripts/coverage_gate.py --min-coverage 80 --max-drop 5`. It was introduced in the repo's first real PR, `Add CI/CD pipeline with tests, coverage gate, CodeQL, and quality checks [POT-1558] (#1)` by jdyaberi-pp. `[tool.coverage.run]` sets `source = [\"src/pie\"]`, `branch = true`. Search terms: coverage dropped, gate failed, untested code, coverage.xml, pytest --cov, minimum coverage, quality gate, POT-1558."
+    },
+    {
+      "slug": "premerge-cli-journey-gate",
+      "name": "The pre-merge CLI journey must pass before merging potpie",
+      "policy_kind": "testing_policy",
+      "prescription": "Changes to the potpie CLI must pass the dedicated pre-merge journey test — the `premerge_journey` pytest marker, run only in the `premerge-cli-journey` job because it needs a Rust toolchain for the parsing crate. Do not mark journey tests as skipped to get a merge through; if the journey is genuinely inapplicable, say so in the PR body.",
+      "lifecycle": "active",
+      "summary": "A dedicated end-to-end CLI journey job gates potpie merges; the premerge_journey marker keeps it out of the default suite.",
+      "description": "Landed as potpie commit e0b814e4 'Add pre-merge CLI journey integration gate (#950)'. The marker is registered in pyproject as 'premerge_journey: dedicated pre-merge CLI journey test (Rust required; run in premerge-cli-journey job only)'. It exercises the real install-and-use path — doctor, login, pot create, source register, graph read — which is where regressions like 'pot create --repo . not registering the current repo' (#974) and the uv-tool install breakages (#945, #941) actually surface, since unit tests never touch the packaged entry points. Search terms: e2e CLI test, journey test, merge blocked, Rust toolchain required, integration gate, install smoke test, potpie doctor failure."
+    },
+    {
+      "slug": "evidence-required-for-authoritative-claims",
+      "name": "Evidence, not vibes — authoritative claims must carry a source ref",
+      "policy_kind": "graph_writing_policy",
+      "prescription": "Any claim written with truth `authoritative_fact` or `source_observation` must carry an `evidence` source reference (`github:pr:owner/repo:812`, `code:potpie/pyproject.toml`, `linear:POT-1930`). If you cannot cite a source, downgrade the claim to `agent_claim` with an honest `confidence` — do not launder an inference into a fact.",
+      "lifecycle": "active",
+      "summary": "authoritative_fact and source_observation claims are rejected without evidence; uncited inferences must be agent_claim.",
+      "description": "docs/context-graph/writing.md §3 calls this the 'evidence-or-low-authority' rule: only `authoritative_fact` and `source_observation` claims must carry evidence, while `agent_claim`/`quality_finding` are 'explicitly soft and need none'. The lowering tier stamps `source_refs`/`evidence` into the full V1.5 claim metadata on every edge, and §4 notes that a literal `value` mints a synthetic `Observation` because there is 'never an authoritative fact from raw text'. Material plans with no provenance also get a non-blocking evidence warning at the pre-apply gate. Search terms: claim rejected, missing evidence, truth class, confidence score, provenance, source_ref format, why is my fact low authority, quality degraded."
+    },
+    {
+      "slug": "align-the-declaration-dont-relax-the-check",
+      "name": "Align the declaration, don't relax the check",
+      "policy_kind": "code_quality_policy",
+      "prescription": "When an ontology coherence guard fails at import time, fix the declaration that drifted — do not widen, skip, or delete the assertion. The same applies to lint and type gates: never loosen a ruff rule, a per-file-ignore, or a mypy setting to make an error disappear. Widening the check is only acceptable as a deliberate, reviewed scope decision with a comment explaining it.",
+      "lifecycle": "active",
+      "summary": "Failing invariant checks are fixed by correcting the declaration, never by relaxing or deleting the check.",
+      "description": "The phrasing comes straight from docs/context-graph/writing.md §9 on `domain/coherence.py`: `_run_import_time_checks()` runs at module load and fails startup fast if identity labels are not a subset of `ENTITY_TYPES`, a record type's `anchor_label` is unknown, an `emits_predicate` is not in `EDGE_TYPES`, a `reader_include` is unadvertised, or a `payload_schema` has no builder — and 'the rule is align the declaration, don't relax the check'. `assert_runtime_coherence` extends the same discipline to the live reader registry, raising `OntologyCoherenceError`. The one sanctioned counter-example is potpie commit 674839df 'Scope the root security lint for relocated product code and tests', where the ruff `S` per-file-ignores were widened deliberately and documented in pyproject with a comment explaining that the patterns predate the move into the distribution's security-lint scope. Search terms: OntologyCoherenceError, import-time assertion failed, don't disable the test, noqa, per-file-ignores, weakening a guard, startup crash on import."
+    },
+    {
+      "slug": "propose-commit-verify-write-door",
+      "name": "All graph writes go through propose → commit --verify",
+      "policy_kind": "graph_writing_policy",
+      "prescription": "Write the context graph only via `potpie graph propose --file mutation.json` followed by `potpie graph commit <plan_id> --verify`. Never hand-write Cypher, never call the writer port directly, and never bypass the plan. Follow the canonical loop: `graph catalog` → `graph read` → `graph search-entities` → propose → commit --verify → `graph inbox add` for anything uncertain → `graph quality`.",
+      "lifecycle": "active",
+      "summary": "propose → commit --verify is the single canonical write door; uncertain work goes to the inbox, not into the graph.",
+      "description": "docs/context-graph/writing.md frames this up front — 'The canonical write door is graph propose → graph commit --verify' — and §5 describes what you lose by skipping it: the persisted `GraphMutationPlanRecord`, the TTL, the coarse `_global` version-conflict guard, and `_verify_ingestion_commit`, which reads committed `claim_keys` back through `claim_query.find_claims` and downgrades the result to degraded/partial/watch on missing readback or a quality regression. Commit replays the server-persisted plan, so the agent never resends mutations. Inbox items (`~/.potpie/graph_inbox.json`) are pending work that intentionally never becomes fact until a harness processes it. Search terms: how to write to the graph, plan_id expired, review_required, approved-by, version conflict, readback missing claim keys, graph inbox, mutation not applied."
+    },
+    {
+      "slug": "responsible-security-disclosure",
+      "name": "Report vulnerabilities privately, never in a public issue",
+      "policy_kind": "security_policy",
+      "prescription": "Do not open a public GitHub issue for a suspected vulnerability. Contact the maintainers directly at engineering@potpie.ai with reproduction details and impact, and allow time for a fix before disclosure. Fixed advisories get written up in the repo's SECURITY.md with the CVE id, affected range, patched version, and the mitigation actually shipped.",
+      "lifecycle": "active",
+      "summary": "Private disclosure to maintainers first; fixed advisories are documented in SECURITY.md with CVE, range, and mitigation.",
+      "description": "potpie-workflows' SECURITY.md 'Reporting Security Issues' is explicit: do not open a public issue, contact the maintainers directly, provide detail, allow time for a fix. The same file models the write-up format for CVE-2024-34069 (Werkzeug debugger), CVE-2024-53981 (python-multipart boundary DoS, with the defense-in-depth `MultipartProtectionMiddleware` limiting preamble and trailing data to 1024 bytes), CVE-2025-62727 (Starlette FileResponse ReDoS, mitigated by `RangeHeaderValidationMiddleware`), and the monitored-but-unused llama-index-core CVE-2025-5302 / CWE-379 entries. potpie is a public 5.5k-star repo, so a public issue is effectively a zero-day announcement. Search terms: report a vulnerability, responsible disclosure, security contact, embargo, CVE writeup, SECURITY.md, advisory process."
+    }
+  ],
+  "edges": [
+    { "from": "policy:agent-safe-cli-output", "type": "POLICY_APPLIES_TO", "to": "service:potpie-cli", "truth": "preference", "evidence": "github:potpie-ai/potpie#964" },
+    { "from": "policy:agent-safe-cli-output", "type": "POLICY_APPLIES_TO", "to": "service:potpie-daemon", "truth": "preference", "confidence": 0.85 },
+    {
+      "from": "preference:strict-typescript-no-suppressions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "preference",
+      "evidence": "code:potpie-ui/tsconfig.json",
+      "note": "tsconfig.json sets strict: true; CLAUDE.md mandates strict mode."
+    },
+    {
+      "from": "preference:strict-typescript-no-suppressions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-vscode-extension",
+      "truth": "preference",
+      "evidence": "code:potpie-ui/CLAUDE.md",
+      "note": "Same TypeScript discipline applies to the VS Code extension."
+    },
+    {
+      "from": "preference:strict-typescript-no-suppressions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-ui",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:strict-typescript-no-suppressions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie-ui:tsconfig.json",
+      "truth": "preference",
+      "evidence": "code:potpie-ui/tsconfig.json"
+    },
+    {
+      "from": "preference:pascalcase-components-camelcase-utils",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "preference",
+      "evidence": "code:potpie-ui/CLAUDE.md"
+    },
+    {
+      "from": "preference:pascalcase-components-camelcase-utils",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie-ui:app/(main)/pots/components/PotSourcesPanel.tsx",
+      "truth": "preference",
+      "note": "Representative PascalCase feature component."
+    },
+    {
+      "from": "preference:pascalcase-components-camelcase-utils",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-vscode-extension",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:feature-based-app-router-structure",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "preference",
+      "evidence": "code:potpie-ui/CLAUDE.md"
+    },
+    {
+      "from": "preference:feature-based-app-router-structure",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-ui",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:feature-based-app-router-structure",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie-ui:app/(main)/layout.tsx",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:import-order-react-first",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "preference",
+      "evidence": "code:potpie-ui/CLAUDE.md"
+    },
+    {
+      "from": "preference:import-order-react-first",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "preference",
+      "evidence": "code:potpie-workflows/AGENTS.md",
+      "note": "Python mirror: stdlib, third-party, absolute src. imports."
+    },
+    {
+      "from": "preference:tailwind-cn-utility-not-inline-styles",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "preference",
+      "evidence": "code:potpie-ui/lib/utils.ts"
+    },
+    {
+      "from": "preference:tailwind-cn-utility-not-inline-styles",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-ui",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:tailwind-cn-utility-not-inline-styles",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie-ui:app/globals.css",
+      "truth": "preference",
+      "note": "Design tokens live in globals.css, not in TS template literals."
+    },
+    {
+      "from": "preference:tailwind-cn-utility-not-inline-styles",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie-ui:components/ui/input.tsx",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:functional-components-destructured-props",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "preference",
+      "evidence": "code:potpie-ui/CLAUDE.md"
+    },
+    {
+      "from": "preference:functional-components-destructured-props",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-vscode-extension",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:functional-components-destructured-props",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie-ui:app/(main)/pots/components/PotSourcesPanel.tsx",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:use-client-directive-at-the-boundary",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "preference",
+      "evidence": "code:potpie-ui/CLAUDE.md"
+    },
+    {
+      "from": "preference:use-client-directive-at-the-boundary",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-ui",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:use-client-directive-at-the-boundary",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie-ui:app/(main)/layout.tsx",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:redux-toolkit-persist-for-global-state",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "preference",
+      "evidence": "code:potpie-ui/package.json"
+    },
+    {
+      "from": "preference:redux-toolkit-persist-for-global-state",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-ui",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:redux-toolkit-persist-for-global-state",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie-ui:package.json",
+      "truth": "preference",
+      "note": "@reduxjs/toolkit, react-redux, redux-persist, @tanstack/react-query."
+    },
+    {
+      "from": "preference:defensive-null-handling-and-error-boundaries",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "preference",
+      "evidence": "code:potpie-ui/CLAUDE.md"
+    },
+    {
+      "from": "preference:defensive-null-handling-and-error-boundaries",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-ui",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:emotion-styled-components-for-new-ui",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "preference",
+      "note": "Deprecated styling path; superseded by Tailwind + cn()."
+    },
+    {
+      "from": "preference:emotion-styled-components-for-new-ui",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie-ui:package.json",
+      "truth": "preference",
+      "note": "@emotion/react and @emotion/styled remain only for transitive consumers."
+    },
+    {
+      "from": "preference:python-absolute-src-imports",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "preference",
+      "evidence": "code:potpie-workflows/AGENTS.md"
+    },
+    {
+      "from": "preference:python-absolute-src-imports",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:workflows-rest-server",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:python-absolute-src-imports",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:workflows-celery-worker",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:python-absolute-src-imports",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:workflows-event-bus-worker",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:python-naming-conventions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "preference",
+      "evidence": "code:potpie-workflows/AGENTS.md"
+    },
+    {
+      "from": "preference:python-naming-conventions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:python-naming-conventions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/pie",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:python-naming-conventions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-slack",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:modern-python-union-type-hints",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "preference",
+      "evidence": "code:potpie-workflows/AGENTS.md"
+    },
+    {
+      "from": "preference:modern-python-union-type-hints",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "preference",
+      "evidence": "code:potpie/pyproject.toml",
+      "note": "requires-python >=3.12,<3.15 — no legacy typing aliases needed."
+    },
+    {
+      "from": "preference:modern-python-union-type-hints",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/pie",
+      "truth": "preference",
+      "evidence": "code:pie/pyproject.toml",
+      "note": "ruff selects UP (pyupgrade) at target-version py311."
+    },
+    {
+      "from": "preference:pydantic-models-at-layer-boundaries",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "preference",
+      "evidence": "code:potpie-workflows/AGENTS.md"
+    },
+    {
+      "from": "preference:pydantic-models-at-layer-boundaries",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:workflows-rest-server",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:pydantic-models-at-layer-boundaries",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:mom-api",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:pydantic-models-at-layer-boundaries",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:context-engine",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:async-first-io",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "preference",
+      "evidence": "code:potpie-workflows/AGENTS.md"
+    },
+    {
+      "from": "preference:async-first-io",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:workflows-rest-server",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:async-first-io",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:workflows-celery-worker",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:async-first-io",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:context-engine",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:module-logger-with-exception-context",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "preference",
+      "evidence": "code:potpie-workflows/AGENTS.md"
+    },
+    {
+      "from": "preference:module-logger-with-exception-context",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:module-logger-with-exception-context",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/pie",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:module-logger-with-exception-context",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:pie-observability",
+      "truth": "preference",
+      "note": "Redaction sinks depend on nothing sensitive reaching the logger."
+    },
+    {
+      "from": "preference:domain-specific-exceptions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "preference",
+      "evidence": "code:potpie-workflows/AGENTS.md"
+    },
+    {
+      "from": "preference:domain-specific-exceptions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:domain-specific-exceptions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/errors.py",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:ruff-check-changed-files-before-done",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "preference",
+      "evidence": "code:potpie-workflows/AGENTS.md"
+    },
+    {
+      "from": "preference:ruff-check-changed-files-before-done",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "preference",
+      "evidence": "code:potpie/.pre-commit-config.yaml"
+    },
+    {
+      "from": "preference:ruff-check-changed-files-before-done",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/pie",
+      "truth": "preference",
+      "evidence": "code:pie/.github/workflows/ci.yml"
+    },
+    {
+      "from": "preference:ruff-check-changed-files-before-done",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:pyproject.toml",
+      "truth": "preference",
+      "note": "[tool.ruff.lint] extend-select S plus scoped per-file-ignores."
+    },
+    {
+      "from": "preference:uv-for-python-dependency-management",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "preference",
+      "evidence": "code:potpie/Makefile"
+    },
+    {
+      "from": "preference:uv-for-python-dependency-management",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "preference",
+      "evidence": "code:potpie-workflows/AGENTS.md"
+    },
+    {
+      "from": "preference:uv-for-python-dependency-management",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/pie",
+      "truth": "preference",
+      "evidence": "code:pie/pyproject.toml"
+    },
+    {
+      "from": "preference:uv-for-python-dependency-management",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-cli",
+      "truth": "preference",
+      "note": "make cli-install runs uv tool install --force --editable '.'"
+    },
+    {
+      "from": "preference:uv-for-python-dependency-management",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:pyproject.toml",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:conventional-commits-with-scope-and-ticket",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "preference",
+      "evidence": "github:potpie-ai/potpie#966"
+    },
+    {
+      "from": "preference:conventional-commits-with-scope-and-ticket",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:conventional-commits-with-scope-and-ticket",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:conventional-commits-with-scope-and-ticket",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/pie",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:conventional-commits-with-scope-and-ticket",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-vscode-extension",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:conventional-commits-with-scope-and-ticket",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/mintlify-docs",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:pytest-marker-taxonomy",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "preference",
+      "evidence": "code:potpie/pyproject.toml"
+    },
+    {
+      "from": "preference:pytest-marker-taxonomy",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/pie",
+      "truth": "preference",
+      "evidence": "code:pie/pyproject.toml",
+      "note": "addopts --strict-markers makes an unregistered marker a hard error."
+    },
+    {
+      "from": "preference:pytest-marker-taxonomy",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:pytest-marker-taxonomy",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:pyproject.toml",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:deterministic-agent-temperatures",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "preference",
+      "evidence": "code:potpie-workflows/AGENTS.md"
+    },
+    {
+      "from": "preference:deterministic-agent-temperatures",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:workflows-celery-worker",
+      "truth": "preference",
+      "note": "specgen and plangen pipelines run in the Celery worker."
+    },
+    {
+      "from": "preference:retrieval-grade-entity-descriptions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "preference",
+      "evidence": "code:potpie/docs/context-graph/writing.md"
+    },
+    {
+      "from": "preference:retrieval-grade-entity-descriptions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:context-engine",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:retrieval-grade-entity-descriptions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-cli",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:retrieval-grade-entity-descriptions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/graph_entity_summary.py",
+      "truth": "preference",
+      "note": "compact_entity_summary derives summaries only from authored material."
+    },
+    {
+      "from": "preference:retrieval-grade-entity-descriptions",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/semantic_mutation_validator.py",
+      "truth": "preference",
+      "note": "Missing description is a warning here, but skills treat it as mandatory."
+    },
+    {
+      "from": "preference:flat-semantic-dsl-operations",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "preference",
+      "evidence": "code:potpie/docs/context-graph/writing.md"
+    },
+    {
+      "from": "preference:flat-semantic-dsl-operations",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/semantic_mutations.py",
+      "truth": "preference",
+      "note": "SemanticMutationRequest.parse raises SemanticMutationParseError on nested shapes."
+    },
+    {
+      "from": "preference:flat-semantic-dsl-operations",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/graph_contract.py",
+      "truth": "preference",
+      "note": "SemanticMutationOp defines exactly the ten applicable ops."
+    },
+    {
+      "from": "preference:flat-semantic-dsl-operations",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-mcp-server",
+      "truth": "preference",
+      "note": "context_record is the only MCP write tool and lowers to the same ops."
+    },
+    {
+      "from": "preference:pnpm-overrides-for-transitive-cves",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "preference",
+      "evidence": "code:potpie-ui/package.json"
+    },
+    {
+      "from": "preference:pnpm-overrides-for-transitive-cves",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie-ui:package.json",
+      "truth": "preference",
+      "note": "pnpm.overrides pins glob 10.5.0, axios 1.17.0, undici ^6.21.2, and more."
+    },
+    {
+      "from": "preference:pnpm-overrides-for-transitive-cves",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-vscode-extension",
+      "truth": "preference"
+    },
+    {
+      "from": "preference:graph-mutate-command-for-writes",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-cli",
+      "truth": "preference",
+      "note": "Deprecated: commands/graph.py emits a legacy warning steering to propose/commit."
+    },
+    {
+      "from": "preference:graph-mutate-command-for-writes",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "preference"
+    },
+    {
+      "from": "policy:no-secrets-in-code-gitleaks",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/pie",
+      "truth": "user_decision",
+      "evidence": "code:pie/.gitleaks.toml"
+    },
+    {
+      "from": "policy:no-secrets-in-code-gitleaks",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision",
+      "evidence": "code:potpie/.pre-commit-config.yaml",
+      "note": "detect-private-key pre-commit hook; keyring credential storage disabled in d64f5182."
+    },
+    {
+      "from": "policy:no-secrets-in-code-gitleaks",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:no-secrets-in-code-gitleaks",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:no-secrets-in-code-gitleaks",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-slack",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:no-secrets-in-code-gitleaks",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-k8s-deployments",
+      "truth": "user_decision",
+      "note": "Manifests reference secret refs, never literal values."
+    },
+    {
+      "from": "policy:no-secrets-in-code-gitleaks",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:pie:.gitleaks.toml",
+      "truth": "user_decision",
+      "evidence": "code:pie/.gitleaks.toml"
+    },
+    {
+      "from": "policy:no-public-secret-env-vars",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "user_decision",
+      "evidence": "code:potpie-ui/.github/workflows/ci-policy-check.yaml"
+    },
+    {
+      "from": "policy:no-public-secret-env-vars",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-ui",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:no-public-secret-env-vars",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie-ui:.github/workflows/ci-policy-check.yaml",
+      "truth": "user_decision",
+      "evidence": "code:potpie-ui/.github/workflows/ci-policy-check.yaml"
+    },
+    {
+      "from": "policy:vanta-cve-remediation-cadence",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision",
+      "evidence": "github:potpie-ai/potpie#1000"
+    },
+    {
+      "from": "policy:vanta-cve-remediation-cadence",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "user_decision",
+      "evidence": "github:potpie-ai/potpie-ui#420"
+    },
+    {
+      "from": "policy:vanta-cve-remediation-cadence",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:vanta-cve-remediation-cadence",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/pie",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:vanta-cve-remediation-cadence",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-vscode-extension",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:vanta-cve-remediation-cadence",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-slack",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:vanta-cve-remediation-cadence",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:pyproject.toml",
+      "truth": "user_decision",
+      "note": "[tool.uv] override-dependencies carries the CVE floors with inline comments."
+    },
+    {
+      "from": "policy:pinned-dependency-floors-in-package-metadata",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision",
+      "evidence": "github:potpie-ai/potpie#1015"
+    },
+    {
+      "from": "policy:pinned-dependency-floors-in-package-metadata",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:pyproject.toml",
+      "truth": "user_decision",
+      "evidence": "code:potpie/pyproject.toml"
+    },
+    {
+      "from": "policy:pinned-dependency-floors-in-package-metadata",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "user_decision",
+      "evidence": "code:potpie-workflows/SECURITY.md"
+    },
+    {
+      "from": "policy:pinned-dependency-floors-in-package-metadata",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "user_decision",
+      "note": "npm equivalent is the pnpm.overrides block in package.json."
+    },
+    {
+      "from": "policy:pinned-dependency-floors-in-package-metadata",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-cli",
+      "truth": "user_decision",
+      "note": "The published potpie wheel is what downstream installers resolve against."
+    },
+    {
+      "from": "policy:pre-commit-gate-required",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision",
+      "evidence": "github:potpie-ai/potpie#989"
+    },
+    {
+      "from": "policy:pre-commit-gate-required",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:.pre-commit-config.yaml",
+      "truth": "user_decision",
+      "evidence": "code:potpie/.pre-commit-config.yaml"
+    },
+    {
+      "from": "policy:pre-commit-gate-required",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "user_decision",
+      "note": "husky .husky/pre-push runs npm run lint-staged."
+    },
+    {
+      "from": "policy:pre-commit-gate-required",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:context-engine",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:mypy-strict-typecheck-gate",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/pie",
+      "truth": "user_decision",
+      "evidence": "code:pie/pyproject.toml"
+    },
+    {
+      "from": "policy:mypy-strict-typecheck-gate",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:pie:pyproject.toml",
+      "truth": "user_decision",
+      "evidence": "code:pie/pyproject.toml"
+    },
+    {
+      "from": "policy:mypy-strict-typecheck-gate",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:pie-observability",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:mypy-strict-typecheck-gate",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:pie-harness-runner",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:coverage-gate-80-percent",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/pie",
+      "truth": "user_decision",
+      "evidence": "code:pie/.github/workflows/ci.yml"
+    },
+    {
+      "from": "policy:coverage-gate-80-percent",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:pie:.github/workflows/ci.yml",
+      "truth": "user_decision",
+      "evidence": "code:pie/.github/workflows/ci.yml"
+    },
+    {
+      "from": "policy:coverage-gate-80-percent",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:pie-observability",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:coverage-gate-80-percent",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:pie-cli",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:premerge-cli-journey-gate",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision",
+      "evidence": "github:potpie-ai/potpie#950"
+    },
+    {
+      "from": "policy:premerge-cli-journey-gate",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-cli",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:premerge-cli-journey-gate",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-daemon",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:premerge-cli-journey-gate",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:pyproject.toml",
+      "truth": "user_decision",
+      "note": "premerge_journey marker registered under [tool.pytest.ini_options]."
+    },
+    {
+      "from": "policy:evidence-required-for-authoritative-claims",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision",
+      "evidence": "code:potpie/docs/context-graph/writing.md"
+    },
+    {
+      "from": "policy:evidence-required-for-authoritative-claims",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:context-engine",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:evidence-required-for-authoritative-claims",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-cli",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:evidence-required-for-authoritative-claims",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-mcp-server",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:evidence-required-for-authoritative-claims",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/semantic_mutation_validator.py",
+      "truth": "user_decision",
+      "note": "The evidence-or-low-authority rule is enforced here."
+    },
+    {
+      "from": "policy:evidence-required-for-authoritative-claims",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/semantic_mutation_lowering.py",
+      "truth": "user_decision",
+      "note": "_claim_properties stamps source_refs/evidence onto every edge."
+    },
+    {
+      "from": "policy:align-the-declaration-dont-relax-the-check",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision",
+      "evidence": "code:potpie/docs/context-graph/writing.md"
+    },
+    {
+      "from": "policy:align-the-declaration-dont-relax-the-check",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/coherence.py",
+      "truth": "user_decision",
+      "note": "_run_import_time_checks fails startup fast; raises OntologyCoherenceError."
+    },
+    {
+      "from": "policy:align-the-declaration-dont-relax-the-check",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/ontology.py",
+      "truth": "user_decision",
+      "note": "ENTITY_TYPES / EDGE_TYPES are the declarations that must be aligned."
+    },
+    {
+      "from": "policy:align-the-declaration-dont-relax-the-check",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:context-engine",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:align-the-declaration-dont-relax-the-check",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/pie",
+      "truth": "user_decision",
+      "note": "Same rule applied to the mypy strict and ruff gates."
+    },
+    {
+      "from": "policy:propose-commit-verify-write-door",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision",
+      "evidence": "code:potpie/docs/context-graph/writing.md"
+    },
+    {
+      "from": "policy:propose-commit-verify-write-door",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-cli",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:propose-commit-verify-write-door",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:context-engine",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:propose-commit-verify-write-door",
+      "type": "POLICY_APPLIES_TO",
+      "to": "service:potpie-mcp-server",
+      "truth": "user_decision",
+      "note": "context_record is the only MCP write tool; everything else reads."
+    },
+    {
+      "from": "policy:propose-commit-verify-write-door",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/graph_workbench.py",
+      "truth": "user_decision",
+      "note": "GraphWorkbenchService.propose/commit is the two-phase door."
+    },
+    {
+      "from": "policy:propose-commit-verify-write-door",
+      "type": "POLICY_APPLIES_TO",
+      "to": "code:potpie:potpie/context-core/src/potpie_context_core/graph_plans.py",
+      "truth": "user_decision",
+      "note": "GraphMutationPlanStatus and TERMINAL_PLAN_STATUSES."
+    },
+    {
+      "from": "policy:responsible-security-disclosure",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "user_decision",
+      "note": "Public 5.5k-star repo — a public issue is effectively a zero-day announcement."
+    },
+    {
+      "from": "policy:responsible-security-disclosure",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "user_decision",
+      "evidence": "code:potpie-workflows/SECURITY.md"
+    },
+    {
+      "from": "policy:responsible-security-disclosure",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:responsible-security-disclosure",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/mintlify-docs",
+      "truth": "user_decision"
+    },
+    {
+      "from": "policy:responsible-security-disclosure",
+      "type": "POLICY_APPLIES_TO",
+      "to": "repo:potpie-ai/pie",
+      "truth": "user_decision"
+    }
+  ]
+}

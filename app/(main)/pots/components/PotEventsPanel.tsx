@@ -4,13 +4,18 @@
 // state and stitches together the data hooks with the presentational pieces.
 // Everything heavier-weight (rendering, payload formatting, agent activity)
 // lives in ./events/* so this file stays a thin coordinator.
+//
+// Layout is an activity console: page header → inline filter toolbar with a
+// live-stream indicator → the ingestion pipeline stage flow → a dense
+// hairline-divided event list. Selection raises a floating glass action bar.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCcw, Zap } from "lucide-react";
+import Link from "next/link";
+import { Plus, RefreshCcw, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/sonner";
+import { MonoChip, PageHeader, StatusDot, type StatusTone } from "./kit";
 import {
   EventBulkActionBar,
   EventDetailSheet,
@@ -40,7 +45,6 @@ export default function PotEventsPanel({ potId }: Props) {
   // Local search input is debounced into the filters key so we don't
   // refetch on every keystroke. Server-side search since Phase 6.
   const [searchInput, setSearchInput] = useState("");
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   // Debounce 250ms — matches the typical typing cadence and stays under
   // the request latency budget so the user sees results "while" typing.
@@ -106,6 +110,18 @@ export default function PotEventsPanel({ potId }: Props) {
 
   const handleClearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
+  const handleFiltersChange = useCallback((f: EventsFilters) => {
+    setFilters(f);
+    // Filter change can change what's selected. Drop selection rather
+    // than carrying stale IDs forward.
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleClearFilters = useCallback(() => {
+    setSearchInput("");
+    handleFiltersChange(defaultFilters());
+  }, [handleFiltersChange]);
+
   const handleRetry = useCallback(
     (id: string) => {
       retryMutation.mutate(id, {
@@ -143,7 +159,7 @@ export default function PotEventsPanel({ potId }: Props) {
 
   // Count queued/processing events in the loaded pages. This is a lower
   // bound (server may have more on later pages), but it reflects what the
-  // user can see now and is enough signal for the "Queued: N ⚡" CTA.
+  // user can see now and is enough signal for the flush CTA.
   const queuedCount = useMemo(
     () =>
       allEvents.filter((ev) =>
@@ -153,7 +169,7 @@ export default function PotEventsPanel({ potId }: Props) {
   );
 
   // Events the agent is actively working right now — drives the pipeline
-  // "Processing" phase + the graph pulse animation.
+  // "Processing" stage pulse.
   const processingCount = useMemo(
     () =>
       allEvents.filter((ev) => getEffectiveStatus(ev) === "processing").length,
@@ -176,44 +192,73 @@ export default function PotEventsPanel({ potId }: Props) {
 
   const refreshing = eventsQuery.isFetching && !eventsQuery.isFetchingNextPage;
 
-  // Connection affordance: steady green when live, amber only after a
-  // sustained drop (the by-design idle-timeout reconnect stays green),
-  // red when retries keep failing.
-  const connMeta =
+  // Connection affordance: pulsing accent dot when live, amber only after a
+  // sustained drop (the by-design idle-timeout reconnect stays live),
+  // rose when retries keep failing.
+  const liveMeta: { tone: StatusTone; pulse: boolean; label: string } =
     liveSync.connectionStatus === "connected"
-      ? {
-          wrap: "bg-green-500/15 text-green-700",
-          dot: "bg-green-500 animate-pulse",
-          label: "Live",
-        }
+      ? { tone: "busy", pulse: true, label: "Live" }
       : liveSync.connectionStatus === "reconnecting"
-        ? {
-            wrap: "bg-amber-500/15 text-amber-700",
-            dot: "bg-amber-500 animate-pulse",
-            label: "Reconnecting…",
-          }
-        : {
-            wrap: "bg-red-500/15 text-red-700",
-            dot: "bg-red-500",
-            label: "Disconnected",
-          };
+        ? { tone: "warn", pulse: true, label: "Reconnecting…" }
+        : { tone: "error", pulse: false, label: "Offline" };
 
   return (
-    <Card>
-      <CardHeader className="space-y-3 pb-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <CardTitle className="text-base font-semibold">Ingestion events</CardTitle>
+    <>
+      <div className="space-y-6">
+        <PageHeader
+          title="Events"
+          description="Everything this pot ingests — notes, webhooks, and agent runs — with live status."
+          actions={
+            <>
+              {queuedCount > 0 ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void handleForceFlush()}
+                  disabled={flushMutation.isPending}
+                  className="h-9 gap-1.5 px-2.5 text-[13px]"
+                  title="Process all queued events now"
+                >
+                  <Zap
+                    className={cn(
+                      "h-4 w-4 text-amber-500",
+                      flushMutation.isPending && "animate-pulse",
+                    )}
+                  />
+                  Process queued
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {queuedCount}
+                  </span>
+                </Button>
+              ) : null}
+              <EventIngestionSettings potId={potId} />
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground"
+                onClick={() => eventsQuery.refetch()}
+                disabled={refreshing}
+                aria-label="Refresh events"
+              >
+                <RefreshCcw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+              </Button>
+            </>
+          }
+        />
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/70 pb-4">
+          <EventFilters
+            search={searchInput}
+            onSearchChange={setSearchInput}
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+          />
+          <div className="ml-auto flex items-center gap-3">
             {ingestionConfig?.mode === "windowed" ? (
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                {ingestionConfig.window_minutes}-min batches
-              </span>
+              <MonoChip>{ingestionConfig.window_minutes}-min batches</MonoChip>
             ) : null}
             <span
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
-                connMeta.wrap,
-              )}
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-foreground"
               title={
                 liveSync.connectionStatus === "offline"
                   ? "Live updates unavailable — retrying. The list still refreshes periodically."
@@ -222,67 +267,12 @@ export default function PotEventsPanel({ potId }: Props) {
                     : "Syncing…"
               }
             >
-              <span
-                className={cn("h-1.5 w-1.5 rounded-full", connMeta.dot)}
-              />
-              {connMeta.label}
+              <StatusDot tone={liveMeta.tone} pulse={liveMeta.pulse} />
+              {liveMeta.label}
             </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            {queuedCount > 0 ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => void handleForceFlush()}
-                disabled={flushMutation.isPending}
-                className="h-7 gap-1.5 px-2 text-xs"
-                title="Process all queued events now"
-              >
-                <Zap
-                  className={cn(
-                    "h-3.5 w-3.5 text-amber-500",
-                    flushMutation.isPending && "animate-pulse",
-                  )}
-                />
-                <span>Queued: {queuedCount}</span>
-              </Button>
-            ) : null}
-            <EventIngestionSettings potId={potId} />
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => eventsQuery.refetch()}
-              disabled={refreshing}
-              aria-label="Refresh"
-            >
-              <RefreshCcw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
-            </Button>
           </div>
         </div>
 
-        <EventFilters
-          search={searchInput}
-          onSearchChange={setSearchInput}
-          filters={filters}
-          onFiltersChange={(f) => {
-            setFilters(f);
-            // Filter change can change what's selected. Drop selection rather
-            // than carrying stale IDs forward.
-            setSelectedIds(new Set());
-          }}
-          expanded={filtersExpanded}
-          onExpandedChange={setFiltersExpanded}
-        />
-
-        <EventBulkActionBar
-          selectedCount={selectedIds.size}
-          reprocessing={batchRetryMutation.isPending}
-          onReprocess={handleBulkReprocess}
-          onClear={handleClearSelection}
-        />
-      </CardHeader>
-
-      <CardContent className="space-y-4">
         <IngestionPipeline
           potId={potId}
           queuedCount={queuedCount}
@@ -290,13 +280,16 @@ export default function PotEventsPanel({ potId }: Props) {
           onForceFlush={() => void handleForceFlush()}
           flushing={flushMutation.isPending}
         />
+
         {eventsQuery.isError ? (
-          <div className="rounded-md border border-red-300/40 bg-red-50/40 px-3 py-2 text-sm text-red-700 dark:bg-red-950/20">
-            {eventsQuery.error?.message ?? "Failed to load events"}
+          <div className="flex items-baseline gap-2 border-l-2 border-rose-400 py-1 pl-3">
+            <p className="text-sm text-rose-600 dark:text-rose-400">
+              {eventsQuery.error?.message ?? "Failed to load events"}
+            </p>
             <Button
               size="sm"
               variant="link"
-              className="ml-2 h-auto p-0 text-xs"
+              className="h-auto p-0 text-[13px]"
               onClick={() => eventsQuery.refetch()}
             >
               Retry
@@ -318,9 +311,25 @@ export default function PotEventsPanel({ potId }: Props) {
             retryingId={retryMutation.isPending ? (retryMutation.variables ?? null) : null}
             highlightedId={openEventId}
             hasSearchOrFilters={!!filters.search.trim() || isFiltersActive(filters)}
+            onClearFilters={handleClearFilters}
+            emptyAction={
+              <Button asChild size="sm" variant="outline" className="gap-1.5">
+                <Link href={`/pots/${potId}/add-context`}>
+                  <Plus className="h-4 w-4" />
+                  Add context
+                </Link>
+              </Button>
+            }
           />
         )}
-      </CardContent>
+      </div>
+
+      <EventBulkActionBar
+        selectedCount={selectedIds.size}
+        reprocessing={batchRetryMutation.isPending}
+        onReprocess={handleBulkReprocess}
+        onClear={handleClearSelection}
+      />
 
       <EventDetailSheet
         eventId={openEventId}
@@ -330,6 +339,6 @@ export default function PotEventsPanel({ potId }: Props) {
         onRetry={handleRetry}
         retrying={retryMutation.isPending && retryMutation.variables === openEventId}
       />
-    </Card>
+    </>
   );
 }

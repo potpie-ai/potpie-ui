@@ -1,0 +1,1787 @@
+{
+  "activities": [
+    {
+      "slug": "github:workflows-76",
+      "name": "workflows#76 — remediate high-risk Python dependency vulnerabilities",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-17T08:45:58Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/76",
+      "number": 76,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "cursor/pot-1931-vanta-vulnerability-fixes-19ed",
+      "base_branch": "main",
+      "summary": "Raised mcp to 1.28.1 and constrained joserfc/msgpack above affected versions, refreshing uv.lock (Linear POT-1931).",
+      "description": "Cursor-agent-driven Vanta remediation PR in potpie-ai/potpie-workflows that raises `mcp` to the fixed 1.28.1 release, constrains `joserfc` and `msgpack` above their affected versions, and regenerates `uv.lock` with secure resolved versions. Touches only `pyproject.toml` and `uv.lock`; verification was `uv lock --check` plus a secure-dependency smoke test constructing an MCP transport and round-tripping joserfc/msgpack. Notably the PR reports the pre-existing suite state — 109 passed, 38 failed, 45 errored — because the workflows test suite needs a configured database URL, so red pytest output is normal here and is not caused by the bump. Linked to Linear POT-1931 'Vanta potpie-ai/potpie-workflows high vulnerabilities'."
+    },
+    {
+      "slug": "github:workflows-75",
+      "name": "workflows#75 — upgrade joserfc to remediate CVE-2026-48990",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-17T08:44:22Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/75",
+      "number": 75,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "cursor/pot-1934-joserfc-fix-9d71",
+      "base_branch": "main",
+      "summary": "Bumped the transitive joserfc dependency 1.6.5 -> 1.7.3 to close CVE-2026-48990 (Linear POT-1934).",
+      "description": "Lockfile-only remediation in potpie-ai/potpie-workflows upgrading the transitive `joserfc` dependency from 1.6.5 to 1.7.3 to remediate CVE-2026-48990, which affects versions before 1.6.7. joserfc arrives through Authlib, so the fix lands purely in `uv.lock` with no `pyproject.toml` change. Verified with `uv lock --check`, a frozen install, and a joserfc/Authlib import smoke test. Filed against Linear POT-1934 'Vanta potpie-ai/potpie-workflows medium vulnerabilities'."
+    },
+    {
+      "slug": "github:workflows-74",
+      "name": "workflows#74 — specs produce clearer requirement descriptions",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-03T10:54:11Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/74",
+      "number": 74,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "spec-outcome-description-alignment",
+      "base_branch": "fix/qa_spec_v1",
+      "summary": "Reworked the SpecGen author prompt toward outcome-first requirement prose and compact testable acceptance criteria.",
+      "description": "Prompt-engineering change to `src/core/agents/specgen/prompts.py` in potpie-ai/potpie-workflows that reshapes how generated specifications read. Shifts requirement descriptions toward outcome-first prose, pushes research findings toward concise synthesis, tightens acceptance criteria into compact testable checks, clarifies file-impact purpose text, and relocates deeper rationale and edge cases into guardrails, ADR, and appendix sections. The goal was reviewability: specs stayed grounded in concrete implementation details and repository evidence while becoming shorter to read. Deliberately paired with a potpie-ui spec-rendering change so the richer requirement metadata displays cleanly."
+    },
+    {
+      "slug": "github:workflows-73",
+      "name": "workflows#73 — fix high and medium vulnerabilities (aiohttp, tornado)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-06-22T11:25:47Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/73",
+      "number": 73,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "fix/v-wf",
+      "base_branch": "main",
+      "summary": "Bumped aiohttp 3.14.0 -> 3.14.1 and tornado 6.5.6 -> 6.5.7 to clear five aiohttp CVEs plus GHSA-pw6j-qg29-8w7f.",
+      "description": "Vanta-driven dependency floor raise in potpie-ai/potpie-workflows covering aiohttp CVE-2026-54273, CVE-2026-54274, CVE-2026-54276, CVE-2026-54277 and CVE-2026-54278, plus tornado advisory GHSA-pw6j-qg29-8w7f. Only minimum version constraints in `pyproject.toml` changed (aiohttp `>=3.14.0` -> `>=3.14.1`, tornado `>=6.5.6` -> `>=6.5.7`) and `uv.lock` was regenerated via `uv lock`. This is the third aiohttp bump in this repo in two months — the same package keeps reappearing in the scanner as new advisories land on the 3.14.x line."
+    },
+    {
+      "slug": "github:workflows-72",
+      "name": "workflows#72 — [Vanta] fix high vulnerabilities (starlette, cryptography, PyJWT)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-06-17T05:58:00Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/72",
+      "number": 72,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "cursor/POT-1632-vanta-vulnerability-remediation-8804",
+      "base_branch": "main",
+      "summary": "Agent-authored Vanta high-severity sweep: starlette 1.2.1->1.3.1, python-multipart 0.0.27->0.0.32, cryptography 48->49, PyJWT 2.12.1->2.13.0.",
+      "description": "Opened by the Cursor GitHub App (not a human) against Linear POT-1632, this PR raises four dependency floors in potpie-ai/potpie-workflows and names the Vanta entity id for each finding — starlette `6a311e277e098647ce3afd5e`, python-multipart `6a311e277e098647ce3afd71`, cryptography `6a311e277e098647ce3afd82`, PyJWT `6a311e287e098647ce3afdb5`. Verification chain was `uv lock --check`, `uv sync --extra test`, `uv pip check`, and `uv run python -m compileall src tests`. Like its siblings it records the known-red baseline pytest result (109 passed / 38 failed / 45 errored) rather than pretending the suite is green."
+    },
+    {
+      "slug": "github:workflows-71",
+      "name": "workflows#71 — [Vanta] fix low vulnerabilities (tornado 6.5.6)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-06-16T06:15:55Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/71",
+      "number": 71,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "cursor/POT-1604-vanta-vulnerability-remediation-4c88",
+      "base_branch": "main",
+      "summary": "Cursor-agent PR raising tornado from >=6.5.5 to >=6.5.6 for Vanta finding pip-tornado < 6.5.6 (POT-1604).",
+      "description": "Second Cursor-App-authored remediation in potpie-ai/potpie-workflows, this one clearing a low-severity Vanta finding: `pip-tornado < 6.5.6`, Vanta entity `6a2cb9507e098647ce281f14`, tracked as Linear POT-1604. Raises the direct floor from `>=6.5.5` to `>=6.5.6` and moves `uv.lock` accordingly. Verified with `uv lock --check`, `compileall`, `uv pip check`, and an import printing `tornado.version`. Six days later PR #73 bumps tornado again to 6.5.7 — a clean illustration of how fast the CVE treadmill re-fires on the same package."
+    },
+    {
+      "slug": "github:workflows-70",
+      "name": "workflows#70 — medium vulnerabilities fixed (aiohttp 3.14.0, starlette 1.2.1)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-06-05T06:10:32Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/70",
+      "number": 70,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "fix/V-4",
+      "base_branch": "main",
+      "summary": "aiohttp >=3.13.4 -> >=3.14.0 for CVE-2026-34993 / CVE-2026-47265 and starlette to >=1.0.1 for CVE-2026-48710 (BadHost).",
+      "description": "Medium-severity Vanta sweep in potpie-ai/potpie-workflows. aiohttp moves from `>=3.13.4` (locked 3.13.4) to `>=3.14.0` closing CVE-2026-34993 and CVE-2026-47265; starlette moves from `>=0.49.1,<1.0.0` (locked 0.50.0) to `>=1.0.1,<2.0.0` (locked 1.2.1) closing CVE-2026-48710, the BadHost host-header issue. Also touches `.gitignore`. The starlette major-version jump across the 1.0 boundary was the risky part of this change since the FastAPI rest_server surface sits directly on top of it."
+    },
+    {
+      "slug": "github:workflows-69",
+      "name": "workflows#69 — medium vulnerabilities fixed (pydantic-ai floor raise)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-05-27T06:11:10Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/69",
+      "number": 69,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "fix/vanta-2",
+      "base_branch": "main",
+      "summary": "Raised pydantic-ai and pydantic-ai-slim minimums from >=1.56.0 to >=1.99.0, resolving to 1.102.0.",
+      "description": "Dependency remediation in potpie-ai/potpie-workflows lifting both `pydantic-ai` and `pydantic-ai-slim` from `>=1.56.0` to `>=1.99.0`, with `uv.lock` resolving both to 1.102.0 so the fix also covers a later follow-up advisory. This is the highest-blast-radius bump in the CVE stream because pydantic-ai is the agent runtime underneath SpecGen, PlanGen and CodeGen — a 46-minor-version jump on the framework that drives every workflow agent, shipped as a security patch rather than a planned upgrade."
+    },
+    {
+      "slug": "github:workflows-68",
+      "name": "workflows#68 — medium Vanta vulns fixed (idna >= 3.15)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-05-20T10:08:07Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/68",
+      "number": 68,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "fix/v-pw3",
+      "base_branch": "main",
+      "summary": "Pinned idna>=3.15 in pyproject.toml to fix pip-idna < 3.15 / CVE-2026-45409, moving the lock from 3.10 to 3.15.",
+      "description": "Fixes Vanta finding `pip-idna < 3.15` / CVE-2026-45409 in potpie-ai/potpie-workflows by adding an explicit `idna>=3.15` constraint to `pyproject.toml` even though idna is purely transitive. Regenerating `uv.lock` lifted the resolved idna from 3.10 to 3.15 and forced every transitive HTTP-related dependency (requests, httpx, aiohttp chains) onto a non-vulnerable version. The pattern of pinning a transitive package directly, purely to steer the resolver, recurs repeatedly across this repo's remediation history."
+    },
+    {
+      "slug": "github:workflows-67",
+      "name": "workflows#67 — high vulnerabilities solved (urllib3 >= 2.7.0)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-05-18T06:57:06Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/67",
+      "number": 67,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "fix/vanta-pw2",
+      "base_branch": "main",
+      "summary": "Bumped urllib3 from >=2.6.0,<2.7.0 to >=2.7.0,<3.0.0 for CVE-2026-44432 and CVE-2026-44431.",
+      "description": "Follow-up to PR #66 in potpie-ai/potpie-workflows: the previous bump landed inside the still-vulnerable 2.6.x window, so this PR widens the constraint to `>=2.7.0,<3.0.0` and re-locks to urllib3 2.7.0 (was 2.6.3). CVE-2026-44432 is the decompression-bomb safeguard bypass in parts of the streaming API affecting `>=2.6.0,<2.7.0`; CVE-2026-44431 is sensitive headers being forwarded across origins on redirect. A textbook example of a remediation that had to be done twice because the first fix chose a range the advisory later swallowed."
+    },
+    {
+      "slug": "github:workflows-66",
+      "name": "workflows#66 — high vulns fixed (urllib3 >= 2.6.0, first attempt)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-05-15T07:52:38Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/66",
+      "number": 66,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "fix/V-PW",
+      "base_branch": "main",
+      "summary": "First urllib3 remediation: pin moved >=2.5.0 -> >=2.6.0,<2.7.0 for CVE-2026-44432 / CVE-2026-44431.",
+      "description": "Initial urllib3 remediation in potpie-ai/potpie-workflows, bumping the direct pin in `pyproject.toml` from `>=2.5.0` to `>=2.6.0,<2.7.0` and running `uv lock`. It claimed to fix CVE-2026-44432 and CVE-2026-44431 but the upper bound `<2.7.0` kept the resolver inside the affected window, so the scanner re-fired and PR #67 reopened the same finding three days later. Useful as the canonical 'a CVE fix that did not actually fix the CVE' case in this repository."
+    },
+    {
+      "slug": "github:workflows-65",
+      "name": "workflows#65 — QA defaults to multi-batch",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-05-14T07:42:40Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/65",
+      "number": 65,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "qa-plan-default-multiple-batches",
+      "base_branch": "fix/qa_spec_v1",
+      "summary": "Flipped the recipe feature flag so clarifying-question QA defaults to multi-batch Janus instead of legacy single batch.",
+      "description": "Feature-flag default flip in potpie-ai/potpie-workflows: clarifying-question generation ('QA', the Janus flow) previously defaulted to a legacy single batch and now defaults to multiple batches. Touches `src/utils/recipe_feature_flags.py`, `src/adapters/celery_recipe_streaming.py`, `src/adapters/celery_recipe_subscriber.py`, `.env_template` and `AGENTS.md`. Landing this as a default change (rather than an opt-in) is what made multi-batch Q&A the production behaviour for spec generation; the underlying implementation came from PR #57 'multi-batch structured Janus Q&A with continuation task'."
+    },
+    {
+      "slug": "github:workflows-64",
+      "name": "workflows#64 — high, med, critical and low vulnerabilities fixed",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-05-08T06:25:15Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/64",
+      "number": 64,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "fix/vanta-vul",
+      "base_branch": "main",
+      "summary": "Twelve-package floor raise (litellm, fastmcp, authlib, mako, python-dotenv, python-multipart, pytest, cryptography, anthropic, aiohttp, requests, pygments) in one PR.",
+      "description": "The consolidation PR in potpie-ai/potpie-workflows that finally landed what PRs #60, #61, #62 and #63 had each tried piecemeal. Raises vulnerable dependency floors for `litellm`, `fastmcp`, `authlib`, `mako`, `python-dotenv`, `python-multipart`, `pytest`, `cryptography`, `anthropic`, `aiohttp`, `requests` and `pygments`, and adjusts `openai` to `>=2.24.0` to satisfy the litellm resolver while keeping the graph installable. Validated by `uv lock --upgrade-package ...` producing a solvable lockfile and by checking every resolved version sits outside the reported vulnerable ranges."
+    },
+    {
+      "slug": "github:workflows-63",
+      "name": "workflows#63 — fixed med vanta vulnerabilities (closed, superseded)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_closed",
+      "occurred_at": "2026-05-06T15:59:06Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/63",
+      "number": 63,
+      "state": "CLOSED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "fix/med-vanta",
+      "base_branch": "fix/qa_spec_v1",
+      "summary": "Closed without merging: authlib>=1.6.11, mako>=1.3.11, python-dotenv>=1.2.2,<2.0.0, python-multipart>=0.0.26.",
+      "description": "One of four remediation PRs opened within 42 minutes on 2026-05-06 against potpie-ai/potpie-workflows, splitting the Vanta backlog by severity. This medium-severity slice added explicit constraints for `authlib>=1.6.11` and `mako>=1.3.11` and tightened `python-dotenv` and `python-multipart`. It was closed unmerged because it targeted the long-lived `fix/qa_spec_v1` integration branch rather than `main`, and its content was folded into PR #64 two days later."
+    },
+    {
+      "slug": "github:workflows-62",
+      "name": "workflows#62 — fixed critical vanta vulnerabilities (closed, superseded)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_closed",
+      "occurred_at": "2026-05-06T15:38:33Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/62",
+      "number": 62,
+      "state": "CLOSED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "fix/critical-vanta",
+      "base_branch": "fix/qa_spec_v1",
+      "summary": "Closed unmerged: litellm >= 1.83.14 for CVE-2026-35030, fastmcp >= 3.2.0 for CVE-2026-32871.",
+      "description": "Critical-severity slice of the 2026-05-06 Vanta split in potpie-ai/potpie-workflows. Bumps `litellm` to `>=1.83.14` to remediate CVE-2026-35030 and related advisories, keeps `fastmcp` on the non-vulnerable `>=3.2.0` line with lock resolution at 3.2.3 for CVE-2026-32871, and adjusts `openai>=2.24.0` to keep resolution compatible with the patched litellm. Closed unmerged against the `fix/qa_spec_v1` base; the same content shipped in PR #64."
+    },
+    {
+      "slug": "github:workflows-61",
+      "name": "workflows#61 — fixed high vanta vulnerabilities (closed duplicate)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_closed",
+      "occurred_at": "2026-05-06T15:19:05Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/61",
+      "number": 61,
+      "state": "CLOSED",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "fix/high-vanta",
+      "base_branch": "fix/qa_spec_v1",
+      "summary": "Duplicate of PR #60 retargeted at fix/qa_spec_v1; closed unmerged 76 seconds after #60 was opened.",
+      "description": "Opened 72 seconds after PR #60 from the identical `fix/high-vanta` branch, differing only in base branch (`fix/qa_spec_v1` instead of `main`), in potpie-ai/potpie-workflows. Same content: litellm minimum raised to 1.83.14, fastmcp kept at `>=3.2.0`, `uv.lock` regenerated and the openai constraint adjusted for resolver compatibility. Closed without merging. The #60/#61 pair is the clearest artifact of this repo's dual-trunk problem — `main` and the long-running `fix/qa_spec_v1` branch both behaving as integration targets."
+    },
+    {
+      "slug": "github:workflows-60",
+      "name": "workflows#60 — Fix/high vanta (still open)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-05-06T15:17:53Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/60",
+      "number": 60,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "fix/high-vanta",
+      "base_branch": "main",
+      "summary": "Long-open high-severity Vanta PR against main whose diff ballooned to the whole repo because main had drifted from fix/qa_spec_v1.",
+      "description": "Still-open PR in potpie-ai/potpie-workflows raising litellm to `>=1.83.14`, keeping fastmcp at `>=3.2.0` and regenerating `uv.lock`. Because it targets `main` while all feature work had moved to `fix/qa_spec_v1`, GitHub renders it as a whole-repository diff — dockerfile, k8s/deployment.yaml, every Alembic migration under `migrations/versions/`, `event_bus_worker.log`, `generate_phased_plan.py`, AGENTS.md and more. That unreviewable diff is why it has sat open since 2026-05-06 while its actual dependency content shipped separately in PR #64."
+    },
+    {
+      "slug": "github:workflows-59",
+      "name": "workflows#59 — Add architecture documentation (agent-authored)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-05-05T06:18:47Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/pull/59",
+      "number": 59,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "head_branch": "agent/edits-019df2dd-3191-7c6a-b63a-bea5d3c8a22d",
+      "base_branch": "main",
+      "summary": "ARCHITECTURE.md written and opened entirely by the potpie-agent GitHub App — no human author on the PR.",
+      "description": "Authored by the `potpie-agent` GitHub App, not a person: the branch name `agent/edits-019df2dd-3191-7c6a-b63a-bea5d3c8a22d` carries the agent run UUID. Adds a single `ARCHITECTURE.md` to potpie-ai/potpie-workflows documenting system architecture, components, data models, API endpoints and development setup — Potpie writing Potpie's own docs. Still open, which makes it the standing example of agent-authored documentation waiting on human review. Search terms: agent PR, bot-authored pull request, ARCHITECTURE.md, self-documenting repo."
+    },
+    {
+      "slug": "github:pie-85",
+      "name": "pie#85 — test: gate Postgres migration journey",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-20T09:44:27Z",
+      "url": "https://github.com/potpie-ai/pie/pull/85",
+      "number": 85,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "agent/journey-database-migrations",
+      "base_branch": "main",
+      "summary": "Adds a Postgres 16 journey driving auth, GitHub, runs and sandbox migration sets pending -> applied and replaying migrate up for idempotency.",
+      "description": "Part of the nine-PR 'journey gate' burst opened on potpie-ai/pie within 11 seconds on 2026-07-20. Adds `.github/workflows/journey-database-migrations.yml` and a Postgres 16 migration journey that takes the auth, GitHub, runs and sandbox migration sets from pending to applied, verifies status output, then replays `migrate up` to prove idempotency. Rationale: unit registration tests never proved all deployable migration sets can execute together on a fresh production-class database. Validated with `TEST_DATABASE_URL=... go test ./services/platform-api/cmd/platform-db -count=1`."
+    },
+    {
+      "slug": "github:pie-84",
+      "name": "pie#84 — test: gate observability redaction journey",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-20T09:44:25Z",
+      "url": "https://github.com/potpie-ai/pie/pull/84",
+      "number": 84,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "agent/journey-observability-redaction",
+      "base_branch": "main",
+      "summary": "OTLP-to-Loki/Tempo journey proving run correlation survives while every contract-defined secret and sensitive attribute is redacted.",
+      "description": "Adds `.github/workflows/journey-observability-redaction.yml` to potpie-ai/pie: boots the OTel Collector, Loki and Tempo, pushes telemetry, and asserts that run correlation ids survive end to end while every contract-defined secret pattern and sensitive attribute is redacted in both backends. The stated principle is that observability must preserve operational correlation without leaking prompt, credential or PII material. Validation runs `./scripts/verify-collector-redaction.sh`. Directly gates the redaction machinery introduced by PR #72."
+    },
+    {
+      "slug": "github:pie-83",
+      "name": "pie#83 — test: gate platform run lifecycle journey",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-20T09:44:21Z",
+      "url": "https://github.com/potpie-ai/pie/pull/83",
+      "number": 83,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "agent/journey-platform-run-lifecycle",
+      "base_branch": "main",
+      "summary": "Exposes the G1 run lifecycle gate on main — outbox, worker ownership, sidecar attach, cancellation, fencing — with a CreateRun idempotency replay.",
+      "description": "Adds `.github/workflows/journey-platform-run.yml` to potpie-ai/pie and strengthens the G1 journey with a CreateRun idempotency replay assertion. The gate covers Postgres, outbox processing, worker ownership, sidecar attach, Path-B tools, artifacts, event replay, cancellation, cleanup, recovery, fencing, and browser/sidecar proofs — all without invoking a live model. Motivation: the Part 8 release gate existed only inside the stacked V0 branch series, so `main` had no deterministic product-lifecycle merge gate."
+    },
+    {
+      "slug": "github:pie-82",
+      "name": "pie#82 — test: gate CLI session journey",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-20T09:44:19Z",
+      "url": "https://github.com/potpie-ai/pie/pull/82",
+      "number": 82,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "agent/journey-cli-session",
+      "base_branch": "main",
+      "summary": "Makes the CLI interactive-session test unconditional by isolating it from machine-local context state with deterministic preflight and context seams.",
+      "description": "Adds `.github/workflows/journey-cli-session.yml` to potpie-ai/pie. The prior test was conditionally skipped whenever a context engine was unavailable, even though the behavior under test is the CLI/orchestrator session contract rather than context retrieval. This journey introduces deterministic preflight and context seams so the real pipeline, session harness, streaming presenter, durable store, outcome, file-change reporting and usage telemetry all execute every run. Symptom it kills: a green CI that silently skipped the CLI session path."
+    },
+    {
+      "slug": "github:pie-81",
+      "name": "pie#81 — test: gate VS Code session journey",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-20T09:44:19Z",
+      "url": "https://github.com/potpie-ai/pie/pull/81",
+      "number": 81,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "agent/journey-vscode-session",
+      "base_branch": "main",
+      "summary": "Turns the VS Code integration test into a required process journey with Python, uv, Bun and locked deps in one job.",
+      "description": "Adds `.github/workflows/journey-vscode-session.yml` to potpie-ai/pie so the editor-to-`pie serve`-to-gRPC-to-orchestrator path runs deterministically against the fake harness. The existing test could skip inside the Bun-only web job because `uv` was not installed there; this journey installs Python, uv, Bun and locked dependencies in the same job. Strengthened assertions cover event ordering, echoed text, turn completion, persisted run metadata, and the absence of error events."
+    },
+    {
+      "slug": "github:pie-80",
+      "name": "pie#80 — test: gate cross-language contract journey",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-20T09:44:18Z",
+      "url": "https://github.com/potpie-ai/pie/pull/80",
+      "number": 80,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "agent/journey-contract-conformance",
+      "base_branch": "main",
+      "summary": "Validates protobuf source and golden-frame consumers across Python and TypeScript in one locked CI environment so schema drift fails before merge.",
+      "description": "Adds `.github/workflows/journey-contracts.yml` and `./scripts/verify-journey-contracts.sh` to potpie-ai/pie. Because pie crosses Go, Python and TypeScript process boundaries, generated-code or schema drift would otherwise surface as a runtime protocol error rather than a build failure; this journey validates protobuf source and golden-frame consumers (`packages/contracts/testdata/harness_runtime_golden.jsonl`) across languages under one locked environment. Validation: 10 Python contract tests and 24 TypeScript contract tests passing."
+    },
+    {
+      "slug": "github:pie-79",
+      "name": "pie#79 — test: gate authentication session journey",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-20T09:44:18Z",
+      "url": "https://github.com/potpie-ai/pie/pull/79",
+      "number": 79,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "agent/journey-auth-session",
+      "base_branch": "main",
+      "summary": "Auth journey covering login start, idempotent retry, OIDC callback, session read, logout, cookie clearing and immediate server-side token invalidation.",
+      "description": "Adds `.github/workflows/journey-auth-session.yml` to potpie-ai/pie exercising login start, idempotent retry, OIDC callback, session read, already-authenticated behavior, logout, cookie clearing, and — the actual security assertion — immediate server-side invalidation of the old token. The stated reasoning is that cookie clearing alone is insufficient: a copied or delayed browser cookie must not remain a valid session after logout. Validated with `go test ./services/platform-api/internal/app -count=1 -run '^TestAuthNHTTPLoginS...'`."
+    },
+    {
+      "slug": "github:pie-78",
+      "name": "pie#78 — test: gate GitHub installation journey",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-20T09:44:17Z",
+      "url": "https://github.com/potpie-ai/pie/pull/78",
+      "number": 78,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "agent/journey-github-install",
+      "base_branch": "main",
+      "summary": "Authenticated GitHub App journey: install start, callback, repo/branch reads, sync, disconnect, and post-disconnect not-connected assertion.",
+      "description": "Adds `.github/workflows/journey-github-install.yml` to potpie-ai/pie covering the full GitHub App installation flow — install start, callback with signed setup state, repository and branch reads, synchronization, disconnect, and verification that the installation is genuinely no longer connected afterward. Justified because this single user-visible integration crosses authentication, signed setup state, provider adapters, persistence and HTTP handlers, and needed one regression gate spanning all those boundaries rather than five unit tests."
+    },
+    {
+      "slug": "github:pie-77",
+      "name": "pie#77 — test: gate context engine journey",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-20T09:44:16Z",
+      "url": "https://github.com/potpie-ai/pie/pull/77",
+      "number": 77,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "agent/journey-context-engine",
+      "base_branch": "main",
+      "summary": "Records and resolves context through the real embedded Potpie context engine in an isolated home; CI fails closed if the pinned engine cannot import.",
+      "description": "Adds `.github/workflows/journey-context-engine.yml` to potpie-ai/pie, running record-and-resolve against the real embedded Potpie context-engine shell inside an isolated HOME so nothing leaks from the developer machine. CI fails closed when the pinned engine cannot import or initialize. Motivation: normal Python verification intentionally deselects integration tests, so context priming could regress silently while unit suites stayed green. Validation: `PIE_INTEGRATION_REQUIRED=1 uv run pytest -q packages/py/orchestrator/tests/test_context_*`."
+    },
+    {
+      "slug": "github:pie-76",
+      "name": "pie#76 — V0 Part 8: End-to-end release gate",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-20T05:21:56Z",
+      "url": "https://github.com/potpie-ai/pie/pull/76",
+      "number": 76,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "yash/pot-1974-v0-part-8-end-to-end-release-gate",
+      "base_branch": "yash/pot-1973-v0-part-7-recovery-and-visible-failure-paths",
+      "summary": "Closes the eight-part V0 stack with the FakeRuntime G1 path, make release-gate, and a live Daytona worker provision/prepare/attach gate (POT-1974).",
+      "description": "Final PR of the stacked V0 series in potpie-ai/pie (Parts 1-8, POT-1941 through POT-1974), each branch based on the previous one. Adds `.github/workflows/release-gate.yml` and the repository-wide `make release-gate` target driving the full FakeRuntime G1 path, plus `TestLiveDaytonaWorkerProvisionPrepareAttach` covering CreateRun -> provision -> prepare -> remote harness attach -> cancel/cleanup on real Daytona sandboxes. Also stabilizes shared-Postgres gates against clock skew and retained sessions. Search terms: release gate, V0 stack, Daytona worker, FakeRuntime, frozen bun lock."
+    },
+    {
+      "slug": "github:pie-73",
+      "name": "pie#73 — V0 Part 7: Recovery and visible failure paths",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-17T11:36:11Z",
+      "url": "https://github.com/potpie-ai/pie/pull/73",
+      "number": 73,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "yash/pot-1973-v0-part-7-recovery-and-visible-failure-paths",
+      "base_branch": "yash/pot-1969-v0-part-6-tool-coordination-path-b-shs-harness-integrate",
+      "summary": "Run cancellation, cleanup recovery, reconnect observation and retry exhaustion with redacted public failure messages (POT-1973).",
+      "description": "Part 7 of the V0 stack in potpie-ai/pie. Preserves redacted public failure messages while implementing run cancellation, cleanup recovery, reconnect observation and retry-exhaustion paths across `packages/go/platform/runs/cancel.go`, `snapshot.go`, `service.go` and the worker. The subtle design choice: deferred async turns and model egress keep running so an observer can reclaim them, instead of shutting live work down on disconnect. Recovery fixtures stay aligned with selected-ref contracts and current outbox clocks. Closes Linear POT-1973."
+    },
+    {
+      "slug": "github:pie-71",
+      "name": "pie#71 — V0 Part 6: Tool coordination and pie-harness",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-17T08:12:22Z",
+      "url": "https://github.com/potpie-ai/pie/pull/71",
+      "number": 71,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "yash/pot-1969-v0-part-6-tool-coordination-path-b-shs-harness-integrate",
+      "base_branch": "yash/pot-1962-v0-part-5-external-harness-integration",
+      "summary": "Integrates the TypeScript pie-harness sidecar with the Go NDJSON runtime and adds the Path-B tool poll/result loop with fenced ToolCoordinator execution (POT-1969).",
+      "description": "Part 6 of the V0 stack in potpie-ai/pie, wiring the TypeScript `pie-harness` sidecar to a Go NDJSON runtime process. Adds the Path B tool poll/result loop, fenced `ToolCoordinator` execution, per-tool permissions and durable tool events, and packages the real sidecar for Daytona deployment via `deploy/sandbox/Dockerfile` and `build-harness-bundle.sh`. Touches `packages/contracts/proto/pie/v1/harness_runtime.proto` and its golden JSONL. Verified with Go harness/tools tests, `bun --cwd packages/ts/harness-sidecar test`, and `bun install --frozen-lockfile`. Closes POT-1969."
+    },
+    {
+      "slug": "github:pie-74",
+      "name": "pie#74 — VS Code / pie serve Langfuse turn tracing",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-17T14:56:09Z",
+      "url": "https://github.com/potpie-ai/pie/pull/74",
+      "number": 74,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "obs/langfuse-vs-code",
+      "base_branch": "shs",
+      "summary": "Links pie.vscode.turn to pie.turn via W3C traceparent on SendTurn and adds Pi sidecar gen_ai.chat spans with prompt/response capture.",
+      "description": "Observability work in potpie-ai/pie wiring VS Code to `pie serve` turn tracing: a `pie.vscode.turn` span linked to `pie.turn` through a W3C `traceparent` header on `SendTurn`, with `trace_id` persisted on run records and history. Adds Pi sidecar `gen_ai.chat` spans carrying usage plus prompt/response when OTLP is enabled, and attribute-correlates harness spans without forging parentage. Enables content capture by default via CLI `--capture-content` and VS Code `captureContent`, while keeping file/tool content out until separately instrumented. Also fixes the ClickHouse healthcheck to use `127.0.0.1` so Docker Desktop stops reporting a false-unhealthy container over IPv6."
+    },
+    {
+      "slug": "github:pie-72",
+      "name": "pie#72 — SDK redaction and collector verification",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-17T11:32:26Z",
+      "url": "https://github.com/potpie-ai/pie/pull/72",
+      "number": 72,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "shs-observability-redaction-integration",
+      "base_branch": "shs",
+      "summary": "Contract-driven log redaction across Go, TypeScript and Python wrappers, with Collector redaction generated from the same observability contract.",
+      "description": "Merged into `shs` in potpie-ai/pie. Adds contract-driven log redaction to all three SDK wrappers — Go (`packages/go/platform/observability/redaction.go` plus generated `redaction_patterns_gen.go`), TypeScript (`packages/ts/observability`) and Python (`packages/py/observability/src/observability/sinks/otlp.py`) — redacting string log bodies and string attributes and fully masking values whose attribute names are marked sensitive, while preserving non-string attributes. The OTel Collector config in `infra/compose/otel-collector-config.yaml` is generated from the same shared observability contract, and CI gates it with a real collector-to-Loki verification plus contract-drift tests. Defense in depth: if an SDK misses a secret, the collector still strips it."
+    },
+    {
+      "slug": "github:pie-87",
+      "name": "pie#87 — VS Code onboarding UI and chat UI",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-20T11:48:42Z",
+      "url": "https://github.com/potpie-ai/pie/pull/87",
+      "number": 87,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "fix/ext-ui",
+      "base_branch": "shs",
+      "summary": "First-run onboarding webview (harness pick + API keys), chat/composer polish, and a PTY workaround for Bun ignoring pipe stdin until EOF (POT-1977).",
+      "description": "Adds a first-run Potpie onboarding webview to `apps/vscode` in potpie-ai/pie — harness selection and API key entry, with host wiring that switches into the chat panel afterward — plus polish on the chat, composer and welcome surfaces and new media assets. The load-bearing bug fix is POT-1977: `pi` sidecar session open was timing out because the Bun-compiled `pie-harness` binary ignores long-lived pipe stdin until EOF, so `PiSidecarClient` now feeds stdin over a PTY on Unix. Search terms: pi sidecar open times out, Bun stdin pipe EOF, PTY workaround, VS Code onboarding, harness picker."
+    },
+    {
+      "slug": "github:pie-88",
+      "name": "pie#88 — VS Code Linux tempdir and timeout fix",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-20T12:38:17Z",
+      "url": "https://github.com/potpie-ai/pie/pull/88",
+      "number": 88,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "vscode-linux-tempdir-and-timeoutfix",
+      "base_branch": "shs",
+      "summary": "Fixes Linux tempdir handling and service-start timeouts in the VS Code extension, with Linux VSIX smoke and validation scripts.",
+      "description": "Follow-up to the self-contained Linux VSIX work in potpie-ai/pie, touching `apps/vscode/src/host/serviceManager.ts`, `harnessSelection.ts`, `warmup.ts` and the Pi harness registry at `packages/py/orchestrator/src/pie_orchestrator/harness/registry/pi.py`. Adds `scripts/smoke-linux-bundle.sh` and `scripts/validate-linux-vsix.sh` plus tests for harness selection, service manager and warmup. Addresses the class of failure where the extension works on macOS but times out or writes to an unwritable temp path under Remote-SSH on Linux."
+    },
+    {
+      "slug": "github:pie-86",
+      "name": "pie#86 — standardize env access on bracket notation",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-07-20T10:52:20Z",
+      "url": "https://github.com/potpie-ai/pie/pull/86",
+      "number": 86,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/pie",
+      "head_branch": "fix/env-bracket-access",
+      "base_branch": "obs/langfuse-vs-code",
+      "summary": "Moves all TS/JS environment reads to process.env[\"NAME\"] to satisfy the stricter shared tsconfig.",
+      "description": "Small cross-cutting cleanup in potpie-ai/pie standardizing TypeScript/JavaScript environment-variable access on bracket notation — `process.env[\"NAME\"]` rather than `process.env.NAME` — across `apps/web` and `apps/vscode`. Required by the stricter shared TypeScript configuration (`noPropertyAccessFromIndexSignature`) and avoids inconsistent property-access behavior between packages. Touches `apps/vscode/src/host/observability.ts`, `serviceManager.ts`, the integration/packaging/serviceManager tests, and `apps/web/instrumentation.ts`. Typical error string: 'Property comes from an index signature, so it must be accessed with'."
+    },
+    {
+      "slug": "github:slack-29",
+      "name": "potpie-slack#29 — Add Author: Potpie to README (agent-authored)",
+      "activity_type": "pull_request",
+      "verb_class": "pr_opened",
+      "occurred_at": "2026-05-04T11:27:59Z",
+      "url": "https://github.com/potpie-ai/potpie-slack/pull/29",
+      "number": 29,
+      "state": "OPEN",
+      "repo_name": "potpie-ai/potpie-slack",
+      "head_branch": "agent/edits-019dd83e-7830-78a7-915c-8c698cb9e33f",
+      "base_branch": "main",
+      "summary": "The only 2026 activity in potpie-slack — a one-line README edit opened by the potpie-agent GitHub App.",
+      "description": "Opened by the `potpie-agent` GitHub App against potpie-ai/potpie-slack, branch `agent/edits-019dd83e-7830-78a7-915c-8c698cb9e33f`. It adds an `Author: Potpie` line to the README and is the single piece of 2026 activity in the repository — the Slack bot (`src/app.py`, `src/handlers`, `src/potpie_service.py`, Cloud Run deployment) has been feature-frozen since the DM-flow fix in late 2025. Useful as evidence of a dormant-but-deployed service in the org's repo inventory."
+    },
+    {
+      "slug": "github:mintlify-40",
+      "name": "mintlify-docs#40 — move CLI docs under /cli URLs and add redirects",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-06T05:56:08Z",
+      "url": "https://github.com/potpie-ai/mintlify-docs/pull/40",
+      "number": 40,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/mintlify-docs",
+      "head_branch": "docs/cli-url-update",
+      "base_branch": "main",
+      "summary": "Relocated the CLI documentation to /cli paths in docs.json and added redirects so existing links keep resolving.",
+      "description": "Documentation IA change in potpie-ai/mintlify-docs moving every CLI page under `/cli` URLs and registering redirects in `docs.json` so previously published links and blog references do not 404. Follows PR #39 which restructured the same section around the Context Engine CLI. Authored by Nih1tGupta, who also files most of the CLI bug reports — the docs move was driven by the same confusion that generated those issues: users landing on platform docs when they wanted `potpie` command reference."
+    },
+    {
+      "slug": "github:mintlify-39",
+      "name": "mintlify-docs#39 — restructure docs for Context Engine CLI",
+      "activity_type": "pull_request",
+      "verb_class": "pr_merged",
+      "occurred_at": "2026-07-03T12:28:02Z",
+      "url": "https://github.com/potpie-ai/mintlify-docs/pull/39",
+      "number": 39,
+      "state": "MERGED",
+      "repo_name": "potpie-ai/mintlify-docs",
+      "head_branch": "docs/context-engine-cli-update",
+      "base_branch": "main",
+      "summary": "Reorganized the public Mintlify docs around the Context Engine CLI as the primary entry point rather than the hosted agent platform.",
+      "description": "Restructures potpie-ai/mintlify-docs so the Context Engine CLI becomes the primary documented surface, reflecting Potpie's repositioning to 'Context Graph for AI Native SDLC'. Reworks navigation in `docs.json` and the `quickstart.mdx` / `introduction.mdx` entry path away from the older hosted-agent framing. This is the docs-side counterpart to the CLI and context-core work in potpie-ai/potpie, and it precedes PR #40 which finished the job by moving the URLs themselves under `/cli`."
+    },
+    {
+      "slug": "commit:workflows-f9a4e4e",
+      "name": "workflows f9a4e4e — rework spec generation around deep agents",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2026-04-20T10:21:06Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/commit/f9a4e4e274aa19bcee210850f50384dccd718be7",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "state": "MERGED",
+      "head_branch": "new-spec-deep-agent",
+      "summary": "Replaced the six-step SpecGen pipeline with a two-phase deep-agent design (research then author).",
+      "description": "The architectural pivot of SpecGen in potpie-ai/potpie-workflows: the previous six-step deterministic pipeline is torn out and replaced by a two-phase deep-agent flow — a research phase that explores the repository, then an author phase that writes the specification. Landed on branch new-spec-deep-agent and shipped through PR #55. The same branch immediately followed up in 581c5fc by giving the hybrid research agent real filesystem tools — Potpie read/grep/glob/bash, with grep executed via ripgrep — so spec research became repository-grounded rather than embedding-only. Everything under src/core/agents/specgen/ descends from this commit, including the prompt tuning later done in PR #74. Search terms: deep agent, specgen rework, research then author, two-phase pipeline, ripgrep research tools."
+    },
+    {
+      "slug": "commit:workflows-bb1062e",
+      "name": "workflows bb1062e — multi-batch Janus clarifying questions flow",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2026-04-28T15:55:54Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/commit/bb1062ef69e95b3065b4de5bda3609d5b3d87995",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "state": "MERGED",
+      "head_branch": "feat/qa-with-multiple-batches",
+      "summary": "Implemented structured multi-batch Janus clarifying questions with a continuation task, later made the default by PR #65.",
+      "description": "Implements the multi-batch clarifying-question flow ('Janus QA') in potpie-ai/potpie-workflows, replacing a single up-front batch with several structured batches driven by a Celery continuation task so later questions can depend on earlier answers. Shipped via PR #57 and switched on for everyone two weeks later by PR #65's feature-flag default flip in `src/utils/recipe_feature_flags.py`. Related surfaces: `src/adapters/celery_recipe_subscriber.py`, `src/adapters/celery_recipe_streaming.py`, the recipes store, and the QA Alembic table `0a95320beaaa_add_qa_table.py`."
+    },
+    {
+      "slug": "commit:workflows-ee5361b",
+      "name": "workflows ee5361b — codegen agents and tools (no celery changes)",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2026-02-24T05:03:11Z",
+      "url": "https://github.com/potpie-ai/potpie-workflows/commit/ee5361b89322f42847073b811bc3a43ccc6762ba",
+      "repo_name": "potpie-ai/potpie-workflows",
+      "state": "MERGED",
+      "head_branch": "fix/codegen",
+      "summary": "Landed the CodeGen agent set and its tool surface without touching the Celery execution path (PR #38).",
+      "description": "Merge commit for PR #38 in potpie-ai/potpie-workflows introducing the CodeGen agents and their tools while deliberately leaving the Celery task wiring untouched, so the risky agent change could land independently of the queue topology. Sits alongside contemporaneous work reducing codegen tool limits and adding no-exploration prompts to avoid worker timeouts, and the patch-validator/worktree machinery. Search terms: codegen agent, patch validator, worktree, tool limits, no-exploration prompt, celery recipe subscriber."
+    },
+    {
+      "slug": "commit:pie-32f7d3a",
+      "name": "pie 32f7d3a — implement V0 Part 4 repository preparation",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2026-07-14T09:58:45Z",
+      "url": "https://github.com/potpie-ai/pie/commit/32f7d3aaf49e70e3cd772f84c7d766bab155e48f",
+      "repo_name": "potpie-ai/pie",
+      "state": "MERGED",
+      "head_branch": "yash/pot-1958-v0-part-4-repository-preparation",
+      "summary": "Implements the V0 Part 4 repository-preparation stage — clone, checkout and workspace setup inside the sandbox (POT-1958).",
+      "description": "Part 4 of the stacked V0 series in potpie-ai/pie: preparing a repository inside a provisioned sandbox before a run can start. The follow-up commit `1cf2f3d` ('Fix Part 4 review: network restore, clone failure class, gofmt') added a distinct clone-failure classification and restored network state after preparation — relevant when diagnosing runs that fail during prepare with a generic error instead of a typed clone failure. Tracked as Linear POT-1958."
+    },
+    {
+      "slug": "commit:pie-1e18cbe",
+      "name": "pie 1e18cbe — add QnA/RCA agent eval plan of action",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2026-07-16T11:58:18Z",
+      "url": "https://github.com/potpie-ai/pie/commit/1e18cbeeae8bf6c26676f3aa2c4dbc5e06c4b55b",
+      "repo_name": "potpie-ai/pie",
+      "state": "OPEN",
+      "head_branch": "evals",
+      "summary": "Adds docs/evals/qna-rca-eval-plan.md defining the first product eval suite: read-only pie.qna profile, pinned-SHA pots, citation scorers before LLM judges.",
+      "description": "Planning document at `docs/evals/qna-rca-eval-plan.md` in potpie-ai/pie laying out the first product evaluation suite. The plan: define a read-only `pie.qna` agent profile, ingest Zulip and FastAPI as pinned-SHA pots, bootstrap a non-deployable `packages/py/eval` harness that uses citation-based code scorers before any LLM judges, author 15-25 human-reviewed golden cases, then run baseline error analysis and calibrate exactly one binary judge. The harness graduates to the external testing repo later. Strengthened the same day by `d99c043`."
+    },
+    {
+      "slug": "commit:slack-db7bcdd",
+      "name": "potpie-slack db7bcdd — add issue templates",
+      "activity_type": "commit",
+      "verb_class": "commit_pushed",
+      "occurred_at": "2025-12-17T13:35:30Z",
+      "url": "https://github.com/potpie-ai/potpie-slack/commit/db7bcdd92f9a3aa16a24338de2e1330ae0278faf",
+      "repo_name": "potpie-ai/potpie-slack",
+      "state": "MERGED",
+      "head_branch": "misc/add-issue-templates",
+      "summary": "Community contributor added bug report, documentation, feature request and question issue templates to potpie-slack.",
+      "description": "Merge of PR #28 in potpie-ai/potpie-slack adding GitHub issue templates for bug reports, documentation, feature requests and questions. Contributed by community member zingzy, who shipped the parallel `mintlify-docs` restructure (`c03cf24`, replacing `mint.json` with `docs.json` and adding self-hosting and getting-started guides) on the very same day. This is the last substantive human change to potpie-slack — everything after it is the 2026 agent-authored README PR."
+    }
+  ],
+  "edges": [
+    {
+      "from": "person:shmbhvi101",
+      "type": "PERFORMED",
+      "to": "activity:github:workflows-76",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#76"
+    },
+    {
+      "from": "activity:github:workflows-76",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#76"
+    },
+    {
+      "from": "activity:github:workflows-76",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:workflows-76",
+      "type": "TOUCHED",
+      "to": "code:potpie-workflows:pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#76 files"
+    },
+    {
+      "from": "activity:github:workflows-76",
+      "type": "TOUCHED",
+      "to": "code:potpie-workflows:uv.lock",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#76 files"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "PERFORMED",
+      "to": "activity:github:workflows-75",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#75"
+    },
+    {
+      "from": "activity:github:workflows-75",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#75"
+    },
+    {
+      "from": "activity:github:workflows-75",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:workflows-75",
+      "type": "TOUCHED",
+      "to": "code:potpie-workflows:uv.lock",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#75 files"
+    },
+    {
+      "from": "person:BrhKmr23",
+      "type": "AUTHORED",
+      "to": "activity:github:workflows-74",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#74"
+    },
+    {
+      "from": "activity:github:workflows-74",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#74"
+    },
+    {
+      "from": "activity:github:workflows-74",
+      "type": "TOUCHED",
+      "to": "code:potpie-workflows:src/core/agents/specgen/prompts.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#74 files"
+    },
+    {
+      "from": "activity:github:workflows-74",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:workflows-74",
+      "type": "MENTIONS",
+      "to": "repo:potpie-ai/potpie-ui",
+      "truth": "agent_claim",
+      "confidence": 0.6,
+      "note": "PR body says the backend change pairs with a potpie-ui spec rendering update"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "PERFORMED",
+      "to": "activity:github:workflows-73",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#73"
+    },
+    {
+      "from": "activity:github:workflows-73",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#73"
+    },
+    {
+      "from": "activity:github:workflows-73",
+      "type": "IN_PERIOD",
+      "to": "period:2026-06",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:workflows-73",
+      "type": "TOUCHED",
+      "to": "code:potpie-workflows:pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#73 files"
+    },
+    {
+      "from": "activity:github:workflows-73",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:aiohttp",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#73 body"
+    },
+    {
+      "from": "activity:github:workflows-72",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#72"
+    },
+    {
+      "from": "activity:github:workflows-72",
+      "type": "IN_PERIOD",
+      "to": "period:2026-06",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:workflows-72",
+      "type": "TOUCHED",
+      "to": "code:potpie-workflows:pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#72 files"
+    },
+    {
+      "from": "activity:github:workflows-72",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:cryptography",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#72 body"
+    },
+    {
+      "from": "activity:github:workflows-72",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:starlette",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#72 body"
+    },
+    {
+      "from": "activity:github:workflows-71",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#71"
+    },
+    {
+      "from": "activity:github:workflows-71",
+      "type": "IN_PERIOD",
+      "to": "period:2026-06",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:workflows-71",
+      "type": "TOUCHED",
+      "to": "code:potpie-workflows:uv.lock",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#71 files"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "PERFORMED",
+      "to": "activity:github:workflows-70",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#70"
+    },
+    {
+      "from": "activity:github:workflows-70",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#70"
+    },
+    {
+      "from": "activity:github:workflows-70",
+      "type": "IN_PERIOD",
+      "to": "period:2026-06",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:workflows-70",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:starlette",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#70 body"
+    },
+    {
+      "from": "activity:github:workflows-70",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:aiohttp",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#70 body"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "PERFORMED",
+      "to": "activity:github:workflows-69",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#69"
+    },
+    {
+      "from": "activity:github:workflows-69",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#69"
+    },
+    {
+      "from": "activity:github:workflows-69",
+      "type": "IN_PERIOD",
+      "to": "period:2026-05",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:workflows-69",
+      "type": "TOUCHED",
+      "to": "code:potpie-workflows:pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#69 files"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "PERFORMED",
+      "to": "activity:github:workflows-68",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#68"
+    },
+    {
+      "from": "activity:github:workflows-68",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#68"
+    },
+    {
+      "from": "activity:github:workflows-68",
+      "type": "IN_PERIOD",
+      "to": "period:2026-05",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "PERFORMED",
+      "to": "activity:github:workflows-67",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#67"
+    },
+    {
+      "from": "activity:github:workflows-67",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#67"
+    },
+    {
+      "from": "activity:github:workflows-67",
+      "type": "IN_PERIOD",
+      "to": "period:2026-05",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:workflows-67",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:urllib3",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#67 body"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "PERFORMED",
+      "to": "activity:github:workflows-66",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#66"
+    },
+    {
+      "from": "activity:github:workflows-66",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#66"
+    },
+    {
+      "from": "activity:github:workflows-66",
+      "type": "IN_PERIOD",
+      "to": "period:2026-05",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:workflows-66",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:urllib3",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#66 body"
+    },
+    {
+      "from": "person:BrhKmr23",
+      "type": "AUTHORED",
+      "to": "activity:github:workflows-65",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#65"
+    },
+    {
+      "from": "activity:github:workflows-65",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#65"
+    },
+    {
+      "from": "activity:github:workflows-65",
+      "type": "TOUCHED",
+      "to": "code:potpie-workflows:src/utils/recipe_feature_flags.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#65 files"
+    },
+    {
+      "from": "activity:github:workflows-65",
+      "type": "TOUCHED",
+      "to": "code:potpie-workflows:src/adapters/celery_recipe_subscriber.py",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#65 files"
+    },
+    {
+      "from": "activity:github:workflows-65",
+      "type": "IN_PERIOD",
+      "to": "period:2026-05",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "PERFORMED",
+      "to": "activity:github:workflows-64",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#64"
+    },
+    {
+      "from": "activity:github:workflows-64",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#64"
+    },
+    {
+      "from": "activity:github:workflows-64",
+      "type": "IN_PERIOD",
+      "to": "period:2026-05",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:workflows-64",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:litellm",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#64 body"
+    },
+    {
+      "from": "activity:github:workflows-64",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:cryptography",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#64 body"
+    },
+    {
+      "from": "activity:github:workflows-64",
+      "type": "TOUCHED",
+      "to": "code:potpie-workflows:pyproject.toml",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#64 files"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "PERFORMED",
+      "to": "activity:github:workflows-63",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#63"
+    },
+    {
+      "from": "activity:github:workflows-63",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#63"
+    },
+    {
+      "from": "activity:github:workflows-63",
+      "type": "IN_PERIOD",
+      "to": "period:2026-05",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "PERFORMED",
+      "to": "activity:github:workflows-62",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#62"
+    },
+    {
+      "from": "activity:github:workflows-62",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#62"
+    },
+    {
+      "from": "activity:github:workflows-62",
+      "type": "IN_PERIOD",
+      "to": "period:2026-05",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:workflows-62",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:litellm",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#62 body"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "PERFORMED",
+      "to": "activity:github:workflows-61",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#61"
+    },
+    {
+      "from": "activity:github:workflows-61",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#61"
+    },
+    {
+      "from": "activity:github:workflows-61",
+      "type": "IN_PERIOD",
+      "to": "period:2026-05",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "PERFORMED",
+      "to": "activity:github:workflows-60",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/potpie-workflows#60"
+    },
+    {
+      "from": "activity:github:workflows-60",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#60"
+    },
+    {
+      "from": "activity:github:workflows-60",
+      "type": "IN_PERIOD",
+      "to": "period:2026-05",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:workflows-60",
+      "type": "MENTIONS",
+      "to": "dependency:pypi:litellm",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#60 body"
+    },
+    {
+      "from": "activity:github:workflows-59",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-workflows#59"
+    },
+    {
+      "from": "activity:github:workflows-59",
+      "type": "IN_PERIOD",
+      "to": "period:2026-05",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:jdyaberi-pp",
+      "type": "PERFORMED",
+      "to": "activity:github:pie-85",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#85"
+    },
+    {
+      "from": "activity:github:pie-85",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#85"
+    },
+    {
+      "from": "activity:github:pie-85",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:pie-85",
+      "type": "MENTIONS",
+      "to": "datastore:postgres-potpiedb",
+      "truth": "agent_claim",
+      "confidence": 0.65,
+      "note": "journey runs against Postgres 16"
+    },
+    {
+      "from": "person:jdyaberi-pp",
+      "type": "PERFORMED",
+      "to": "activity:github:pie-84",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#84"
+    },
+    {
+      "from": "activity:github:pie-84",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#84"
+    },
+    {
+      "from": "activity:github:pie-84",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:pie-84",
+      "type": "MENTIONS",
+      "to": "activity:github:pie-72",
+      "truth": "agent_claim",
+      "confidence": 0.7,
+      "note": "this journey gates the redaction pipeline added in #72"
+    },
+    {
+      "from": "person:jdyaberi-pp",
+      "type": "PERFORMED",
+      "to": "activity:github:pie-83",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#83"
+    },
+    {
+      "from": "activity:github:pie-83",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#83"
+    },
+    {
+      "from": "activity:github:pie-83",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:pie-83",
+      "type": "MENTIONS",
+      "to": "activity:github:pie-76",
+      "truth": "agent_claim",
+      "confidence": 0.75,
+      "note": "exposes the Part 8 release gate from #76 on main"
+    },
+    {
+      "from": "person:jdyaberi-pp",
+      "type": "PERFORMED",
+      "to": "activity:github:pie-82",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#82"
+    },
+    {
+      "from": "activity:github:pie-82",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#82"
+    },
+    {
+      "from": "activity:github:pie-82",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:jdyaberi-pp",
+      "type": "PERFORMED",
+      "to": "activity:github:pie-81",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#81"
+    },
+    {
+      "from": "activity:github:pie-81",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#81"
+    },
+    {
+      "from": "activity:github:pie-81",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:jdyaberi-pp",
+      "type": "PERFORMED",
+      "to": "activity:github:pie-80",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#80"
+    },
+    {
+      "from": "activity:github:pie-80",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#80"
+    },
+    {
+      "from": "activity:github:pie-80",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:jdyaberi-pp",
+      "type": "PERFORMED",
+      "to": "activity:github:pie-79",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#79"
+    },
+    {
+      "from": "activity:github:pie-79",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#79"
+    },
+    {
+      "from": "activity:github:pie-79",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:jdyaberi-pp",
+      "type": "PERFORMED",
+      "to": "activity:github:pie-78",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#78"
+    },
+    {
+      "from": "activity:github:pie-78",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#78"
+    },
+    {
+      "from": "activity:github:pie-78",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:jdyaberi-pp",
+      "type": "PERFORMED",
+      "to": "activity:github:pie-77",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#77"
+    },
+    {
+      "from": "activity:github:pie-77",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#77"
+    },
+    {
+      "from": "activity:github:pie-77",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:pie-77",
+      "type": "MENTIONS",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "agent_claim",
+      "confidence": 0.75,
+      "note": "journey pins and imports the embedded Potpie context engine"
+    },
+    {
+      "from": "person:yashkrishan",
+      "type": "AUTHORED",
+      "to": "activity:github:pie-76",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#76"
+    },
+    {
+      "from": "activity:github:pie-76",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#76"
+    },
+    {
+      "from": "activity:github:pie-76",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:yashkrishan",
+      "type": "AUTHORED",
+      "to": "activity:github:pie-73",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#73"
+    },
+    {
+      "from": "activity:github:pie-73",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#73"
+    },
+    {
+      "from": "activity:github:pie-73",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:yashkrishan",
+      "type": "AUTHORED",
+      "to": "activity:github:pie-71",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#71"
+    },
+    {
+      "from": "activity:github:pie-71",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#71"
+    },
+    {
+      "from": "activity:github:pie-71",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:BrhKmr23",
+      "type": "AUTHORED",
+      "to": "activity:github:pie-74",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#74"
+    },
+    {
+      "from": "activity:github:pie-74",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#74"
+    },
+    {
+      "from": "activity:github:pie-74",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:BrhKmr23",
+      "type": "AUTHORED",
+      "to": "activity:github:pie-72",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#72"
+    },
+    {
+      "from": "activity:github:pie-72",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#72"
+    },
+    {
+      "from": "activity:github:pie-72",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:yashkrishan",
+      "type": "PERFORMED",
+      "to": "activity:github:pie-72",
+      "truth": "timeline_event",
+      "evidence": "review on github:potpie-ai/pie#72; obs stack originated in yashkrishan's obs/* PRs"
+    },
+    {
+      "from": "person:shmbhvi101",
+      "type": "AUTHORED",
+      "to": "activity:github:pie-87",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#87"
+    },
+    {
+      "from": "activity:github:pie-87",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#87"
+    },
+    {
+      "from": "activity:github:pie-87",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:pie-87",
+      "type": "MENTIONS",
+      "to": "repo:potpie-ai/potpie-vscode-extension",
+      "truth": "agent_claim",
+      "confidence": 0.55,
+      "note": "the pie apps/vscode surface supersedes the standalone extension repo"
+    },
+    {
+      "from": "person:BrhKmr23",
+      "type": "AUTHORED",
+      "to": "activity:github:pie-88",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#88"
+    },
+    {
+      "from": "activity:github:pie-88",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#88"
+    },
+    {
+      "from": "activity:github:pie-88",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:pie-88",
+      "type": "MENTIONS",
+      "to": "activity:github:pie-87",
+      "truth": "agent_claim",
+      "confidence": 0.6,
+      "note": "both chase VS Code harness start-up timeouts on Linux"
+    },
+    {
+      "from": "person:BrhKmr23",
+      "type": "AUTHORED",
+      "to": "activity:github:pie-86",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/pie#86"
+    },
+    {
+      "from": "activity:github:pie-86",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/pie#86"
+    },
+    {
+      "from": "activity:github:pie-86",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:slack-29",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-slack",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/potpie-slack#29"
+    },
+    {
+      "from": "activity:github:slack-29",
+      "type": "IN_PERIOD",
+      "to": "period:2026-05",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:slack-29",
+      "type": "MENTIONS",
+      "to": "activity:github:workflows-59",
+      "truth": "agent_claim",
+      "confidence": 0.6,
+      "note": "same potpie-agent GitHub App authored both open agent PRs"
+    },
+    {
+      "from": "person:Nih1tGupta",
+      "type": "AUTHORED",
+      "to": "activity:github:mintlify-40",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/mintlify-docs#40"
+    },
+    {
+      "from": "activity:github:mintlify-40",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/mintlify-docs",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/mintlify-docs#40"
+    },
+    {
+      "from": "activity:github:mintlify-40",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:mintlify-40",
+      "type": "MENTIONS",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "agent_claim",
+      "confidence": 0.7,
+      "note": "documents the potpie CLI shipped from the potpie repo"
+    },
+    {
+      "from": "person:Nih1tGupta",
+      "type": "AUTHORED",
+      "to": "activity:github:mintlify-39",
+      "truth": "timeline_event",
+      "evidence": "github:potpie-ai/mintlify-docs#39"
+    },
+    {
+      "from": "activity:github:mintlify-39",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/mintlify-docs",
+      "truth": "source_observation",
+      "evidence": "github:potpie-ai/mintlify-docs#39"
+    },
+    {
+      "from": "activity:github:mintlify-39",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:github:mintlify-39",
+      "type": "MENTIONS",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "agent_claim",
+      "confidence": 0.7,
+      "note": "restructures docs around the Context Engine CLI"
+    },
+    {
+      "from": "person:BrhKmr23",
+      "type": "AUTHORED",
+      "to": "activity:commit:workflows-f9a4e4e",
+      "truth": "timeline_event",
+      "evidence": "git:potpie-workflows f9a4e4e274aa19bcee210850f50384dccd718be7"
+    },
+    {
+      "from": "activity:commit:workflows-f9a4e4e",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "git:potpie-workflows f9a4e4e274aa19bcee210850f50384dccd718be7"
+    },
+    {
+      "from": "activity:commit:workflows-f9a4e4e",
+      "type": "IN_PERIOD",
+      "to": "period:2026-04",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:commit:workflows-f9a4e4e",
+      "type": "TOUCHED",
+      "to": "code:potpie-workflows:src/core/agents/specgen/prompts.py",
+      "truth": "agent_claim",
+      "confidence": 0.7,
+      "note": "the specgen agent package was created by this rework"
+    },
+    {
+      "from": "person:BrhKmr23",
+      "type": "AUTHORED",
+      "to": "activity:commit:workflows-bb1062e",
+      "truth": "timeline_event",
+      "evidence": "git:potpie-workflows bb1062ef69e95b3065b4de5bda3609d5b3d87995"
+    },
+    {
+      "from": "activity:commit:workflows-bb1062e",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "git:potpie-workflows bb1062ef69e95b3065b4de5bda3609d5b3d87995"
+    },
+    {
+      "from": "activity:commit:workflows-bb1062e",
+      "type": "IN_PERIOD",
+      "to": "period:2026-04",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:commit:workflows-bb1062e",
+      "type": "TOUCHED",
+      "to": "code:potpie-workflows:src/adapters/celery_recipe_subscriber.py",
+      "truth": "agent_claim",
+      "confidence": 0.65,
+      "note": "continuation task runs through the celery recipe subscriber"
+    },
+    {
+      "from": "activity:commit:workflows-bb1062e",
+      "type": "MENTIONS",
+      "to": "activity:github:workflows-65",
+      "truth": "agent_claim",
+      "confidence": 0.8,
+      "note": "PR #65 flipped this flow to the default"
+    },
+    {
+      "from": "person:Dsantra92",
+      "type": "AUTHORED",
+      "to": "activity:commit:workflows-ee5361b",
+      "truth": "timeline_event",
+      "evidence": "git:potpie-workflows ee5361b89322f42847073b811bc3a43ccc6762ba"
+    },
+    {
+      "from": "activity:commit:workflows-ee5361b",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-workflows",
+      "truth": "source_observation",
+      "evidence": "git:potpie-workflows ee5361b89322f42847073b811bc3a43ccc6762ba"
+    },
+    {
+      "from": "activity:commit:workflows-ee5361b",
+      "type": "IN_PERIOD",
+      "to": "period:2026-02",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:yashkrishan",
+      "type": "AUTHORED",
+      "to": "activity:commit:pie-32f7d3a",
+      "truth": "timeline_event",
+      "evidence": "git:pie 32f7d3aaf49e70e3cd772f84c7d766bab155e48f"
+    },
+    {
+      "from": "activity:commit:pie-32f7d3a",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "git:pie 32f7d3aaf49e70e3cd772f84c7d766bab155e48f"
+    },
+    {
+      "from": "activity:commit:pie-32f7d3a",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "person:jdyaberi-pp",
+      "type": "AUTHORED",
+      "to": "activity:commit:pie-1e18cbe",
+      "truth": "timeline_event",
+      "evidence": "git:pie 1e18cbeeae8bf6c26676f3aa2c4dbc5e06c4b55b"
+    },
+    {
+      "from": "activity:commit:pie-1e18cbe",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/pie",
+      "truth": "source_observation",
+      "evidence": "git:pie 1e18cbeeae8bf6c26676f3aa2c4dbc5e06c4b55b"
+    },
+    {
+      "from": "activity:commit:pie-1e18cbe",
+      "type": "IN_PERIOD",
+      "to": "period:2026-07",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:commit:pie-1e18cbe",
+      "type": "MENTIONS",
+      "to": "repo:potpie-ai/potpie",
+      "truth": "agent_claim",
+      "confidence": 0.6,
+      "note": "eval plan ingests pinned-SHA pots via the Potpie context engine"
+    },
+    {
+      "from": "person:zingzy",
+      "type": "AUTHORED",
+      "to": "activity:commit:slack-db7bcdd",
+      "truth": "timeline_event",
+      "evidence": "git:potpie-slack db7bcdd92f9a3aa16a24338de2e1330ae0278faf"
+    },
+    {
+      "from": "activity:commit:slack-db7bcdd",
+      "type": "TOUCHED",
+      "to": "repo:potpie-ai/potpie-slack",
+      "truth": "source_observation",
+      "evidence": "git:potpie-slack db7bcdd92f9a3aa16a24338de2e1330ae0278faf"
+    },
+    {
+      "from": "activity:commit:slack-db7bcdd",
+      "type": "IN_PERIOD",
+      "to": "period:2025-12",
+      "truth": "timeline_event"
+    },
+    {
+      "from": "activity:commit:slack-db7bcdd",
+      "type": "MENTIONS",
+      "to": "repo:potpie-ai/mintlify-docs",
+      "truth": "agent_claim",
+      "confidence": 0.7,
+      "note": "same contributor shipped the docs.json restructure the same day"
+    }
+  ]
+}

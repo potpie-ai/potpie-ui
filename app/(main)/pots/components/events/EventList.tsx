@@ -1,12 +1,15 @@
 "use client";
 
-// Renders the list of events. Owns no data — gets events + selection state
-// and handlers from the parent (which holds the React Query results).
+// Renders the list of events as dense hairline-divided rows. Owns no data —
+// gets events + selection state and handlers from the parent (which holds
+// the React Query results).
 
-import { Inbox } from "lucide-react";
+import { Inbox, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { PotEvent } from "@/services/PotService";
+import { EmptyState } from "../kit";
 import { EventRow } from "./EventRow";
 
 type Props = {
@@ -24,6 +27,10 @@ type Props = {
   retryingId: string | null;
   highlightedId: string | null;
   hasSearchOrFilters: boolean;
+  /** Optional: shown as the action on the filtered empty state. */
+  onClearFilters?: () => void;
+  /** Optional: action node for the no-events-at-all empty state. */
+  emptyAction?: React.ReactNode;
 };
 
 export function EventList({
@@ -41,20 +48,23 @@ export function EventList({
   retryingId,
   highlightedId,
   hasSearchOrFilters,
+  onClearFilters,
+  emptyAction,
 }: Props) {
   if (loading) {
     return (
-      <div className="space-y-2">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div
-            key={i}
-            className="rounded-lg border border-border/40 px-3 py-3 animate-pulse"
-          >
-            <div className="flex justify-between">
-              <div className="h-3.5 w-1/3 rounded bg-muted" />
-              <div className="h-5 w-16 rounded-full bg-muted" />
+      <div className="divide-y divide-border/60">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3 px-3 py-3.5">
+            <Skeleton className="h-4 w-4 rounded bg-muted" />
+            <Skeleton className="h-2 w-2 rounded-full bg-muted" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <Skeleton className="h-3.5 w-1/3 rounded bg-muted" />
+                <Skeleton className="h-3 w-24 rounded bg-muted" />
+              </div>
+              <Skeleton className="h-2.5 w-1/2 rounded bg-muted" />
             </div>
-            <div className="h-2.5 w-1/2 rounded bg-muted/60 mt-2" />
           </div>
         ))}
       </div>
@@ -62,15 +72,26 @@ export function EventList({
   }
 
   if (events.length === 0) {
-    return (
-      <div className="py-12 text-center">
-        <Inbox className="h-6 w-6 mx-auto text-muted-foreground mb-2" />
-        <p className="text-sm text-muted-foreground">
-          {hasSearchOrFilters
-            ? "No events match your filters."
-            : "No ingestion events yet."}
-        </p>
-      </div>
+    return hasSearchOrFilters ? (
+      <EmptyState
+        icon={Inbox}
+        title="No matching events"
+        description="Nothing in this pot matches the current search and filters."
+      >
+        {onClearFilters ? (
+          <Button variant="outline" size="sm" onClick={onClearFilters}>
+            Clear filters
+          </Button>
+        ) : null}
+      </EmptyState>
+    ) : (
+      <EmptyState
+        icon={Inbox}
+        title="No events yet"
+        description="Events land here as sources sync and notes are added — each one shows its journey through the ingestion pipeline."
+      >
+        {emptyAction}
+      </EmptyState>
     );
   }
 
@@ -83,19 +104,20 @@ export function EventList({
   const someSelected = selectedVisible > 0 && !allSelected;
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 px-1 pb-1 pt-2">
+    <div>
+      <div className="flex items-center gap-3 px-3 pb-2.5">
         <Checkbox
           aria-label="Select all visible"
           checked={allSelected ? true : someSelected ? "indeterminate" : false}
           onCheckedChange={(v) => onSelectAllVisible(v === true)}
         />
-        <span className="text-[11px] text-muted-foreground">
+        <span className="font-mono text-xs text-muted-foreground">
           {events.length} event{events.length === 1 ? "" : "s"}
-          {hasMore ? " (more available)" : ""}
+          {hasMore ? " · more available" : ""}
         </span>
       </div>
-      <div className="space-y-1.5">
+
+      <div className="divide-y divide-border/60 border-t border-border/70">
         {events.map((ev, idx) => {
           const id = ev.event_id || ev.id;
           const key = `${id ?? "noid"}-${idx}`;
@@ -116,15 +138,18 @@ export function EventList({
       </div>
 
       {hasMore && (
-        <div className="mt-3 flex justify-center">
+        <div className="flex justify-center border-t border-border/60 pt-4">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={onLoadMore}
             disabled={loadingMore}
-            className="text-xs"
+            className="gap-1.5 text-[13px] text-muted-foreground hover:text-foreground"
           >
-            {loadingMore ? "Loading…" : "Load more"}
+            {loadingMore ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : null}
+            Load more
           </Button>
         </div>
       )}

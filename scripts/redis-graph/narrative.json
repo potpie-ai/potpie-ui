@@ -1,0 +1,1348 @@
+{
+ "people": [
+  {
+   "slug": "sgreco",
+   "name": "Salvatore Greco",
+   "email": "salvatore@redis.dev",
+   "role": "Tech lead \u2014 core runtime & persistence",
+   "summary": "Tech lead for the server core, event loop, IO threads, and the RDB/AOF persistence stack.",
+   "description": "Salvatore Greco (salvatore@redis.dev) is the tech lead and de-facto architect of the core runtime: ae event loop, iothread.c offload model, networking.c, and the whole persistence stack (rdb.c, aof.c, Multi-Part AOF, the BACKUP command state machine). He signs off on the architectural decision spine (single-threaded command execution, io-threads-for-network, RDB-preamble AOF) and is the usual reviewer for anything touching beforeSleep, fork/COW behavior, or the command table. Recently shipped the Backup & Restore feature (#15441) and the io-thread replication busy-loop fix (#15329). Ask him about 'why is command execution single-threaded', AOF rewrite pressure, and hinted hash templates.",
+   "member_of": [
+    "redis-oss"
+   ]
+  },
+  {
+   "slug": "ytanaka",
+   "name": "Yuki Tanaka",
+   "email": "yuki@redis.dev",
+   "role": "Senior engineer \u2014 streams & client features",
+   "summary": "Owns Streams (XADD/consumer groups/XNACK/IDMP) and client-facing features: tracking, ACL, pubsub, blocking commands.",
+   "description": "Yuki Tanaka (yuki@redis.dev) leads the Streams Squad and owns t_stream.c end to end: consumer groups and the PEL, the XNACK nack-zone design, the IDMP idempotent producer, and the in-flight XDLQ dead-letter workflow (draft PR #15500, plan doc STREAM_DLQ_IMPLEMENTATION_PLAN.md). Also owns client-side features: CLIENT TRACKING / client-side caching (fixed the BCAST ACL key-name leak in #15371), ACL key-spec enforcement (#15478 domain), keyspace notifications, MULTI/EXEC queueing, and blocked clients (LMOVEM/BLMOVEM, #15405). Ask her about 'dead letter queue', 'PEL growth', 'poison message', 'invalidation push', 'XREADGROUP NOACK'.",
+   "member_of": [
+    "redis-oss",
+    "streams-squad"
+   ]
+  },
+  {
+   "slug": "enovak",
+   "name": "Elena Novak",
+   "email": "elena@redis.dev",
+   "role": "Senior engineer \u2014 cluster & replication",
+   "summary": "Owns cluster (bus, atomic slot migration) and replication (PSYNC2, RDB-channel sync, zstd link compression), plus Sentinel.",
+   "description": "Elena Novak (elena@redis.dev) owns everything that crosses the wire between Redis nodes: replication.c (PSYNC2 dual replids, backlog trimming, RDB-channel dual-connection full sync), the new zstd replication link compression (client_comp.c, #15366/#15490), cluster_legacy.c and the cluster bus, and the 2025 atomic slot migration engine (cluster_asm.c) that she drove to replace MIGRATE/ASK resharding. Also on the hook for redis-sentinel failover behavior. Ask her about 'replica lag', 'full sync storm', 'REPLCONF compression', 'slot migration handoff lag', 'split brain'.",
+   "member_of": [
+    "redis-oss"
+   ]
+  },
+  {
+   "slug": "aokafor",
+   "name": "Amara Okafor",
+   "email": "amara@redis.dev",
+   "role": "Senior engineer \u2014 memory & performance",
+   "summary": "Owns memory subsystems (zmalloc, eviction, defrag, lazyfree, expire cycle) and performance work: SIMD paths, rax/listpack optimizations, hotkeys.",
+   "description": "Amara Okafor (amara@redis.dev) is the memory and performance specialist: zmalloc per-thread used_memory sharding, maxmemory eviction and the LRU pool, active defrag StageDescriptor slices, lazyfree, and the active expire cycle (she shipped the FAST-cycle unit-mismatch fix #15412). Performance credits include the rax leaf-inlining rework (#15256), the batched wide-HSET listpack append (#15345), BITFIELD overflow hardening (#15433), and the HOTKEYS CuckooHeavyKeeper rollout. First responder for 'memory fragmentation', 'RSS spike', 'expired keys not being deleted', 'evictions during AOF rewrite', 'used_memory drift'.",
+   "member_of": [
+    "redis-oss"
+   ]
+  },
+  {
+   "slug": "rmehta",
+   "name": "Rohan Mehta",
+   "email": "rohan@redis.dev",
+   "role": "Engineer \u2014 scripting & modules",
+   "summary": "Owns Lua/EVAL, FUNCTION engine, the module API, and the in-tree vector-sets module.",
+   "description": "Rohan Mehta (rohan@redis.dev) owns the scripting and extension surface: eval.c/script_lua.c (effects-only replication, dedicated Lua jemalloc arena), the FUNCTION engine, module.c and its server events (he added RedisModuleEvent_ClusterTopologyChange, #15350), and the bundled vector-sets HNSW module (fixed the VRANDMEMBER LLONG_MIN crash, #15392). Sits on the Streams Squad as the second pair of eyes on XDLQ persistence and replication semantics. Ask him about 'module datatype callbacks', 'script determinism', 'vector search recall', 'topology change event', 'FUNCTION LOAD timeout'.",
+   "member_of": [
+    "redis-oss",
+    "streams-squad"
+   ]
+  },
+  {
+   "slug": "lcosta",
+   "name": "Luiza Costa",
+   "email": "luiza@redis.dev",
+   "role": "Engineer \u2014 tooling, QA & release",
+   "summary": "Owns redis-cli/redis-benchmark, the tcl test suite, the build system, and release/CI health; verifies most fixes.",
+   "description": "Luiza Costa (luiza@redis.dev) owns developer and operator tooling: redis-cli (cluster manager, latency percentiles #15352 domain), redis-benchmark, scripts/build.sh + modules.yaml orchestration, and the tcl integration test suite \u2014 she deflaked the cluster-topology-change test by waiting for ASM completion (#15493). Runs the CI nightly deployment and is the default verifier on fixes before they ship (busy-loop, expire-cycle, KeyMeta double-restore). Ask her about 'flaky test', 'CI red', 'reproduce with tcl', 'redis-cli --cluster reshard', 'release checklist'.",
+   "member_of": [
+    "redis-oss",
+    "streams-squad"
+   ]
+  }
+ ],
+ "teams": [
+  {
+   "slug": "redis-oss",
+   "name": "Redis OSS Core",
+   "summary": "The core open-source engineering team: all six engineers across runtime, data types, cluster, memory, scripting, and tooling.",
+   "description": "Redis OSS Core is the umbrella team owning the redis/redis unstable branch: server runtime and IO threads, data types, streams, persistence, replication and cluster, memory management, scripting/modules, and tooling/QA. Every persona in this graph is a member; component-level ownership is split by domain (Greco core/persistence, Tanaka streams/client features, Novak cluster/replication, Okafor memory/perf, Mehta scripting/modules, Costa tooling/QA)."
+  },
+  {
+   "slug": "streams-squad",
+   "name": "Streams Squad",
+   "summary": "Working group driving the Streams roadmap: XNACK, IDMP idempotent producer, and the XDLQ dead-letter workflow.",
+   "description": "Streams Squad is the focused working group behind this fork's stream ambitions: the XNACK nack-zone requeue primitive, the IDMP idempotent-producer dedup layer, XACKDEL/XDELEX delete strategies, and now the XDLQ dead-letter queue (issue redis/redis#7386, STREAM_DLQ_IMPLEMENTATION_PLAN.md, draft PR #15500). Led by Yuki Tanaka with Rohan Mehta on replication/persistence semantics and Luiza Costa on the stream-dlq.tcl test plan. Owns streams-core, stream-consumer-groups, and the stream-dlq component."
+  }
+ ],
+ "ownership": [
+  {
+   "owner": "team:redis-oss",
+   "owns": "service:redis-server"
+  },
+  {
+   "owner": "person:enovak",
+   "owns": "service:redis-sentinel"
+  },
+  {
+   "owner": "person:lcosta",
+   "owns": "service:redis-cli"
+  },
+  {
+   "owner": "person:lcosta",
+   "owns": "service:redis-benchmark"
+  },
+  {
+   "owner": "team:streams-squad",
+   "owns": "component:streams-core"
+  },
+  {
+   "owner": "team:streams-squad",
+   "owns": "component:stream-consumer-groups"
+  },
+  {
+   "owner": "team:streams-squad",
+   "owns": "component:stream-dlq"
+  },
+  {
+   "owner": "team:streams-squad",
+   "owns": "feature:streams-dlq"
+  },
+  {
+   "owner": "person:sgreco",
+   "owns": "component:server-core"
+  },
+  {
+   "owner": "person:sgreco",
+   "owns": "component:io-threads"
+  },
+  {
+   "owner": "person:sgreco",
+   "owns": "component:networking"
+  },
+  {
+   "owner": "person:sgreco",
+   "owns": "component:aof-persistence"
+  },
+  {
+   "owner": "person:sgreco",
+   "owns": "component:rdb-persistence"
+  },
+  {
+   "owner": "person:sgreco",
+   "owns": "component:command-table"
+  },
+  {
+   "owner": "person:enovak",
+   "owns": "component:replication-core"
+  },
+  {
+   "owner": "person:enovak",
+   "owns": "component:repl-compression"
+  },
+  {
+   "owner": "person:enovak",
+   "owns": "component:cluster-core"
+  },
+  {
+   "owner": "person:enovak",
+   "owns": "component:atomic-slot-migration"
+  },
+  {
+   "owner": "person:enovak",
+   "owns": "component:sentinel-core"
+  },
+  {
+   "owner": "person:aokafor",
+   "owns": "component:zmalloc-layer"
+  },
+  {
+   "owner": "person:aokafor",
+   "owns": "component:eviction"
+  },
+  {
+   "owner": "person:aokafor",
+   "owns": "component:defrag"
+  },
+  {
+   "owner": "person:aokafor",
+   "owns": "component:expire-cycle"
+  },
+  {
+   "owner": "person:aokafor",
+   "owns": "component:hotkeys-tracking"
+  },
+  {
+   "owner": "person:rmehta",
+   "owns": "component:module-system"
+  },
+  {
+   "owner": "person:rmehta",
+   "owns": "component:eval-scripts"
+  },
+  {
+   "owner": "person:rmehta",
+   "owns": "component:vector-sets-module"
+  },
+  {
+   "owner": "person:ytanaka",
+   "owns": "component:client-tracking"
+  },
+  {
+   "owner": "person:ytanaka",
+   "owns": "component:acl-engine"
+  },
+  {
+   "owner": "person:lcosta",
+   "owns": "component:test-suite"
+  },
+  {
+   "owner": "person:lcosta",
+   "owns": "component:cli-internals"
+  },
+  {
+   "owner": "person:lcosta",
+   "owns": "component:build-system"
+  }
+ ],
+ "prs": [
+  {
+   "number": 15500,
+   "title": "XDLQ: dead-letter workflow for stream consumer groups",
+   "state": "draft",
+   "merged_date": null,
+   "kind": "feature",
+   "summary": "Draft implementation of the XDLQ command family (MOVE/LIST/INFO/REPLAY/PURGE) adding group-scoped dead-letter quarantine to stream consumer groups.",
+   "description": "Work-in-progress PR implementing STREAM_DLQ_IMPLEMENTATION_PLAN.md phases 1-3: the XDLQ container command skeleton (src/commands/xdlq*.json entries in the generated command table), group-scoped DLQ metadata keyed by stream ID (reason, last consumer, delivery count, moved-at ms, replay count) hanging off streamCG, and XDLQ MOVE/LIST/INFO semantics layered on the existing XNACK nack-zone and cgroups_ref machinery in t_stream.c. XCLAIM/XAUTOCLAIM skip quarantined entries; XDLQ REPLAY reinserts the original entry ID into the PEL for a target consumer. Replication via command rewriting; tests land in tests/unit/type/stream-dlq.tcl. Motivated by redis/redis#7386 (dead letter queue support). Still open: RDB/AOF persistence phase and XINFO STREAM FULL summary fields \u2014 see the #xdlq-semantics thread on replay-vs-purge defaults.",
+   "authored_by": "ytanaka",
+   "touches": [
+    "streams-core",
+    "stream-consumer-groups",
+    "command-table"
+   ],
+   "resolves_issue": null,
+   "implements_feature": "streams-dlq"
+  },
+  {
+   "number": 15366,
+   "title": "Client compression for replication",
+   "state": "merged",
+   "merged_date": "2026-07-20",
+   "kind": "feature",
+   "summary": "Adds zstd on-the-wire compression of the master-to-replica command stream (client_comp.c), negotiated via REPLCONF compression.",
+   "description": "Implements the repl-zstd-compression decision: a new client_comp.c (~850 lines) compresses the replication stream with zstd, negotiated via REPLCONF compression with exact level match and requiring io-threads > 1; config knobs repl-compression / repl-compression-max-latency in redis.conf, pending-data drained in beforeSleep. Cuts replication bandwidth for write-heavy workloads at the cost of CPU on both ends; opt-in at build time (BUILD_COMPRESSION=yes, zstd is the only non-vendored dependency). Canaried in staging via deployment repl-compression-canary before production enablement.",
+   "authored_by": "enovak",
+   "touches": [
+    "repl-compression",
+    "replication-core",
+    "networking",
+    "io-threads",
+    "config-engine",
+    "server-core",
+    "test-suite"
+   ],
+   "resolves_issue": null,
+   "implements_feature": "replication-zstd-compression"
+  },
+  {
+   "number": 15490,
+   "title": "Fix redis.conf and README for repl compression",
+   "state": "merged",
+   "merged_date": "2026-07-20",
+   "kind": "docs",
+   "summary": "Same-day follow-up correcting the redis.conf directive descriptions and README build notes for replication compression.",
+   "description": "Documentation fix shipped hours after #15366: corrects the repl-compression and repl-compression-max-latency directive descriptions in redis.conf and the README BUILD_COMPRESSION=yes usage notes so operators enable replication link compression with accurate defaults (io-threads > 1 requirement, exact zstd level match between master and replica).",
+   "authored_by": "enovak",
+   "touches": [
+    "repl-compression"
+   ],
+   "resolves_issue": null,
+   "implements_feature": "replication-zstd-compression"
+  },
+  {
+   "number": 15329,
+   "title": "Fix IO thread busy looping for repl clients",
+   "state": "merged",
+   "merged_date": "2026-07-14",
+   "kind": "fix",
+   "summary": "One-line iothread.c fix stopping IO threads from spinning at 100% CPU when they own replica clients; adds a 149-line replication-iothreads test suite.",
+   "description": "Resolves the iothread-repl-busy-loop bug pattern: when a replication client was bound to an IO thread, the thread's ae loop kept a write-ready event armed with nothing to send and spun a full core at 100% CPU even with zero traffic. The fix corrects the event-mask handling for replica-owned connections in iothread.c so the thread parks in its multiplexer wait, and adds tests/integration/replication-iothreads.tcl (149 lines). Landed after a failed first attempt that throttled the loop with a sleep instead of removing the spurious event. Found during the repl-compression canary because compression requires io-threads > 1.",
+   "authored_by": "sgreco",
+   "touches": [
+    "io-threads",
+    "replication-core",
+    "test-suite"
+   ],
+   "resolves_issue": "redis-15311",
+   "implements_feature": null
+  },
+  {
+   "number": 15338,
+   "title": "Support atomic slot migration in redis-cli",
+   "state": "merged",
+   "merged_date": "2026-07-01",
+   "kind": "feature",
+   "summary": "Teaches redis-cli --cluster reshard/rebalance to drive the server-side atomic slot migration protocol instead of legacy MIGRATE.",
+   "description": "Client-side half of the atomic-slot-migration decision: ~344 lines in redis-cli.c teach the cluster manager to drive the server-side ASM protocol (cluster_asm.c) instead of the legacy per-key MIGRATE/ASK resharding dance, gated on server >= 8.4.0. Reshard and rebalance operations become atomic per slot with no client-visible ASK window; the destination node snapshots slot ranges as RESTORE commands over a dedicated RDB channel and flips ownership via the cluster bus once lag drops below cluster-slot-migration-handoff-max-lag-bytes.",
+   "authored_by": "enovak",
+   "touches": [
+    "cli-internals",
+    "atomic-slot-migration",
+    "test-suite"
+   ],
+   "resolves_issue": null,
+   "implements_feature": "atomic-slot-migration-feature"
+  },
+  {
+   "number": 15493,
+   "title": "Fix flaky cluster-topology-change test by waiting for ASM to finish",
+   "state": "merged",
+   "merged_date": "2026-07-20",
+   "kind": "test",
+   "summary": "Deflakes the cluster-topology-change test with a shared ASM-completion wait helper in cluster_util.tcl.",
+   "description": "CI de-flake: the cluster-topology-change test (added with the RedisModuleEvent_ClusterTopologyChange event, #15350) intermittently asserted topology state while an atomic slot migration was still in flight. Moves an ASM-completion wait helper into shared cluster_util.tcl and calls it before assertions, so nightly CI stops going red on a race the product code doesn't actually have. Classic 'wait for convergence before asserting' pattern now recommended for all cluster tests.",
+   "authored_by": "lcosta",
+   "touches": [
+    "test-suite",
+    "atomic-slot-migration",
+    "cluster-core"
+   ],
+   "resolves_issue": null,
+   "implements_feature": null
+  },
+  {
+   "number": 15412,
+   "title": "Fix unit mismatch that disabled the FAST expire cycle stale trigger",
+   "state": "merged",
+   "merged_date": "2026-07-13",
+   "kind": "fix",
+   "summary": "One-character fix in expire.c: a microseconds-vs-milliseconds comparison meant the FAST expire cycle never fired.",
+   "description": "Resolves the fast-expire-stale-trigger-dead bug pattern: the stale-percentage trigger condition in activeExpireCycle compared a microsecond timestamp against a millisecond threshold, so ACTIVE_EXPIRE_CYCLE_FAST effectively never activated and expired keys lingered until the slow cycle or lazy expiration caught them. Symptom: DBSIZE and memory stay elevated under heavy expired-key pressure, INFO shows expired_stale_perc high but no fast cycles. The fix is a single unit conversion; found by auditing why staging RSS stayed high after a TTL-heavy load test.",
+   "authored_by": "aokafor",
+   "touches": [
+    "expire-cycle"
+   ],
+   "resolves_issue": "redis-15388",
+   "implements_feature": null
+  },
+  {
+   "number": 15436,
+   "title": "Fix AOF rewrite crash on module types with a NULL aof_rewrite callback",
+   "state": "merged",
+   "merged_date": "2026-07-19",
+   "kind": "fix",
+   "summary": "Guards the BGREWRITEAOF path against module datatypes that registered no aof_rewrite callback (as vector sets do).",
+   "description": "redis-server segfaulted during BGREWRITEAOF when the dataset contained a module datatype whose type methods left aof_rewrite NULL \u2014 vector sets being the in-tree example. aof.c now skips or errors cleanly instead of dereferencing the missing callback, and a vector-sets aof_rewrite regression test covers the path. Surfaced during the v8.4 rollout when a canary node with vector-set keys crashed on its first scheduled AOF rewrite.",
+   "authored_by": "sgreco",
+   "touches": [
+    "aof-persistence",
+    "module-system",
+    "vector-sets-module"
+   ],
+   "resolves_issue": "redis-15418",
+   "implements_feature": null
+  },
+  {
+   "number": 15466,
+   "title": "Avoid duplicate KeyMeta restoration in RESTORE-based AOF rewrites",
+   "state": "merged",
+   "merged_date": "2026-07-17",
+   "kind": "fix",
+   "summary": "Stops key metadata from being applied twice when RESTORE payloads already embed KeyMeta, corrupting per-key metadata after reload.",
+   "description": "Resolves the keymeta-double-restore bug pattern: the RESTORE path shared by AOF rewrites and atomic slot migration (cluster.c/cluster_asm.c) re-applied KeyMeta that was already embedded in the serialized payload, double-registering per-key metadata slots (expire, module metadata) after reload or slot handoff. Fix makes the RESTORE path skip re-application when the payload embeds KeyMeta; covered by new keymeta module tests. Found by Elena while tracing why migrated slots reported doubled metadata on the destination node.",
+   "authored_by": "sgreco",
+   "touches": [
+    "key-metadata",
+    "cluster-core",
+    "atomic-slot-migration",
+    "test-suite"
+   ],
+   "resolves_issue": null,
+   "implements_feature": null
+  },
+  {
+   "number": 15364,
+   "title": "Introduce hinted hash templates",
+   "state": "merged",
+   "merged_date": "2026-07-18",
+   "kind": "feature",
+   "summary": "~2350-line t_hash.c feature: HIMPORT command family lets millions of schema-like hashes share one field-name template.",
+   "description": "Flagship data-type feature: template-hinted hashes (OBJ_ENCODING_TMPL_LP/TMPL_ARRAY) deduplicate repeated field-name schemas across millions of similar hashes. New HIMPORT PREPARE/SET/DISCARD command family, new RDB encodings (rdbSaveHashTemplates, ref-mode saving), defrag support, and config knobs hash-min/max-template-entries. Preceded by the wide-HSET batched listpack append perf win (#15345). The memory win for ORM-style workloads (same field names on every hash) is the headline; templates are immutable once created per the immutable-hash-templates decision.",
+   "authored_by": "sgreco",
+   "touches": [
+    "hash-type",
+    "listpack",
+    "rdb-persistence",
+    "dict",
+    "defrag",
+    "command-table",
+    "keyspace",
+    "config-engine"
+   ],
+   "resolves_issue": null,
+   "implements_feature": "hash-templates"
+  },
+  {
+   "number": 15345,
+   "title": "Optimize wide HSET/HMSET on a fresh hash with a single batched listpack append",
+   "state": "merged",
+   "merged_date": "2026-07-09",
+   "kind": "perf",
+   "summary": "Wide HSET creating a new listpack hash now appends all field-value pairs in one batched operation instead of pair-by-pair reallocation.",
+   "description": "Performance prelude to hash templates (#15364): when a wide HSET/HMSET creates a brand-new listpack-encoded hash, all field-value pairs are appended in a single batched listpack operation instead of reallocating pair-by-pair, substantially speeding up bulk hash creation for cache-fill and ETL workloads. Benchmark-verified with redis-benchmark before merge.",
+   "authored_by": "aokafor",
+   "touches": [
+    "hash-type",
+    "test-suite"
+   ],
+   "resolves_issue": null,
+   "implements_feature": null
+  },
+  {
+   "number": 15371,
+   "title": "Fix ACL key-name leak in BCAST client-side caching invalidations",
+   "state": "merged",
+   "merged_date": "2026-07-08",
+   "kind": "fix",
+   "summary": "BCAST tracking invalidations now filter through the receiving client's ACL key permissions, closing a key-name information leak.",
+   "description": "Security fix resolving the bcast-acl-key-leak bug pattern: clients using CLIENT TRACKING in BCAST mode received invalidation push messages naming keys their ACL user had no permission to read \u2014 an information disclosure across tenants sharing an instance. Reworks BCAST client-side caching (~224 lines in tracking.c plus acl.c) to filter invalidation broadcasts through each receiving client's ACL key patterns before sending. Reported privately, fixed within a week.",
+   "authored_by": "ytanaka",
+   "touches": [
+    "client-tracking",
+    "acl-engine",
+    "networking"
+   ],
+   "resolves_issue": "redis-15340",
+   "implements_feature": null
+  },
+  {
+   "number": 15433,
+   "title": "Fix signed overflow in BITFIELD #offset parsing",
+   "state": "merged",
+   "merged_date": "2026-07-10",
+   "kind": "fix",
+   "summary": "BITFIELD with a huge #-prefixed offset now errors instead of wrapping negative via signed integer overflow.",
+   "description": "Correctness fix in bitops.c: the #offset multiplication in BITFIELD parsing could overflow signed 64-bit arithmetic, silently wrapping huge typed offsets negative (undefined behavior) instead of rejecting them. Adds overflow checking so out-of-range offsets return a clean error, with regression tests. Found via a fuzzing report; the kind of UB the c99-no-vla / strict-flags build policy exists to surface.",
+   "authored_by": "aokafor",
+   "touches": [
+    "bitops",
+    "test-suite"
+   ],
+   "resolves_issue": "redis-15408",
+   "implements_feature": null
+  },
+  {
+   "number": 15392,
+   "title": "Fix server crash on VRANDMEMBER with LLONG_MIN count",
+   "state": "merged",
+   "merged_date": "2026-07-13",
+   "kind": "fix",
+   "summary": "Vector sets' VRANDMEMBER no longer crashes when given count -9223372036854775808 (negating LLONG_MIN overflows).",
+   "description": "Crash fix in the bundled vector-sets module: VRANDMEMBER with count LLONG_MIN (-9223372036854775808) negated the value, which is undefined for LLONG_MIN and crashed redis-server. The module now rejects the value cleanly with an error; regression test added to the vector-sets python suite. Same UB family as the BITFIELD #offset overflow (#15433) fixed the same week.",
+   "authored_by": "rmehta",
+   "touches": [
+    "vector-sets-module"
+   ],
+   "resolves_issue": "redis-15379",
+   "implements_feature": null
+  },
+  {
+   "number": 15282,
+   "title": "Add MAXCOUNT and MAXSIZE options to XREAD and XREADGROUP",
+   "state": "merged",
+   "merged_date": "2026-06-26",
+   "kind": "feature",
+   "summary": "XREAD/XREADGROUP gain MAXCOUNT and MAXSIZE to cap total entries and reply bytes across all requested streams.",
+   "description": "Streams ergonomics feature (~152 lines in t_stream.c): consumers reading many streams at once can now bound the total entries (MAXCOUNT) and total reply bytes (MAXSIZE) returned across all requested streams, preventing one hot stream from starving others or blowing client output buffers. Groundwork for well-behaved XDLQ-era consumers that poll many streams per loop.",
+   "authored_by": "ytanaka",
+   "touches": [
+    "streams-core",
+    "stream-consumer-groups",
+    "command-table",
+    "test-suite"
+   ],
+   "resolves_issue": null,
+   "implements_feature": "consumer-groups"
+  },
+  {
+   "number": 15441,
+   "title": "Backup & Restore",
+   "state": "merged",
+   "merged_date": "2026-07-18",
+   "kind": "feature",
+   "summary": "BACKUP command family (START/SEAL/STATUS/LIST/ABORT/CLEANUP) producing consistent sealed on-disk backups from a running instance.",
+   "description": "Adds an online consistent-backup state machine (IDLE->PENDING->SNAPSHOTTING->INCREMENTING->SEALED, ~687 lines in aof.c) built on the Multi-Part AOF machinery: BACKUP START hard-links BASE/INCR files plus a generated manifest into backupdirname, BACKUP SEAL closes the set, STATUS/LIST/ABORT/CLEANUP manage lifecycle and retention \u2014 no external orchestrator required. The operational answer to 'how do I take a consistent backup without forking a second BGSAVE'; referenced by the aof-rewrite-pressure runbook.",
+   "authored_by": "sgreco",
+   "touches": [
+    "aof-persistence",
+    "command-table",
+    "config-engine",
+    "server-core",
+    "test-suite"
+   ],
+   "resolves_issue": null,
+   "implements_feature": "backup-command"
+  },
+  {
+   "number": 15350,
+   "title": "Add RedisModuleEvent_ClusterTopologyChange server event",
+   "state": "merged",
+   "merged_date": "2026-07-13",
+   "kind": "feature",
+   "summary": "New debounced module server event fired on cluster topology changes (nodes added/removed, slot ownership moves).",
+   "description": "Module API growth: cluster_legacy.c now fires a debounced RedisModuleEvent_ClusterTopologyChange event with SLOT/ROLE/STATE/NODE change_flags whenever topology shifts, letting shard-routing modules react to reconfiguration (including atomic slot migrations) without polling CLUSTER SHARDS. Ships a dedicated test module and tcl suite \u2014 the suite that later proved flaky against in-flight ASM and was deflaked in #15493.",
+   "authored_by": "rmehta",
+   "touches": [
+    "module-system",
+    "cluster-bus",
+    "test-suite"
+   ],
+   "resolves_issue": null,
+   "implements_feature": null
+  }
+ ],
+ "issues": [
+  {
+   "slug": "redis-7386",
+   "number": 7386,
+   "title": "Dead letter queue support for streams",
+   "state": "open",
+   "summary": "Long-standing community ask: first-class dead-letter handling for stream consumer groups instead of hand-rolled XAUTOCLAIM+XADD side-stream patterns.",
+   "description": "The original community request motivating the XDLQ work: applications using XREADGROUP/XACK have no first-class way to quarantine poison messages \u2014 entries that exceed a delivery-count threshold today require hand-rolled XAUTOCLAIM loops copying entries to a side stream and XACKing the original, losing the original entry ID and failure metadata. Asks for native dead-letter semantics: quarantine after N failed deliveries, inspection of why/when/who, replay back into the group, and purge. Being answered by the streams-dlq-design decision, STREAM_DLQ_IMPLEMENTATION_PLAN.md, and draft PR #15500 (XDLQ MOVE/LIST/INFO/REPLAY/PURGE). Searchable as 'dead letter queue', 'DLQ', 'poison message', 'max delivery count', 'failed message handling'.",
+   "mentions": [
+    "component:stream-consumer-groups",
+    "component:streams-core",
+    "feature:streams-dlq",
+    "pull_request:redis-15500",
+    "decision:streams-dlq-design"
+   ]
+  },
+  {
+   "slug": "redis-15311",
+   "number": 15311,
+   "title": "IO thread burns 100% CPU on an idle master with attached replicas",
+   "state": "closed",
+   "summary": "With io-threads > 1 and replicas attached, one IO thread spins at full CPU even with zero traffic; top shows io_thd_1 at 100%.",
+   "description": "Operator report: on masters running io-threads 4 with attached replicas, `top -H` shows an io_thd_* thread pinned at 100% CPU even when the instance is completely idle; perf top shows the thread spinning through its ae event loop with a write event armed for the replica connection and nothing to write. No functional impact but a full core wasted per replica-owning thread, worse power/latency profiles, and false capacity alarms. Reproduced in the repl-compression staging canary (compression requires io-threads > 1). Root cause and fix in #15329 (event-mask handling for replication clients in iothread.c). Searchable as 'busy loop', 'io thread 100% cpu', 'idle spin', 'replica connection spinning'.",
+   "mentions": [
+    "component:io-threads",
+    "component:replication-core",
+    "bug_pattern:iothread-repl-busy-loop"
+   ]
+  },
+  {
+   "slug": "redis-15388",
+   "number": 15388,
+   "title": "Expired keys linger for minutes under TTL-heavy write load",
+   "state": "closed",
+   "summary": "Keys with short TTLs stay visible in DBSIZE and RSS long after expiry; expired_stale_perc high but the FAST expire cycle never runs.",
+   "description": "After a TTL-heavy load test, staging instances kept elevated DBSIZE and RSS for minutes: keys with 1-5s TTLs were only reclaimed by the slow expire cycle or lazy access-time expiration. INFO stats showed expired_stale_perc consistently above the fast-cycle threshold yet zero ACTIVE_EXPIRE_CYCLE_FAST activations. Root cause: a microseconds-vs-milliseconds unit mismatch in the stale trigger comparison in expire.c meant the FAST cycle condition could never be true \u2014 one character wrong, feature silently dead. Fixed in #15412. Searchable as 'expired keys not deleted', 'memory not released after TTL', 'active expire not working', 'DBSIZE includes expired keys'.",
+   "mentions": [
+    "component:expire-cycle",
+    "bug_pattern:fast-expire-stale-trigger-dead"
+   ]
+  },
+  {
+   "slug": "redis-15340",
+   "number": 15340,
+   "title": "CLIENT TRACKING BCAST leaks key names outside the user's ACL patterns",
+   "state": "closed",
+   "summary": "BCAST-mode invalidation pushes disclose key names an ACL-restricted user cannot read \u2014 information leak across tenants.",
+   "description": "Security report: a client that enables CLIENT TRACKING BCAST (optionally with PREFIX) receives __redis__:invalidate push messages for every matching key modification \u2014 including keys outside the ACL key patterns its user is permitted to read. On multi-tenant instances this leaks tenant key names (which often embed user IDs or emails) to other tenants. Fixed in #15371 by filtering BCAST invalidation broadcasts through the receiving client's ACL key permissions in tracking.c/acl.c. Searchable as 'ACL bypass', 'invalidation message leak', 'client-side caching security', 'key name disclosure'.",
+   "mentions": [
+    "component:client-tracking",
+    "component:acl-engine",
+    "bug_pattern:bcast-acl-key-leak"
+   ]
+  },
+  {
+   "slug": "redis-15379",
+   "number": 15379,
+   "title": "Crash: VRANDMEMBER with count -9223372036854775808",
+   "state": "closed",
+   "summary": "redis-server crashes when vector sets' VRANDMEMBER is called with LLONG_MIN as the count argument.",
+   "description": "Fuzzer-found crash in the bundled vector-sets module: VRANDMEMBER key -9223372036854775808 negates the count to make it positive, but -LLONG_MIN overflows (undefined behavior) and the server aborts. Fixed in #15392 by rejecting LLONG_MIN explicitly with a range error; regression test in the vector-sets python suite. Searchable as 'VRANDMEMBER crash', 'LLONG_MIN negation', 'vector sets segfault', 'integer overflow crash'.",
+   "mentions": [
+    "component:vector-sets-module",
+    "bug_pattern:vrandmember-llong-min-crash"
+   ]
+  },
+  {
+   "slug": "redis-15408",
+   "number": 15408,
+   "title": "BITFIELD #offset silently wraps negative on huge values",
+   "state": "closed",
+   "summary": "BITFIELD with a large #-prefixed typed offset overflows signed multiplication and operates on a wrapped negative offset instead of erroring.",
+   "description": "BITFIELD GET/SET with a #-prefixed offset multiplies the offset by the type width; with huge offsets the signed 64-bit multiplication overflows (UB), wrapping negative and either erroring confusingly or touching unintended bit ranges. Expected: a clean 'bit offset is out of range' error. Fixed in #15433 with explicit overflow checking in bitops.c BITFIELD parsing. Searchable as 'BITFIELD overflow', 'signed integer overflow', 'typed offset wraps', 'undefined behavior bitops'.",
+   "mentions": [
+    "component:bitops"
+   ]
+  },
+  {
+   "slug": "redis-15418",
+   "number": 15418,
+   "title": "BGREWRITEAOF segfault when dataset contains vector-set keys",
+   "state": "closed",
+   "summary": "AOF rewrite crashes on module datatypes that registered no aof_rewrite callback; first hit on a canary node holding vector-set keys.",
+   "description": "During the v8.4 production rollout a canary node crashed on its first scheduled AOF rewrite: the aof.c rewrite path called the module type's aof_rewrite callback unconditionally, but vector sets (and any module type relying on RDB-preamble persistence) register NULL there \u2014 instant segfault dereferencing a NULL function pointer during BGREWRITEAOF. Fixed in #15436 with a NULL guard plus a vector-sets aof_rewrite regression test. Searchable as 'BGREWRITEAOF crash', 'module aof_rewrite NULL', 'segfault during AOF rewrite', 'vector sets persistence crash'.",
+   "mentions": [
+    "component:aof-persistence",
+    "component:module-system",
+    "component:vector-sets-module"
+   ]
+  }
+ ],
+ "decisions": [
+  {
+   "slug": "streams-dlq-design",
+   "title": "XDLQ dead-letter workflow: group-scoped quarantine layered on XNACK, replay preserves entry IDs",
+   "statement": "Build stream dead-lettering as an XDLQ command family storing group-scoped metadata keyed by stream ID (no side stream key in v1); dead-lettered is a quarantined state stronger than XNACK that XCLAIM/XAUTOCLAIM/XPENDING skip; XDLQ REPLAY reinserts the original entry ID into the group PEL rather than appending a new entry; persistence via command rewriting.",
+   "rationale": "A separate side-stream key would broaden keyspace, cluster routing, replication, and UX complexity, while 'this message failed in this consumer group' is inherently group-scoped. Quarantine loses meaning if generic claim paths can bypass it, and XPENDING implies active outstanding work. Preserving the original entry ID keeps replay deterministic and avoids producer-side confusion; command rewriting avoids risky new RDB encodings for v1.",
+   "lifecycle": "accepted",
+   "summary": "Accepted design for the XDLQ dead-letter feature: consumer-group-scoped metadata, quarantine distinct from XNACK, ID-preserving replay.",
+   "description": "The design-lock decision behind feature streams-dlq and draft PR #15500, distilled from the 717-line STREAM_DLQ_IMPLEMENTATION_PLAN.md: XDLQ MOVE/LIST/INFO/REPLAY/PURGE subcommands; DLQ records (reason, consumer, delivery count, moved-at ms, replay count) hang off streamCG keyed by entry ID, compatible with the existing PEL/nack-zone structures; entries move normal-pending -> nacked -> dead-lettered -> replayed; XINFO STREAM FULL grows dlq-count/first-dlq-id/last-dlq-id summary fields. Answers issue redis/redis#7386. Debated in the #xdlq-semantics thread (replay-vs-purge defaults, whether FATAL XNACKs auto-move). Searchable as 'DLQ design', 'dead letter architecture', 'XDLQ semantics', 'quarantine vs nack'.",
+   "decided_by": "ytanaka",
+   "affects": [
+    "component:stream-dlq",
+    "feature:streams-dlq",
+    "component:stream-consumer-groups"
+   ],
+   "supersedes": null,
+   "date": "2026-06-28"
+  },
+  {
+   "slug": "repl-zstd-compression",
+   "title": "Compress the replication link with zstd, negotiated per-replica via REPLCONF",
+   "statement": "Add opt-in zstd compression of the master-to-replica command stream (client_comp.c), negotiated via REPLCONF compression with exact level match, requiring io-threads > 1 so compression work stays off the main thread; zstd stays a system (non-vendored) dependency behind BUILD_COMPRESSION=yes with no-op fallback.",
+   "rationale": "Cross-AZ and cross-region replication bandwidth dominates infra cost for write-heavy fleets; zstd gives 3-5x stream compression at acceptable CPU. Doing the compression on IO threads keeps the main thread latency profile intact, and exact-level negotiation avoids asymmetric CPU surprises. Keeping zstd out of deps/ was a deliberate exception to the vendoring rule since the feature is opt-in and no-ops without the library.",
+   "lifecycle": "accepted",
+   "summary": "Accepted: zstd replication link compression as shipped in #15366/#15490, canaried in staging before production.",
+   "description": "Decision behind feature replication-zstd-compression and the repl-compression component: compress the replication stream with zstd end-frames flushed in beforeSleep (client_comp.c), config knobs repl-compression / repl-compression-max-latency, REPLCONF compression negotiation with exact-level match, hard requirement io-threads > 1. Rollout: staging canary (deployment repl-compression-canary) surfaced the IO-thread busy loop (#15329) before production enablement. The one sanctioned exception to no-external-runtime-deps. Searchable as 'replication bandwidth', 'zstd stream compression', 'REPLCONF compression', 'compressed replica link'.",
+   "decided_by": "enovak",
+   "affects": [
+    "component:repl-compression",
+    "component:replication-core",
+    "adapter:zstd-compression",
+    "component:io-threads"
+   ],
+   "supersedes": null,
+   "date": "2026-05-20"
+  },
+  {
+   "slug": "atomic-slot-migration",
+   "title": "Replace MIGRATE/ASK resharding with destination-initiated atomic slot migration",
+   "statement": "Cluster resharding moves to a destination-initiated Atomic Slot Migration engine (cluster_asm.c): the destination snapshots slot ranges as RESTORE commands over a dedicated RDB channel, streams live writes on a main channel, pauses source writes only when lag < cluster-slot-migration-handoff-max-lag-bytes (default 1MB), and flips slot ownership atomically via the cluster bus. The legacy per-key MIGRATE/ASK dance remains only for manual single-key moves.",
+   "rationale": "Per-key MIGRATE resharding is slow (one key per round trip), leaves long client-visible ASK redirect windows, loses per-key metadata edge cases, and cannot bound the write-pause. Snapshot-plus-stream with a lag-gated handoff gives near-zero pause, no ASK window, and an API (clusterAsmProcess/clusterAsmOnEvent) that module-based cluster implementations can drive.",
+   "lifecycle": "accepted",
+   "summary": "Accepted: cluster_asm.c atomic slot migration supersedes the legacy MIGRATE/ASK per-key resharding approach.",
+   "description": "Decision behind component atomic-slot-migration and feature atomic-slot-migration-feature (3888 LOC cluster_asm.c, 2025): destination-initiated, dual-channel (RDB snapshot channel + live write stream), lag-gated write pause (cluster-slot-migration-handoff-max-lag-bytes, cluster-slot-migration-write-pause-timeout), atomic ownership flip on the cluster bus. redis-cli drives it since #15338 (server >= 8.4.0); the topology-change test race was deflaked in #15493; KeyMeta double-restoration in the shared RESTORE path fixed in #15466. Supersedes migrate-restore-resharding. Runbook: cluster-resharding. Searchable as 'ASM', 'slot migration', 'reshard without ASK', 'resharding write pause'.",
+   "decided_by": "enovak",
+   "affects": [
+    "component:atomic-slot-migration",
+    "component:cluster-core",
+    "feature:atomic-slot-migration-feature",
+    "component:cluster-bus"
+   ],
+   "supersedes": "migrate-restore-resharding",
+   "date": "2026-03-12"
+  },
+  {
+   "slug": "migrate-restore-resharding",
+   "title": "Reshard clusters by per-key MIGRATE with ASK redirects",
+   "statement": "Slot resharding is performed key-by-key: the admin tool issues CLUSTER GETKEYSINSLOT + MIGRATE (DUMP/RESTORE over a synchronous connection) for each key while clients follow ASK/ASKING redirects to the importing node until CLUSTER SETSLOT finalizes ownership.",
+   "rationale": "At the time, per-key MIGRATE reused the existing DUMP/RESTORE serialization, required no new cluster-bus machinery, and kept the cluster available throughout \u2014 the ASK redirect protocol let clients chase keys mid-migration without a global pause.",
+   "lifecycle": "superseded",
+   "summary": "Superseded: the original per-key MIGRATE/ASK resharding model, replaced by atomic slot migration in 2026.",
+   "description": "Historical decision now superseded by atomic-slot-migration: resharding as a long sequence of per-key MIGRATE calls with client-visible ASK/ASKING redirect windows, driven by redis-cli/redis-trib. Pain points that killed it: throughput of one key per round trip on big slots, hours-long resharding of large clusters, ASK-window complexity in every client library, and metadata fidelity gaps (the KeyMeta era made per-key serialization even more delicate, see #15466). Kept in the graph as context for why cluster_asm.c exists. Searchable as 'MIGRATE resharding', 'ASK redirect', 'legacy reshard', 'per-key migration'.",
+   "decided_by": "sgreco",
+   "affects": [
+    "component:cluster-core",
+    "component:atomic-slot-migration"
+   ],
+   "supersedes": null,
+   "date": "2025-10-05"
+  },
+  {
+   "slug": "single-threaded-event-loop",
+   "title": "Command execution stays strictly single-threaded on one ae event loop",
+   "statement": "All command execution happens on the main thread inside a single ae event loop; concurrency is achieved by non-blocking multiplexed IO and background offload (bio, io-threads, module threads), never by concurrent command execution against the keyspace.",
+   "rationale": "Single-threaded execution eliminates locking on every data structure, makes command semantics trivially atomic, keeps tail latency predictable, and has repeatedly benchmarked better than fine-grained locking for an in-memory workload dominated by O(1)/O(log n) operations. Complexity is pushed to the edges (IO, forks) where it is containable.",
+   "lifecycle": "accepted",
+   "summary": "Foundational: one main thread executes all commands; parallelism lives only at the IO and background edges.",
+   "description": "The load-bearing architectural decision of the codebase: ae.c runs one event loop on the main thread and every keyspace mutation happens there \u2014 asserted at runtime in processClientsFromIOThread (io-threads hand off parsed commands but never execute). Everything else in this graph bends around it: bio threads for fsync/lazyfree, fork-based persistence for snapshots, io-threads for socket work, module background threads fenced by locks. When someone asks 'why doesn't Redis use all my cores for commands', this is the answer. Searchable as 'single threaded', 'event loop', 'atomicity guarantee', 'no locks on keyspace'.",
+   "decided_by": "sgreco",
+   "affects": [
+    "component:event-loop",
+    "component:server-core",
+    "component:command-table"
+   ],
+   "supersedes": null,
+   "date": "2025-09-25"
+  },
+  {
+   "slug": "io-threads-for-network",
+   "title": "IO threads own reads, parsing, and writes \u2014 never command execution",
+   "statement": "Each IO thread (iothread.c, 2024 redesign) runs its own ae event loop and offloads socket reads, RESP parsing, and writes for its bound clients, handing fully-parsed commands to the main thread via mutex-guarded pending lists; command execution remains exclusively on the main thread.",
+   "rationale": "Network IO and RESP parsing are the scalable share of CPU under high connection counts and can parallelize without touching keyspace invariants; per-thread event loops avoid the old start/stop batching model's synchronization overhead. Keeping execution on the main thread preserves the single-threaded-event-loop guarantees while still scaling throughput 2-4x on multi-core hosts.",
+   "lifecycle": "accepted",
+   "summary": "Accepted: the 2024 iothread.c redesign \u2014 per-thread ae loops for socket work, parsed commands funneled to the main thread.",
+   "description": "Refines single-threaded-event-loop for multi-core scaling: io-threads N spawns N-1 IO threads each with its own ae loop, clients are bound to threads, reads/parses/writes happen there, and processClientsFromIOThread drains mutex-guarded pending lists on the main thread (with an assertion that execution never happens off-main). Operationally sharp edges captured in this graph: the replication-client busy-loop bug pattern (fixed #15329), sendTrackingMessage pausing another thread's loop via pauseIOThread, zstd repl compression requiring io-threads > 1, and zmalloc's 8-slot sharded used_memory accounting. Searchable as 'io-threads', 'threaded IO', 'network offload', 'pending clients list'.",
+   "decided_by": "sgreco",
+   "affects": [
+    "component:io-threads",
+    "component:event-loop",
+    "component:networking",
+    "feature:threaded-io"
+   ],
+   "supersedes": null,
+   "date": "2025-11-05"
+  },
+  {
+   "slug": "listpack-over-ziplist",
+   "title": "Listpack replaces ziplist as the compact-encoding workhorse",
+   "statement": "All small-collection compact encodings (hash, zset, list nodes, set, stream macro-nodes) use listpack; ziplist survives only as a load-time format converted to listpack in rdb.c, with ziplist.c retained solely for that conversion.",
+   "rationale": "Ziplist's prevlen back-pointers caused cascading update storms (an O(n^2) worst case) and its encoding was fiendish to modify safely \u2014 the source of multiple historical corruption CVEs. Listpack entries are self-contained (no prevlen chain), support backward traversal via end-of-entry length bytes, and are simpler to fuzz and reason about.",
+   "lifecycle": "accepted",
+   "summary": "Accepted: listpack everywhere ziplist used to be; ziplist demoted to an RDB load-time legacy conversion path.",
+   "description": "Encoding-strategy decision confirmed by the lowlevel survey: only server.h still includes ziplist.h, and rdb.c converts RDB_TYPE_*_ZIPLIST/ZIPMAP payloads to listpack on load (OBJ_ENCODING_LISTPACK). Governs hash-max-listpack-entries/-value, zset-max-listpack-entries/-value, set-max-listpack-entries, list-max-listpack-size thresholds, and stream listpack macro-nodes. Supersedes the ziplist-encoding decision; the listpack-for-small-collections preference tells contributors which encoding new small-value features must target. Searchable as 'listpack vs ziplist', 'cascade update', 'compact encoding', 'small hash encoding'.",
+   "decided_by": "aokafor",
+   "affects": [
+    "component:listpack",
+    "component:ziplist-legacy",
+    "component:hash-type",
+    "component:zset-type",
+    "component:quicklist"
+   ],
+   "supersedes": "ziplist-encoding",
+   "date": "2025-10-10"
+  },
+  {
+   "slug": "ziplist-encoding",
+   "title": "Small collections use the ziplist contiguous encoding",
+   "statement": "Small hashes, zsets, and list nodes are stored as ziplists: contiguous byte arrays with per-entry prevlen back-pointers enabling bidirectional traversal, converted to hashtable/skiplist encodings past size thresholds.",
+   "rationale": "For small collections a contiguous byte array beats pointer-chasing structures on both memory (no per-entry malloc headers) and cache locality; prevlen fields made backward iteration possible without an index.",
+   "lifecycle": "superseded",
+   "summary": "Superseded: the original ziplist compact encoding, replaced by listpack after cascading-update and safety problems.",
+   "description": "Historical decision now superseded by listpack-over-ziplist: ziplist's prevlen chain meant inserting or resizing one entry could cascade length-field rewrites through every following entry (the 'cascading update' O(n^2) pathology) and made the format notoriously easy to corrupt \u2014 several CVEs traced to ziplist edge cases. Retained in the graph because ziplist.c still exists for RDB load-time conversion of old dumps (ziplist-legacy component). Searchable as 'ziplist', 'prevlen', 'cascading update', 'legacy encoding'.",
+   "decided_by": "aokafor",
+   "affects": [
+    "component:ziplist-legacy",
+    "component:listpack"
+   ],
+   "supersedes": null,
+   "date": "2025-09-22"
+  },
+  {
+   "slug": "rdb-aof-hybrid-persistence",
+   "title": "Durability = Multi-Part AOF with an RDB-preamble BASE plus periodic RDB snapshots",
+   "statement": "The durable persistence story is hybrid: Multi-Part AOF (manifest-managed BASE + INCR files in appenddirname) where the BASE is written as an RDB snapshot (rdbSaveRio with RDBFLAGS_AOF_PREAMBLE) and INCRs are command logs; standalone RDB BGSAVE remains for snapshots/backups; both rely on fork-based copy-on-write children.",
+   "rationale": "RDB alone loses the last window of writes; plain-text AOF alone rewrites too slowly and loads too slowly at scale. An RDB-format BASE loads an order of magnitude faster than replaying commands, while INCR AOFs bound data loss to appendfsync granularity, and the manifest makes rewrites atomic without the old double-buffer rewrite dance.",
+   "lifecycle": "accepted",
+   "summary": "Foundational: hybrid RDB-preamble Multi-Part AOF as the durability model, fork/COW as the snapshot mechanism.",
+   "description": "The persistence-architecture decision uniting rdb.c and aof.c: aof-use-rdb-preamble yes writes the AOFRW BASE via rdbSaveRio; the manifest in appenddirname tracks BASE/INCR/HISTORY files; BGSAVE/AOFRW children rely on fork COW with usage reported over the childinfo pipe. Everything operational hangs off it: the aofrw-cow-spike bug pattern and rss-cow-spike alert (COW doubling under write load), the aof-rewrite-pressure runbook, the BACKUP command (#15441) hard-linking BASE/INCR into backupdirname, and diskless replica sync framed by $EOF:40-hex marks. Searchable as 'hybrid persistence', 'aof preamble', 'multi-part aof', 'fork copy-on-write'.",
+   "decided_by": "sgreco",
+   "affects": [
+    "component:aof-persistence",
+    "component:rdb-persistence",
+    "feature:multi-part-aof",
+    "feature:fork-bgsave-cow"
+   ],
+   "supersedes": null,
+   "date": "2025-10-20"
+  },
+  {
+   "slug": "jemalloc-default-allocator",
+   "title": "jemalloc (patched) is the default allocator on Linux",
+   "statement": "Redis links a vendored, patched jemalloc as the default allocator on Linux (USE_JEMALLOC), carrying a custom je_get_defrag_hint API that active defrag depends on; libc malloc is a fallback, and MALLOC=libc builds lose activedefrag.",
+   "rationale": "jemalloc's arena/size-class design keeps fragmentation far lower than glibc malloc for Redis's allocation patterns, provides reliable per-allocation introspection (used_memory accuracy), and its stability under long-running processes is proven; patching in a defrag hint lets Redis do active defragmentation no stock allocator supports.",
+   "lifecycle": "accepted",
+   "summary": "Foundational: vendored patched jemalloc as default allocator; active defrag depends on its custom defrag-hint patch.",
+   "description": "Allocator decision behind adapter jemalloc-allocator and the jemalloc-defrag-contract: deps/jemalloc is vendored (per no-external-runtime-deps) and patched with je_get_defrag_hint, which defrag.c's StageDescriptor stages (500us slices) use to decide which allocations to move; zmalloc layers per-thread sharded used_memory accounting (8 cache-line-aligned slots for io-threads scaling) on top. Consequences: mem_fragmentation_ratio semantics, activedefrag availability, and the Lua VM getting its own dedicated arena so script allocations don't block defrag. Searchable as 'jemalloc', 'fragmentation ratio', 'active defrag hint', 'allocator choice'.",
+   "decided_by": "aokafor",
+   "affects": [
+    "component:zmalloc-layer",
+    "adapter:jemalloc-allocator",
+    "component:defrag"
+   ],
+   "supersedes": null,
+   "date": "2025-09-30"
+  },
+  {
+   "slug": "kvstore-per-slot-dicts",
+   "title": "The keyspace is a kvstore of per-slot dicts with Fenwick-tree cumulative counts",
+   "statement": "Databases are kvstore objects holding one dict per cluster slot (16384 in cluster mode, 1 otherwise), with a Fenwick tree (binary indexed tree) over per-slot dict sizes enabling O(log n) fair random-slot selection and cumulative key counting.",
+   "rationale": "Cluster operations (slot migration, per-slot key listing, slot-scoped flushes) need slot-local key sets without scanning a monolithic dict; per-slot dicts make atomic slot migration and slot stats natural, while the Fenwick tree keeps RANDOMKEY and eviction sampling unbiased across slots of wildly different sizes at logarithmic cost.",
+   "lifecycle": "accepted",
+   "summary": "Accepted: kvstore splits each DB into per-slot dicts indexed by a Fenwick tree \u2014 the substrate ASM and slot stats build on.",
+   "description": "Keyspace-architecture decision behind the kvstore and fenwick-tree components: kvstore.c owns an array of dicts keyed by slot with a dict_sizes BIT for cumulative counts; CLUSTER GETKEYSINSLOT, cluster slot stats, atomic slot migration's per-slot snapshotting, and fair RANDOMKEY all ride on it. Also the reason resize/rehash bookkeeping is per-slot (dict-resize-avoid-during-cow interacts here) and why the global HFE expiry estore is per-slot too. Searchable as 'kvstore', 'per slot dict', 'Fenwick tree', 'binary indexed tree', 'GETKEYSINSLOT'.",
+   "decided_by": "enovak",
+   "affects": [
+    "component:kvstore",
+    "component:dict",
+    "component:keyspace",
+    "component:cluster-core"
+   ],
+   "supersedes": null,
+   "date": "2025-11-18"
+  },
+  {
+   "slug": "resp3-protocol-decision",
+   "title": "RESP3 ships as an opt-in protocol upgrade negotiated by HELLO, RESP2 stays default",
+   "statement": "The server speaks RESP2 by default forever; clients opt into RESP3 per-connection via HELLO 3, which unlocks typed replies (maps, sets, doubles, big numbers), out-of-band push messages (invalidation, pubsub), and attribute replies \u2014 and no command may change its RESP2 reply shape.",
+   "rationale": "Breaking the wire protocol would strand thousands of client libraries; per-connection negotiation lets new capabilities (client-side caching push, typed replies) ship without a flag day, while the RESP2-compatibility invariant keeps every existing client working against every future server.",
+   "lifecycle": "accepted",
+   "summary": "Accepted: RESP3 via HELLO 3 negotiation, RESP2 reply shapes frozen forever \u2014 the compat rule behind resp-backward-compat.",
+   "description": "Protocol-evolution decision governing resp-protocol and networking: HELLO 3 switches a connection to RESP3 (maps/sets/doubles/push frames); CLIENT TRACKING invalidation uses RESP3 push natively and the RESP2 redirect-to-pubsub fallback otherwise (see resp2-invalidation-via-redirect-only). Enforced by the resp-backward-compat preference: new commands choose reply shapes that degrade cleanly to RESP2, and existing RESP2 replies are frozen. Every addReply* call site in the tree lives under this rule. Searchable as 'RESP3', 'HELLO 3', 'push message', 'protocol negotiation', 'reply shape compatibility'.",
+   "decided_by": "ytanaka",
+   "affects": [
+    "component:resp-protocol",
+    "component:networking",
+    "component:client-tracking"
+   ],
+   "supersedes": null,
+   "date": "2025-10-02"
+  }
+ ],
+ "preferences": [
+  {
+   "slug": "no-external-runtime-deps",
+   "name": "Vendor all runtime dependencies into deps/",
+   "policy_kind": "dependency_policy",
+   "prescription": "Never add a system-library runtime dependency; vendor the exact source into deps/ (jemalloc, Lua, hiredis, linenoise, fpconv, hdr_histogram pattern) so a bare `make` on a clean POSIX box always succeeds. Opt-in system libs (zstd via BUILD_COMPRESSION=yes) must no-op cleanly when absent.",
+   "summary": "Dependencies are vendored in deps/, never assumed on the system; zstd is the single sanctioned opt-in exception.",
+   "description": "Long-standing build philosophy: deps/ carries pinned, sometimes patched copies of every runtime dependency (jemalloc with je_get_defrag_hint, Lua 5.1 with bytecode loading disabled, hiredis, linenoise) so builds are reproducible and airgapped-friendly. The zstd replication-compression dependency (#15366) was deliberately left as a system library behind BUILD_COMPRESSION=yes with full no-op fallback \u2014 the exception that documents the rule. Violations to flag in review: configure-time discovery of system libs, pkg-config requirements, dlopen of unvendored code. Searchable as 'vendored deps', 'deps directory', 'system library policy', 'make on clean machine'.",
+   "applies_to": [
+    "build-system"
+   ]
+  },
+  {
+   "slug": "listpack-for-small-collections",
+   "name": "New small-value encodings target listpack, never ziplist or bespoke formats",
+   "policy_kind": "data_structure_policy",
+   "prescription": "Any feature needing a compact small-collection representation must use listpack (with a size/count threshold config pair like hash-max-listpack-entries/-value) and convert to the scaled structure past thresholds; do not touch ziplist.c and do not invent new serialized inline formats.",
+   "summary": "Listpack is the only sanctioned compact encoding for small collections; ziplist is load-time legacy only.",
+   "description": "Encoding policy flowing from the listpack-over-ziplist decision: hashes, zsets, sets, list nodes, stream macro-nodes, and the new hash templates (OBJ_ENCODING_TMPL_LP) all encode small data as listpacks with paired threshold configs, converting to dict/skiplist/quicklist beyond them. Reviewers should reject PRs adding entries to ziplist.c (RDB load conversion only) or hand-rolled contiguous formats without listpack's bounds discipline. Searchable as 'compact encoding policy', 'listpack threshold', 'encoding conversion', 'small hash memory'.",
+   "applies_to": [
+    "listpack",
+    "hash-type",
+    "zset-type",
+    "set-type",
+    "list-type",
+    "streams-core"
+   ]
+  },
+  {
+   "slug": "tcl-integration-tests-required",
+   "name": "Behavior changes ship with tcl integration tests",
+   "policy_kind": "testing_policy",
+   "prescription": "Every behavior-visible change lands with tests in tests/unit or tests/integration (tcl framework); new commands get a dedicated suite file; cluster tests must wait for convergence (ASM completion, replication sync) before asserting, using shared helpers in cluster_util.tcl / util.tcl rather than sleeps.",
+   "summary": "No behavior change merges without tcl coverage; cluster tests wait for convergence instead of sleeping.",
+   "description": "Testing policy visible in nearly every recent PR: #15329 shipped a 149-line replication-iothreads suite with a one-line fix, #15436/#15466/#15433 all added regression tests, and #15493 codified the convergence rule by moving an ASM-wait helper into cluster_util.tcl after the cluster-topology-change test raced an in-flight migration. The XDLQ plan mandates tests/unit/type/stream-dlq.tcl before merge. Flaky-test debt is treated as a bug owned by whoever wrote the test. Searchable as 'tcl tests', 'regression test required', 'flaky test policy', 'wait_for_condition'.",
+   "applies_to": [
+    "test-suite"
+   ]
+  },
+  {
+   "slug": "resp-backward-compat",
+   "name": "Never change an existing RESP2 reply shape",
+   "policy_kind": "api_compatibility_policy",
+   "prescription": "Existing commands' RESP2 reply shapes are frozen: extend replies only by appending fields to maps/arrays where clients tolerate extras (like SLOWLOG GET's added argc field), gate richer shapes behind RESP3 or new subcommands, and never repurpose error strings that clients pattern-match (MOVED, ASK, NOGROUP, BUSYGROUP, LOADING).",
+   "summary": "Wire-compatibility rule: RESP2 replies and well-known error prefixes are frozen; new richness goes to RESP3 or new commands.",
+   "description": "API-compatibility policy flowing from resp3-protocol-decision: thousands of client libraries parse replies positionally and pattern-match error prefixes, so changing a reply shape is a silent ecosystem break. Recent practice: SLOWLOG GET appended the total-argc field rather than restructuring (#15347 pattern), XACKDEL introduced per-ID status arrays as a new command instead of overloading XACK, and XDLQ (#15500) defines fresh per-ID reply shapes rather than extending XPENDING. Review checklist: does the change alter any existing addReply sequence under RESP2? Searchable as 'breaking protocol change', 'reply format frozen', 'client compatibility', 'error prefix contract'.",
+   "applies_to": [
+    "resp-protocol",
+    "networking",
+    "command-table"
+   ]
+  },
+  {
+   "slug": "c99-no-vla",
+   "name": "C99 subset: no VLAs, no compiler extensions in portable code",
+   "policy_kind": "code_style_policy",
+   "prescription": "Write C99 without variable-length arrays or GNU-only extensions in portable paths (server compiles with -std=c99 -pedantic across gcc/clang on Linux/BSD/macOS/Solaris); use fixed maxima or heap allocation instead of VLAs, guard platform intrinsics (AVX2/AVX512/NEON) behind runtime detection plus fallback scalar paths, and keep UB-prone arithmetic (signed overflow) behind explicit checks.",
+   "summary": "Portable C99 only: no VLAs, SIMD behind runtime detection with scalar fallbacks, signed-overflow checks explicit.",
+   "description": "Code-style policy for the C codebase: VLAs are banned (stack-depth unpredictability, C11 optionality), platform SIMD (the AVX2/AVX512/NEON paths in bitops and hyperloglog) must runtime-detect and fall back to scalar, and arithmetic that can overflow signed types needs explicit guards \u2014 the BITFIELD #offset overflow (#15433) and VRANDMEMBER LLONG_MIN negation (#15392) are the cautionary tales from this quarter. The compile-time multiplexer ladder in ae.c (evport/epoll/kqueue/select) is the model for platform divergence done right. Searchable as 'VLA ban', 'C99 pedantic', 'signed overflow check', 'SIMD fallback', 'portability rules'.",
+   "applies_to": [
+    "server-core",
+    "bitops",
+    "hyperloglog",
+    "build-system"
+   ]
+  }
+ ],
+ "bug_patterns": [
+  {
+   "slug": "iothread-repl-busy-loop",
+   "name": "IO thread busy-loops at 100% CPU when owning replication clients",
+   "symptom_signature": "top/htop shows an io_thd_* thread pinned at 100% CPU on an otherwise idle master with attached replicas; perf shows the thread cycling its ae event loop with a permanently-armed write event for the replica connection and zero bytes moving; disappears when io-threads is set to 1 or replicas detach.",
+   "summary": "Replica connections bound to IO threads left a write event armed with nothing to send, spinning a full core even when idle.",
+   "description": "Bug pattern in the 2024 iothread.c redesign's interaction with replication clients: replica connections have their output driven by the replication feed rather than the normal client reply path, so the IO thread's event registration logic kept the connection's write event armed even when the replication buffer was empty \u2014 the thread's ae loop woke instantly forever, burning 100% of a core per affected thread with no functional symptoms. Detection: CPU alarms on idle masters, 'io thread high cpu', power draw anomalies. Surfaced 2026-07-02 in the repl-compression staging canary (compression requires io-threads > 1). First fix attempt (usleep throttle) failed review and testing; real fix #15329 corrects the event mask so the thread parks in epoll_wait. Regression guard: tests/integration/replication-iothreads.tcl. Searchable as 'busy loop', 'io thread spin', '100% cpu idle', 'replica connection event mask'.",
+   "reproduces": [
+    "io-threads",
+    "replication-core"
+   ],
+   "first_seen": "2026-07-02"
+  },
+  {
+   "slug": "fast-expire-stale-trigger-dead",
+   "name": "FAST expire cycle silently disabled by a microseconds/milliseconds mismatch",
+   "symptom_signature": "Under heavy expired-key pressure, DBSIZE and RSS stay elevated for minutes; INFO shows expired_stale_perc above threshold but no fast expire cycles ever run; keys with 1-5s TTLs only reclaimed by slow cycle or on access.",
+   "summary": "A one-character unit mismatch in expire.c's stale trigger meant ACTIVE_EXPIRE_CYCLE_FAST could never activate.",
+   "description": "Bug pattern in activeExpireCycle: the condition gating the FAST cycle compared a timestamp in microseconds against a threshold in milliseconds, so the trigger was numerically impossible and the fast path was dead code in production \u2014 active expiration silently degraded to the slow cycle alone. Classic 'silent feature death by unit mismatch': no error, no crash, just expired keys lingering and memory staying high after TTL-heavy workloads. Found by Amara auditing staging RSS after a load test (issue redis-15388), fixed by one unit conversion in #15412. Lesson recorded: assert units at boundaries or encode them in variable names (_us/_ms suffixes). Searchable as 'expired keys linger', 'fast expire cycle never fires', 'unit mismatch', 'us vs ms', 'active expire broken'.",
+   "reproduces": [
+    "expire-cycle"
+   ],
+   "first_seen": "2026-07-05"
+  },
+  {
+   "slug": "aofrw-cow-spike",
+   "name": "Copy-on-write memory doubling during AOF rewrite under write load",
+   "symptom_signature": "RSS nearly doubles within a minute of BGREWRITEAOF starting on a write-heavy instance; INFO persistence shows aof_rewrite_in_progress:1 with mem_cow steadily climbing toward used_memory; kernel OOM killer or maxmemory evictions fire mid-rewrite; worst when auto-aof-rewrite triggers during peak traffic.",
+   "summary": "Fork-based AOFRW under heavy writes copies nearly every touched page, spiking RSS toward 2x and triggering OOM/eviction cascades.",
+   "description": "Operational bug pattern inherent to fork/COW persistence (rdb-aof-hybrid-persistence): the AOFRW child shares pages with the parent, but a write-heavy parent dirties pages faster than the child finishes, so copy-on-write duplicates approach the full dataset size \u2014 RSS spikes toward 2x used_memory, and on memory-tight hosts the kernel OOM-killer takes down redis-server or maxmemory eviction storms evict hot keys mid-rewrite. Aggravators: auto-aof-rewrite-percentage firing at peak traffic, THP (transparent huge pages) inflating COW granularity to 2MB, dict rehashing during the fork (see dict-resize-avoid-during-cow). Observed 2026-06-14 in production during the pre-v8.4 era; mitigated operationally (runbook aof-rewrite-pressure: schedule rewrites off-peak, disable THP, headroom sizing, watch the rss-cow-spike alert; BACKUP command #15441 now offers hard-link backups without a second fork). Searchable as 'COW spike', 'RSS doubles during rewrite', 'OOM during BGREWRITEAOF', 'copy-on-write memory', 'aof rewrite eviction storm'.",
+   "reproduces": [
+    "aof-persistence"
+   ],
+   "first_seen": "2026-06-14"
+  },
+  {
+   "slug": "keymeta-double-restore",
+   "name": "KeyMeta restored twice through RESTORE-based rewrites and slot migration",
+   "symptom_signature": "After AOF reload or atomic slot migration, keys report duplicated per-key metadata: expire metadata slot registered twice, module keymeta callbacks fire twice per key, OBJECT/DEBUG inspection shows doubled metabits state on the destination node.",
+   "summary": "The RESTORE path shared by AOF rewrites and cluster_asm.c re-applied KeyMeta already embedded in serialized payloads.",
+   "description": "Bug pattern at the intersection of the kvobj/keymeta framework and RESTORE-based data movement: serialized payloads produced for AOF rewrites and atomic slot migration already embed KeyMeta (expire in slot 0, module metadata slots), but the deserializing RESTORE path applied metadata again on top \u2014 double-registering lifecycle callbacks and corrupting metabits accounting after reload or slot handoff. Symptoms subtle: doubled module callback invocations, wrong metadata after ASM, only visible with keymeta-using modules or HFE-era metadata. Traced by Elena during ASM validation (metadata doubled on destination nodes), fixed in #15466 by skipping re-application when the payload embeds KeyMeta; new keymeta module tests guard it. Searchable as 'duplicate key metadata', 'RESTORE keymeta', 'metadata doubled after migration', 'metabits corruption'.",
+   "reproduces": [
+    "key-metadata",
+    "atomic-slot-migration"
+   ],
+   "first_seen": "2026-07-10"
+  },
+  {
+   "slug": "bcast-acl-key-leak",
+   "name": "BCAST invalidations disclose key names outside the client's ACL patterns",
+   "symptom_signature": "A client with CLIENT TRACKING BCAST receives __redis__:invalidate push messages naming keys its ACL user cannot read; multi-tenant instances leak other tenants' key names (often containing user IDs) through the invalidation channel.",
+   "summary": "BCAST-mode client tracking broadcast every matching invalidation to every subscriber regardless of ACL key permissions.",
+   "description": "Security bug pattern in client-side caching: BCAST mode registers a prefix in the tracking table and pushed invalidations for every key modification under that prefix to every subscribed client \u2014 without consulting the receiving client's ACL key patterns. On shared/multi-tenant instances, tenant A could enable BCAST with an empty prefix and harvest tenant B's key names (which commonly embed emails, user IDs, session tokens) from invalidation traffic despite having no read permission. Reported privately 2026-07-01 (issue redis-15340), fixed in #15371 by filtering broadcasts through per-client ACL checks in tracking.c/acl.c. Related policy: bcast-prefixes-no-overlap. Searchable as 'ACL leak', 'invalidation disclosure', 'BCAST security', 'tracking key name leak', 'multi-tenant isolation'.",
+   "reproduces": [
+    "client-tracking",
+    "acl-engine"
+   ],
+   "first_seen": "2026-07-01"
+  },
+  {
+   "slug": "vrandmember-llong-min-crash",
+   "name": "VRANDMEMBER crashes on LLONG_MIN count via negation overflow",
+   "symptom_signature": "redis-server aborts (crash log with SIGSEGV/SIGABRT in the vector-sets module) when VRANDMEMBER is called with count -9223372036854775808; any client able to run vector-set commands can crash the server with one command.",
+   "summary": "Negating LLONG_MIN to normalize a negative VRANDMEMBER count is undefined behavior and crashed the server.",
+   "description": "Crash bug pattern in the bundled vector-sets HNSW module: VRANDMEMBER treats negative counts as 'with duplicates' and negates them, but -LLONG_MIN does not fit in long long \u2014 undefined behavior that in practice aborted the process. A single command from any client with vector-set access was a denial of service. Fuzzer-found (issue redis-15379), fixed in #15392 by rejecting LLONG_MIN with a range error; regression test in the vector-sets python suite. Same negation-overflow family as the BITFIELD #offset bug (#15433) \u2014 both now cited in the c99-no-vla policy's overflow-check clause. Searchable as 'VRANDMEMBER crash', 'LLONG_MIN', 'negation overflow', 'one command DoS'.",
+   "reproduces": [
+    "vector-sets-module"
+   ],
+   "first_seen": "2026-07-08"
+  }
+ ],
+ "fixes": [
+  {
+   "slug": "iothread-busyloop-sleep-throttle",
+   "name": "Failed attempt: throttle spinning IO threads with a short sleep",
+   "fix_steps": "Added a usleep(50) backoff in the IO thread loop when an iteration processed zero events for replica-owned connections, hoping to cap the spin without touching event registration.",
+   "verification_status": "failed",
+   "summary": "First attempt papered over the busy loop with a sleep throttle; it cut CPU but added replication latency jitter and left the armed-event root cause in place.",
+   "description": "Plausible-but-wrong first fix for iothread-repl-busy-loop: sleeping in the IO thread loop reduced the idle CPU burn but introduced up to 50us of added latency per replication feed wakeup (visible as replica lag jitter in the staging canary with compression enabled), and the spurious write event stayed armed \u2014 the loop still woke instantly after every sleep. Rejected in review by Salvatore with 'fix the event mask, not the symptom'; superseded by the real fix in #15329. Kept in the graph as the canonical example of treating a scheduler symptom instead of the event-registration cause. Searchable as 'sleep throttle', 'usleep backoff', 'failed busy loop fix'.",
+   "resolves": "iothread-repl-busy-loop",
+   "outcome": "attempt_failed",
+   "via_pr": null,
+   "verified_by": null
+  },
+  {
+   "slug": "iothread-busyloop-event-mask-fix",
+   "name": "Correct write-event mask handling for replica clients on IO threads",
+   "fix_steps": "One-line change in iothread.c: stop keeping the write event armed for replication clients with an empty output state, so the IO thread's ae loop parks in its multiplexer wait until the replication feed actually queues data; added tests/integration/replication-iothreads.tcl (149 lines) covering io-threads > 1 with attached replicas, idle CPU assertion included.",
+   "verification_status": "verified",
+   "summary": "The real fix for the IO-thread busy loop, shipped in #15329: remove the spuriously-armed write event instead of throttling the spin.",
+   "description": "Resolves iothread-repl-busy-loop at the root: replica connections owned by IO threads no longer keep a write-ready event registered when the replication buffer is empty, so idle threads sleep in epoll_wait/kevent instead of spinning at 100% CPU. Verified by Luiza in the staging canary: io_thd_* CPU dropped from 100% to <1% idle with 4 io-threads, 2 replicas, and repl compression enabled; the new replication-iothreads tcl suite guards regressions. Unblocked the repl-compression production rollout (compression requires io-threads > 1). Searchable as 'event mask fix', 'iothread busy loop resolved', 'epoll park'.",
+   "resolves": "iothread-repl-busy-loop",
+   "outcome": "resolved",
+   "via_pr": 15329,
+   "verified_by": "lcosta"
+  },
+  {
+   "slug": "fast-expire-unit-conversion-fix",
+   "name": "Convert the FAST expire trigger comparison to consistent milliseconds",
+   "fix_steps": "One-character-class change in expire.c aligning the stale-trigger timestamp comparison to milliseconds on both sides; verified by rerunning the TTL-heavy staging load test and confirming ACTIVE_EXPIRE_CYCLE_FAST activations in INFO plus prompt RSS reclamation.",
+   "verification_status": "verified",
+   "summary": "Fix for the dead FAST expire cycle (#15412): one unit conversion re-enables fast active expiration under expired-key pressure.",
+   "description": "Resolves fast-expire-stale-trigger-dead: with both sides of the stale-percentage trigger in milliseconds, the FAST expire cycle activates as designed when expired_stale_perc exceeds threshold, and short-TTL keys are reclaimed within seconds instead of minutes. Verified by Luiza re-running the original TTL-heavy reproduction on staging: DBSIZE converged in <5s post-expiry vs minutes before, fast-cycle counters visible in INFO stats. Follow-up hygiene: _us/_ms suffix convention noted for time variables in expire.c review. Searchable as 'fast expire fixed', 'unit conversion fix', 'TTL reclamation restored'.",
+   "resolves": "fast-expire-stale-trigger-dead",
+   "outcome": "resolved",
+   "via_pr": 15412,
+   "verified_by": "lcosta"
+  },
+  {
+   "slug": "aofrw-offpeak-scheduling-mitigation",
+   "name": "Operational mitigation: off-peak AOFRW scheduling, THP off, COW headroom",
+   "fix_steps": "Raised auto-aof-rewrite-percentage from 100 to 200 and auto-aof-rewrite-min-size to 1gb on write-heavy production nodes so automatic rewrites fire less often; cron-triggered BGREWRITEAOF in the 03:00 UTC low-traffic window; verified transparent_hugepage=never on all hosts; resized memory headroom to 2.2x expected used_memory; wired the rss-cow-spike alert to page before OOM territory.",
+   "verification_status": "verified",
+   "summary": "Ops-level resolution of the AOFRW COW spike: fewer, off-peak rewrites with THP disabled and 2.2x headroom; no OOM recurrence since.",
+   "description": "Resolves aofrw-cow-spike operationally (the fork/COW cost is inherent to rdb-aof-hybrid-persistence, so the fix is scheduling and headroom, not code): automatic rewrites now trigger at 200% growth with a 1gb floor, scheduled rewrites run off-peak, THP is disabled fleet-wide (2MB COW granularity was the biggest aggravator), and hosts carry 2.2x headroom validated against peak dirty-page rates. Verified by Salvatore across four weekly cycles in production: peak mem_cow held under 45% of used_memory, zero OOM events, no eviction storms. Codified in the aof-rewrite-pressure runbook; the BACKUP command (#15441) further removes one class of ad-hoc BGSAVE forks. Searchable as 'COW mitigation', 'rewrite scheduling', 'THP disable', 'memory headroom'.",
+   "resolves": "aofrw-cow-spike",
+   "outcome": "resolved",
+   "via_pr": null,
+   "verified_by": "sgreco"
+  },
+  {
+   "slug": "keymeta-restore-skip-fix",
+   "name": "Skip KeyMeta re-application when RESTORE payloads embed metadata",
+   "fix_steps": "Made the shared RESTORE deserialization path (cluster.c/cluster_asm.c/AOF rewrite consumers) detect KeyMeta already embedded in the payload and skip the second application; added keymeta module tests covering AOF reload and atomic slot migration round-trips.",
+   "verification_status": "verified",
+   "summary": "Fix for KeyMeta double-restoration (#15466): RESTORE no longer re-applies metadata that the serialized payload already carries.",
+   "description": "Resolves keymeta-double-restore: the deserializer now recognizes embedded KeyMeta (expire slot 0 plus module metadata slots) and applies it exactly once, restoring correct metabits state and single-fire lifecycle callbacks after AOF reload and ASM slot handoff. Verified by Luiza with the new keymeta module test matrix: metadata identical byte-for-byte across serialize/deserialize round-trips on both the AOF path and a full atomic slot migration between two nodes. Unblocked confidence in ASM for keymeta/HFE-bearing datasets. Searchable as 'keymeta fix', 'RESTORE dedup', 'metadata single application'.",
+   "resolves": "keymeta-double-restore",
+   "outcome": "resolved",
+   "via_pr": 15466,
+   "verified_by": "lcosta"
+  },
+  {
+   "slug": "bcast-acl-filter-fix",
+   "name": "Filter BCAST invalidation broadcasts through the receiver's ACL key patterns",
+   "fix_steps": "Reworked tracking.c BCAST fan-out (~224 lines, plus acl.c helpers) to evaluate each candidate invalidation key against the receiving client's ACL key permissions before pushing; added acl + tracking regression tests asserting a restricted user never sees out-of-pattern key names.",
+   "verification_status": "verified",
+   "summary": "Fix for the BCAST ACL key-name leak (#15371): invalidation pushes are now ACL-filtered per receiving client.",
+   "description": "Resolves bcast-acl-key-leak: every BCAST invalidation is checked against the subscriber's ACL key patterns at send time, so multi-tenant instances no longer leak foreign key names through __redis__:invalidate traffic. Verified by Luiza with a two-tenant reproduction: tenant A subscribed with an empty prefix receives invalidations only for keys matching its own ACL patterns while tenant B's churn stays invisible; perf impact measured negligible for prefix-scoped subscriptions. Security-sensitive review by Yuki and Salvatore before merge. Searchable as 'ACL filtered invalidation', 'BCAST leak fixed', 'tracking security fix'.",
+   "resolves": "bcast-acl-key-leak",
+   "outcome": "resolved",
+   "via_pr": 15371,
+   "verified_by": "lcosta"
+  },
+  {
+   "slug": "vrandmember-llong-min-guard",
+   "name": "Reject LLONG_MIN count in VRANDMEMBER before negation",
+   "fix_steps": "Added an explicit bounds check in the vector-sets module rejecting count == LLONG_MIN with a range error before the sign normalization; regression test added to the vector-sets python suite alongside a sweep of other negation sites in the module.",
+   "verification_status": "verified",
+   "summary": "Fix for the VRANDMEMBER LLONG_MIN crash (#15392): the pathological count is rejected cleanly instead of hitting UB.",
+   "description": "Resolves vrandmember-llong-min-crash: VRANDMEMBER key -9223372036854775808 now returns a clean 'value is out of range' error instead of aborting the server. Rohan also swept the module for other unchecked negations as part of the fix. Verified in the vector-sets python suite plus a targeted fuzz rerun that previously reproduced the abort within seconds. Cross-referenced with the BITFIELD overflow fix (#15433) in the c99-no-vla policy as this quarter's UB case studies. Searchable as 'LLONG_MIN guard', 'VRANDMEMBER fixed', 'negation overflow check'.",
+   "resolves": "vrandmember-llong-min-crash",
+   "outcome": "resolved",
+   "via_pr": 15392,
+   "verified_by": "lcosta"
+  }
+ ],
+ "investigations": [
+  {
+   "slug": "iothread-busyloop-profiling",
+   "name": "Profiling the idle-master IO thread CPU burn",
+   "summary": "perf-based investigation that traced the 100% CPU io_thd_* spin to a permanently-armed write event on replica connections; killed the sleep-throttle attempt and produced the event-mask fix.",
+   "description": "Investigation of iothread-repl-busy-loop led by Salvatore after the repl-compression staging canary showed io_thd_1 pinned at 100% on an idle master: `perf top -t <tid>` showed the thread cycling aeProcessEvents with zero-byte writes; `strace` confirmed epoll_wait returning instantly with a write-ready replica fd every iteration. Ruled out compression itself (reproduced with BUILD_COMPRESSION off), ruled out the sleep-throttle attempt (latency jitter, root cause intact), and isolated the event-registration path for replication clients in iothread.c \u2014 replica connections kept AE_WRITABLE armed with an empty replication buffer. Outcome: the one-line event-mask fix in #15329 plus the replication-iothreads tcl suite. Method note recorded: always strace the multiplexer before touching scheduling. Searchable as 'busy loop investigation', 'perf top io thread', 'epoll_wait instant return'.",
+   "investigates": "iothread-repl-busy-loop",
+   "led_by": "sgreco",
+   "status": "closed"
+  },
+  {
+   "slug": "expire-lag-memory-audit",
+   "name": "Staging RSS audit after the TTL-heavy load test",
+   "summary": "Memory audit explaining why expired keys lingered: INFO forensics showed expired_stale_perc high with zero fast cycles, leading straight to the us/ms comparison in expire.c.",
+   "description": "Investigation of fast-expire-stale-trigger-dead led by Amara: after a TTL-heavy staging load test, RSS and DBSIZE stayed elevated for minutes. INFO stats forensics showed expired_stale_perc pinned above the fast-cycle threshold while the fast-cycle activation counter stayed at zero across the whole fleet \u2014 statistically impossible if the trigger worked. Reading activeExpireCycle found the microseconds-vs-milliseconds comparison that made the condition unsatisfiable; git archaeology showed the mismatch survived multiple refactors because no test asserted fast-cycle activation. Outcome: the unit-conversion fix (#15412), a new assertion-style test, and a convention note to suffix time variables with _us/_ms. Searchable as 'expire audit', 'stale percentage forensics', 'fast cycle never activated'.",
+   "investigates": "fast-expire-stale-trigger-dead",
+   "led_by": "aokafor",
+   "status": "closed"
+  },
+  {
+   "slug": "aofrw-cow-forensics",
+   "name": "Production COW spike forensics during AOF rewrites",
+   "summary": "Correlated smaps/mem_cow telemetry with traffic to explain near-2x RSS spikes during BGREWRITEAOF; produced the off-peak scheduling mitigation, THP finding, and the rss-cow-spike alert thresholds.",
+   "description": "Investigation of aofrw-cow-spike led by Amara with Salvatore on the persistence side: instrumented /proc/<child>/smaps and the childinfo-pipe mem_cow reporting across production rewrite windows, correlating COW growth rate with write throughput and key-access distribution. Findings: THP inflated COW granularity to 2MB pages (single hot key dirties 2MB), auto-aof-rewrite-percentage 100 reliably fired rewrites during peak traffic, and dict rehashing during the fork amplified page dirtying (cross-referenced with the dict-resize-avoid-during-cow decision). Modeled worst-case COW as dirty-page-rate x rewrite-duration and validated the 2.2x headroom figure. Outcome: the aofrw-offpeak-scheduling-mitigation fix, the rss-cow-spike alert (page at COW > 40% of used_memory), and the aof-rewrite-pressure runbook. Searchable as 'COW forensics', 'smaps analysis', 'mem_cow telemetry', 'THP huge pages redis'.",
+   "investigates": "aofrw-cow-spike",
+   "led_by": "aokafor",
+   "status": "closed"
+  },
+  {
+   "slug": "asm-keymeta-doubling-trace",
+   "name": "Tracing doubled key metadata after atomic slot migrations",
+   "summary": "ASM validation caught destination nodes with doubled per-key metadata; the trace pinned the shared RESTORE path re-applying embedded KeyMeta and fed directly into #15466.",
+   "description": "Investigation of keymeta-double-restore led by Elena during atomic-slot-migration validation with keymeta-bearing datasets: after migrating slots holding keys with module metadata and HFE state, destination nodes showed lifecycle callbacks firing twice and DEBUG-level metabits accounting doubled. Bisected the data path \u2014 DUMP-equivalent serialization on the source embeds KeyMeta, and the destination's RESTORE handler applied metadata from the payload and then again through the generic post-restore hook. Confirmed the same doubling on plain AOF-rewrite reload (shared code path), which upgraded severity from 'ASM edge case' to 'persistence correctness'. Outcome: the restore-skip fix shipped by Salvatore in #15466 with a keymeta test matrix. Searchable as 'metadata doubling trace', 'ASM validation', 'RESTORE path bisect'.",
+   "investigates": "keymeta-double-restore",
+   "led_by": "enovak",
+   "status": "closed"
+  }
+ ],
+ "environments": [
+  {
+   "slug": "production",
+   "name": "production",
+   "summary": "Customer-facing fleet: cluster-mode redis-server on prod-cache-euw1 with Sentinel-managed standalone shards for control-plane data.",
+   "description": "Production environment: the customer-facing cache/data fleet, primarily the prod-cache-euw1 cluster (6 nodes, 16384 slots) running cluster-mode redis-server v8.4 with io-threads 4, hybrid RDB+AOF persistence, and Sentinel supervising the non-clustered control-plane shards. Change policy: everything soaks in staging first (see the repl-compression canary), deploys go through tagged rollouts like v8-4-rollout, and the rss-cow-spike / replica-lag / cluster-split-brain alerts page the on-call. Searchable as 'prod', 'live fleet', 'customer facing'.",
+   "hosts_environments": null
+  },
+  {
+   "slug": "staging",
+   "name": "staging",
+   "summary": "Pre-production soak environment mirroring prod topology; where canaries (repl compression) and load tests (TTL-heavy expire audit) run.",
+   "description": "Staging environment: a scaled-down mirror of production topology (cluster + sentinel pair) used for feature canaries and destructive load testing before production rollout. Recent history made here: the repl-compression canary that surfaced the IO-thread busy loop (issue redis-15311), the TTL-heavy load test that exposed the dead FAST expire cycle (issue redis-15388), and ASM rehearsals for the cluster-resharding runbook. Deploys land here days before production. Searchable as 'staging', 'canary environment', 'pre-prod soak'.",
+   "hosts_environments": null
+  },
+  {
+   "slug": "ci",
+   "name": "ci",
+   "summary": "Continuous integration: nightly full tcl matrix (standalone/cluster/sentinel/tls) plus per-PR suites; flaky-test policy enforced here.",
+   "description": "CI environment: per-PR runs of the affected tcl suites plus the nightly full matrix (standalone, cluster, sentinel, TLS, io-threads variants, sanitizer builds) deployed via the nightly-ci deployment. The battleground for the tcl-integration-tests-required policy and flake control \u2014 the cluster-topology-change flake (#15493) and the replication-iothreads suite (#15329) both live here. Red nightly blocks the next day's merges by convention. Searchable as 'CI', 'nightly build', 'test matrix', 'sanitizer run'.",
+   "hosts_environments": null
+  }
+ ],
+ "clusters": [
+  {
+   "slug": "prod-cache-euw1",
+   "name": "Prod cache cluster (eu-west-1)",
+   "summary": "The production Redis Cluster: 6 nodes (3 masters + 3 replicas) covering all 16384 slots in eu-west-1.",
+   "description": "prod-cache-euw1: the production Redis Cluster in eu-west-1 \u2014 6 nodes (3 masters, 3 replicas) covering all 16384 hash slots, cluster-node-timeout 15000, io-threads 4, zstd replication compression enabled since the v8.4 rollout. Resharding uses atomic slot migration exclusively (cluster-resharding runbook); the cluster-split-brain alert watches bus partitions and the replica-lag alert watches feed health. Hosts the production environment. Searchable as 'prod cluster', 'eu-west-1', '16384 slots', 'six nodes'.",
+   "hosts_environments": [
+    "production"
+   ]
+  }
+ ],
+ "deploy_edges": [
+  {
+   "service": "service:redis-server",
+   "environment": "production"
+  },
+  {
+   "service": "service:redis-server",
+   "environment": "staging"
+  },
+  {
+   "service": "service:redis-server",
+   "environment": "ci"
+  },
+  {
+   "service": "service:redis-sentinel",
+   "environment": "production"
+  },
+  {
+   "service": "service:redis-sentinel",
+   "environment": "staging"
+  }
+ ],
+ "deployments": [
+  {
+   "slug": "v8-4-rollout",
+   "name": "v8.4 production rollout",
+   "date": "2026-07-06",
+   "summary": "Rolling production upgrade to the 8.4 line: atomic slot migration, hash templates prep, BACKUP command; surfaced the vector-sets AOF rewrite crash on a canary.",
+   "description": "Staged production rollout of the 8.4-era build to prod-cache-euw1 (one replica, then masters via failover, 2026-07-06 through 07-09): brings atomic slot migration into production resharding, the BACKUP command for hard-link backups, and the fixed FAST expire cycle (#15412). The first canary node crashed on a scheduled BGREWRITEAOF with vector-set keys \u2014 the NULL aof_rewrite callback bug (issue redis-15418) \u2014 pausing the rollout for two days until #15436 merged. Post-rollout validation followed the failover-drill runbook. Searchable as 'v8.4 deploy', 'production upgrade', 'rolling restart'.",
+   "deploys": "service:redis-server",
+   "environment": "production"
+  },
+  {
+   "slug": "repl-compression-canary",
+   "name": "Replication compression staging canary",
+   "date": "2026-07-15",
+   "summary": "Staging canary enabling zstd replication compression (repl-compression yes, io-threads 4); measured 3.8x stream compression and flushed out the IO-thread busy loop.",
+   "description": "Canary deployment to staging enabling the new zstd replication link compression (#15366) ahead of production: repl-compression yes with io-threads 4 across the staging cluster and sentinel pair. Results: 3.8x average compression on the write-heavy soak workload, replica lag flat, CPU +6% on masters \u2014 and the discovery that idle IO threads owning replica connections spin at 100% CPU (issue redis-15311, fixed #15329 before the canary re-run on 07-15 passed clean). Production enablement is gated on one more week of soak per Elena's rollout plan discussed in the repl-compression-canary-review thread. Searchable as 'compression canary', 'staging soak', 'REPLCONF compression rollout'.",
+   "deploys": "service:redis-server",
+   "environment": "staging"
+  },
+  {
+   "slug": "nightly-ci-2026-07-19",
+   "name": "Nightly CI matrix 2026-07-19",
+   "date": "2026-07-19",
+   "summary": "Nightly CI deployment running the full tcl matrix on unstable tip; first fully green cluster run since the ASM-wait deflake landed.",
+   "description": "The 2026-07-19 nightly CI deployment: builds unstable tip (post #15364 hash templates, pre #15366 merge) across standalone/cluster/sentinel/TLS/io-threads/sanitizer configurations and runs the full tcl matrix. Notable as the first fully green cluster suite since the cluster-topology-change flake was fixed by waiting for ASM completion (#15493 merged next morning after this run validated the helper on a branch build). Nightly health is Luiza's domain; red nightlies block merges by convention. Searchable as 'nightly run', 'green build', 'test matrix deploy'.",
+   "deploys": "service:redis-server",
+   "environment": "ci"
+  }
+ ],
+ "runbooks": [
+  {
+   "slug": "aof-rewrite-pressure",
+   "title": "Handling AOF rewrite memory pressure (COW spikes)",
+   "summary": "What to do when RSS balloons during BGREWRITEAOF: verify it's COW, buy headroom, reschedule rewrites, and the THP/config checklist.",
+   "description": "On-call runbook for the aofrw-cow-spike pattern. Diagnose: INFO persistence shows aof_rewrite_in_progress:1 and climbing mem_cow; /proc/<child>/smaps confirms private-dirty growth. Immediate: if COW > 60% of used_memory and climbing, consider killing the rewrite child (it restarts later) before the kernel OOM-killer picks the parent; never restart the parent. Stabilize: confirm transparent_hugepage=never, check auto-aof-rewrite-percentage (fleet standard 200) and -min-size (1gb), verify maxmemory headroom >= 2.2x. Prevent: schedule BGREWRITEAOF in the 03:00 UTC window; for backup needs prefer the BACKUP command (#15441) which hard-links Multi-Part AOF files instead of forking a second child. Escalate to Salvatore Greco. Alert: rss-cow-spike. Searchable as 'OOM during rewrite', 'mem_cow high', 'kill rewrite child', 'THP redis'.",
+   "applies_to": [
+    "aof-persistence",
+    "rdb-persistence",
+    "zmalloc-layer"
+   ]
+  },
+  {
+   "slug": "cluster-resharding",
+   "title": "Resharding with atomic slot migration",
+   "summary": "Step-by-step ASM resharding on prod-cache-euw1: preflight checks, redis-cli --cluster rebalance, lag-gate monitoring, rollback and stuck-migration handling.",
+   "description": "Operator runbook for moving slots on production clusters using atomic slot migration (never legacy MIGRATE \u2014 see the atomic-slot-migration decision). Preflight: server >= 8.4.0 everywhere, replica-full-sync-buffer-limit sized, no rewrite/BGSAVE in flight on source nodes, keymeta fix #15466 present. Execute: redis-cli --cluster rebalance (drives ASM since #15338); watch CLUSTER SLOT-STATS and the migration state on both nodes; handoff pauses source writes only when lag < cluster-slot-migration-handoff-max-lag-bytes (1MB) \u2014 if the pause exceeds cluster-slot-migration-write-pause-timeout the migration aborts safely. Stuck migration: check the dedicated RDB channel connection, then abort and re-run; ownership flips are atomic so no split ownership is possible. Verify: topology-change events observed by modules, slot counts per node, no ASK redirects in client logs. Escalate to Elena Novak. Searchable as 'reshard', 'rebalance slots', 'ASM stuck', 'slot handoff pause'.",
+   "applies_to": [
+    "atomic-slot-migration",
+    "cluster-core",
+    "cli-internals"
+   ]
+  },
+  {
+   "slug": "failover-drill",
+   "title": "Failover drill: Sentinel and cluster promotion",
+   "summary": "Quarterly drill procedure: induced master failure, SDOWN/ODOWN observation, promotion timing budgets, PSYNC2 partial-resync verification, and rollback.",
+   "description": "Runbook for the quarterly failover drill on staging (and post-rollout validation in production): stop a master, watch Sentinel reach SDOWN then ODOWN quorum, leader election by epoch, and replica promotion through the six-state failover machine \u2014 budget: detection < down-after-milliseconds, full failover < 30s. For cluster mode: verify the promoted replica's PSYNC2 dual-replid handling lets surviving replicas partial-resync (master_replid2 continuity, no full sync storm) and that replicas-keep-backlog held. Checks: no lost acknowledged writes (min-replicas-to-write honored), replica-lag alert cleared, clients reconnected. Rollback: controlled SENTINEL FAILOVER / CLUSTER FAILOVER back once the old master rejoins as replica. Escalate to Elena Novak. Searchable as 'failover test', 'sentinel quorum drill', 'promotion budget', 'partial resync verification'.",
+   "applies_to": [
+    "sentinel-core",
+    "replication-core",
+    "cluster-core"
+   ]
+  },
+  {
+   "slug": "hotkey-triage",
+   "title": "Hot key triage with HOTKEYS",
+   "summary": "Using the HOTKEYS CPU/net top-K sketches to find and defuse hot keys: enable, rank, slot-filter, and the standard mitigations ladder.",
+   "description": "Runbook for latency or single-node saturation suspected to be hot-key driven: enable HOTKEYS tracking (CuckooHeavyKeeper sketches ranking keys by CPU-us and net-bytes), let it sample 60s, then read the top-K \u2014 on clusters, slot-filter to the saturated node's slots. Interpret: CPU-heavy keys (expensive ops on big collections) vs net-heavy keys (large values fetched often) need different fixes. Mitigation ladder: client-side caching via CLIENT TRACKING for read-hot keys, key splitting/sharding suffixes for write-hot, replica reads for net-hot, and for cluster imbalance consider moving the slot (cluster-resharding runbook). Correlate with LATENCY HISTORY and slowlog (slowlog-entry-max-argc trimming applies). Disable tracking after triage \u2014 sketches cost memory. Escalate to Amara Okafor. Searchable as 'hot key', 'single node saturated', 'HOTKEYS command', 'top-k keys', 'skewed slot load'.",
+   "applies_to": [
+    "hotkeys-tracking",
+    "latency-monitor",
+    "eviction"
+   ]
+  }
+ ],
+ "alerts": [
+  {
+   "slug": "rss-cow-spike",
+   "name": "RSS copy-on-write spike during persistence fork",
+   "summary": "Pages when a BGSAVE/AOFRW child's COW memory exceeds 40% of used_memory or RSS exceeds 1.8x used_memory while a fork is active.",
+   "description": "Alert watching aof-persistence fork behavior on production nodes: fires when mem_cow (childinfo-pipe reporting) exceeds 40% of used_memory, or process RSS exceeds 1.8x used_memory while aof_rewrite_in_progress or rdb_bgsave_in_progress is set. Warning at 40%/15min, critical at 60% (approaching the 2.2x headroom budget \u2014 OOM-killer territory). Response: aof-rewrite-pressure runbook (verify THP off, consider killing the rewrite child). Tuned from the aofrw-cow-forensics investigation; owned by Amara Okafor. Searchable as 'COW alert', 'RSS spike page', 'rewrite memory alarm'.",
+   "watches": "aof-persistence"
+  },
+  {
+   "slug": "replica-lag",
+   "name": "Replica replication lag",
+   "summary": "Pages when any replica's offset lag exceeds 10MB for 5 minutes or master_link_status goes down; warns on repl-backlog overrun risk.",
+   "description": "Alert watching replication-core health across production and staging: computes per-replica lag as master_repl_offset minus the replica's acked offset; warning at 10MB sustained 5min, critical at 64MB (approaching repl-backlog-size, where disconnect means full sync \u2014 and full sync storms are exactly what the RDB-channel dual-connection sync and replicas-keep-backlog exist to soften). Also fires on master_link_status:down > 30s. Known benign blip: brief lag jitter during zstd compression canary re-negotiation. Response: check network first, then the feed path (see #15447 mid-stream feeding), then failover-drill runbook if the master is sick. Owned by Elena Novak. Searchable as 'replica behind', 'replication lag alert', 'backlog overrun', 'full sync storm risk'.",
+   "watches": "replication-core"
+  },
+  {
+   "slug": "cluster-split-brain",
+   "name": "Cluster bus partition / split-brain risk",
+   "summary": "Pages when cluster nodes disagree on cluster_state or a node marks >= 2 masters PFAIL simultaneously; watches gossip health on the cluster bus.",
+   "description": "Alert watching cluster-bus gossip health on prod-cache-euw1: fires when (a) cluster_state differs across nodes for > cluster-node-timeout, (b) any node reports >= 2 masters PFAIL simultaneously (partition signature, not node failure), or (c) bus message rates collapse asymmetrically. The gossip fanout design (1/10 of nodes, min 3, PFAIL propagation ~node_timeout*2) bounds how fast agreement converges \u2014 sustained disagreement past 2x node_timeout is real. Response: identify the partition boundary from CLUSTER NODES link states on each side, check cluster-require-full-coverage behavior, do not force failovers while partitioned. Escalate to Elena Novak immediately; split-brain writes are unrecoverable. Searchable as 'split brain', 'cluster partition', 'PFAIL storm', 'gossip failure'.",
+   "watches": "cluster-bus"
+  }
+ ],
+ "conversations": [
+  {
+   "slug": "xdlq-semantics",
+   "title": "XDLQ semantics: replay vs purge, and what FATAL should do",
+   "summary": "Streams Squad thread hashing out dead-letter edge semantics for #15500: replay ownership, purge irreversibility, whether XNACK FATAL auto-moves to DLQ, and cluster/replication fidelity.",
+   "description": "Design thread on the draft XDLQ PR (#15500) among the Streams Squad. Settled: XDLQ REPLAY must name a target consumer (no 'back to the pool' replay in v1 \u2014 keeps ownership deterministic per the streams-dlq-design decision); XDLQ PURGE is irreversible and requires an explicit ID list or FORCE for ranges; replayed entries keep their original entry ID and increment a replay counter surfaced in XDLQ LIST. Still open when the thread closed: should XNACK FATAL (delivery_count=LLONG_MAX) auto-move entries to the DLQ or stay a separate manual XDLQ MOVE step \u2014 Yuki holds manual-move for v1 so operators see quarantine happen explicitly; Rohan raised replication concerns about auto-move ordering relative to XIDMPRECORD, reinforcing command-rewriting persistence. Luiza committed the stream-dlq.tcl matrix: replay-then-ack, purge-during-claim, replica reload fidelity. Searchable as 'DLQ debate', 'replay semantics', 'FATAL auto-move', 'purge safety'.",
+   "mentions": [
+    "decision:streams-dlq-design",
+    "feature:streams-dlq",
+    "pull_request:redis-15500",
+    "component:stream-consumer-groups"
+   ],
+   "participants": [
+    "ytanaka",
+    "rmehta",
+    "lcosta"
+   ]
+  },
+  {
+   "slug": "repl-compression-canary-review",
+   "title": "Repl compression canary review: results and production gate",
+   "summary": "Review of the staging zstd canary: 3.8x compression, +6% master CPU, the busy-loop discovery, and the checklist gating production enablement.",
+   "description": "Post-canary review thread for the repl-compression staging deployment: Elena presented soak results (3.8x average stream compression on the write-heavy workload, replica lag flat after the #15329 fix, +6% master CPU, exact-level REPLCONF negotiation verified across version skew). The canary's big catch \u2014 IO threads spinning at 100% on idle replica connections (bug pattern iothread-repl-busy-loop) \u2014 was walked through as a case study for why canaries must include idle-state observation, not just load. Production gate agreed: one more clean soak week, rss/CPU dashboards extended to compression ratio, rollback plan is CONFIG SET repl-compression no (renegotiates on next sync), and Salvatore signed off contingent on the busy-loop regression test staying in the nightly matrix. Searchable as 'canary review', 'compression results', 'production gate', 'rollback plan'.",
+   "mentions": [
+    "feature:replication-zstd-compression",
+    "deployment:repl-compression-canary",
+    "bug_pattern:iothread-repl-busy-loop",
+    "pull_request:redis-15366"
+   ],
+   "participants": [
+    "enovak",
+    "sgreco",
+    "lcosta"
+   ]
+  },
+  {
+   "slug": "hotkeys-rollout-review",
+   "title": "HOTKEYS rollout review: sketch overhead and triage workflow",
+   "summary": "Review before enabling HOTKEYS tracking in production: CuckooHeavyKeeper memory/CPU overhead numbers, slot filtering for cluster triage, and the runbook workflow.",
+   "description": "Thread reviewing whether HOTKEYS tracking (CuckooHeavyKeeper top-K sketches ranking keys by CPU-us and net-bytes) is cheap enough to enable on-demand in production: Amara presented overhead measurements (fixed sketch memory per tracked dimension, low single-digit % CPU while sampling), argued for triage-time enablement rather than always-on, and demoed the cluster slot-filtering flow that isolates a saturated node's hot keys. Salvatore pushed for the disable-after-triage discipline to be written into the runbook (done \u2014 hotkey-triage), and the group agreed the mitigation ladder (client-side caching, key splitting, replica reads, slot moves) belongs with the runbook rather than tribal knowledge. Follow-up: redis-cli key-analytics integration for offline analysis. Searchable as 'hotkeys review', 'sketch overhead', 'top-k rollout', 'triage workflow'.",
+   "mentions": [
+    "feature:hotkey-detection",
+    "component:hotkeys-tracking",
+    "component:topk-sketch",
+    "runbook:hotkey-triage"
+   ],
+   "participants": [
+    "aokafor",
+    "sgreco"
+   ]
+  },
+  {
+   "slug": "maxmemory-tuning",
+   "title": "Maxmemory and eviction tuning for the v8.4 fleet",
+   "summary": "Ops thread settling fleet maxmemory policy: allkeys-lru vs volatile-ttl per workload, eviction-tenacity under COW pressure, and headroom interplay with AOF rewrites.",
+   "description": "Operational tuning thread ahead of the v8.4 rollout: Amara and Elena settled per-workload eviction policy (allkeys-lru for the pure-cache slots, volatile-ttl where producers set honest TTLs \u2014 with a reminder that the FAST expire cycle actually works now post-#15412, changing volatile reclaim behavior), reviewed maxmemory-eviction-tenacity against latency SLOs, and reconciled maxmemory headroom with the 2.2x COW budget from the AOF rewrite forensics \u2014 eviction storms during rewrites were traced to headroom double-counting. Also flagged: replication buffers are excluded from maxmemory accounting (exclude-buffers-from-maxmemory decision), so replica-heavy nodes need the alert margins, not maxmemory, to absorb feed growth. Outcome: fleet config PR plus dashboard changes; revisit after compression goes to production. Searchable as 'eviction tuning', 'maxmemory policy', 'allkeys-lru vs volatile', 'headroom budget'.",
+   "mentions": [
+    "config:maxmemory",
+    "component:eviction",
+    "component:expire-cycle",
+    "alert:rss-cow-spike"
+   ],
+   "participants": [
+    "aokafor",
+    "enovak"
+   ]
+  }
+ ],
+ "documents": [
+  {
+   "slug": "replication-topology-notes",
+   "title": "Replication topology notes",
+   "summary": "Living doc mapping the replication fabric: PSYNC2 replid rules, RDB-channel full sync flow, compression negotiation, and Sentinel supervision of non-cluster shards.",
+   "description": "Engineering notes maintained by Elena covering how our fleets actually replicate: PSYNC2 dual-replid rules of thumb (when a promoted replica can serve partial resyncs, the shiftReplicationId offset+1 subtlety), the RDB-channel dual-connection full sync (replica buffers the live stream while loading, replica-full-sync-buffer-limit sizing), zstd link compression negotiation and its io-threads > 1 requirement, backlog sizing vs the replica-lag alert thresholds, and which shards Sentinel supervises vs cluster-managed ones. The pre-read for the failover-drill runbook and for anyone touching replication.c. Searchable as 'replication topology', 'partial resync rules', 'full sync flow', 'backlog sizing'.",
+   "documents": [
+    "replication-core",
+    "sentinel-core",
+    "repl-compression",
+    "feature:rdb-channel-full-sync"
+   ]
+  },
+  {
+   "slug": "oncall-handbook",
+   "title": "Redis on-call handbook",
+   "summary": "The on-call entry point: alert-to-runbook routing (rss-cow-spike, replica-lag, cluster-split-brain), escalation owners by subsystem, and first-15-minutes checklists.",
+   "description": "The on-call rotation's front door: routes each alert to its runbook (rss-cow-spike -> aof-rewrite-pressure, replica-lag -> failover-drill triage steps, cluster-split-brain -> cluster-resharding's partition appendix), lists escalation owners by subsystem (Greco core/persistence, Novak cluster/replication, Okafor memory/perf, Tanaka streams/clients, Mehta modules, Costa tooling/CI), and gives first-15-minutes checklists: INFO snapshot capture, LATENCY HISTORY, never restart a parent mid-fork, never force failover during a partition. Includes the environment map (prod-cache-euw1 topology, staging mirror, CI) and deploy freeze rules during rollouts. Searchable as 'on-call guide', 'escalation path', 'alert routing', 'incident first steps'.",
+   "documents": [
+    "aof-persistence",
+    "replication-core",
+    "cluster-core",
+    "expire-cycle"
+   ]
+  },
+  {
+   "slug": "memory-tuning-guide",
+   "title": "Memory tuning guide",
+   "summary": "Fleet memory doctrine: maxmemory/headroom budgeting against COW, eviction policy selection, defrag thresholds, and fragmentation-ratio interpretation.",
+   "description": "Amara's doctrine doc for fleet memory settings: how to budget maxmemory against the 2.2x COW headroom rule (and why replication buffers being excluded from maxmemory changes the math), choosing eviction policies per workload (allkeys-lru cache slots vs volatile-ttl with honest TTLs, per the maxmemory-tuning thread), activedefrag thresholds and what mem_fragmentation_ratio actually measures under jemalloc (patched je_get_defrag_hint, StageDescriptor 500us slices), lazyfree settings, and the per-thread used_memory sharding introduced for io-threads scaling. Companion to the aof-rewrite-pressure and hotkey-triage runbooks. Searchable as 'memory tuning', 'fragmentation ratio explained', 'eviction policy guide', 'defrag settings'.",
+   "documents": [
+    "zmalloc-layer",
+    "eviction",
+    "defrag",
+    "lazyfree"
+   ]
+  },
+  {
+   "slug": "io-threads-architecture-notes",
+   "title": "IO threads architecture notes",
+   "summary": "How the 2024 iothread.c redesign works: per-thread ae loops, client binding, pending-list handoff, pauseIOThread choreography, and the busy-loop postmortem.",
+   "description": "Salvatore's architecture notes on the io-threads model for anyone touching iothread.c: each IO thread runs its own ae event loop, clients bind to threads, reads/RESP parsing/writes happen thread-side, and parsed commands cross to the main thread via mutex-guarded pending lists (execution single-threadedness asserted in processClientsFromIOThread). Covers the pauseIOThread choreography (used by sendTrackingMessage to push invalidations to connections owned by another thread), interaction with replication clients including the full busy-loop postmortem (bug pattern iothread-repl-busy-loop, why the sleep throttle was wrong, the event-mask fix in #15329), and why repl compression requires io-threads > 1. Required reading before binding new client classes to IO threads. Searchable as 'io thread design', 'pending list handoff', 'pauseIOThread', 'busy loop postmortem'.",
+   "documents": [
+    "io-threads",
+    "event-loop",
+    "networking"
+   ]
+  }
+ ]
+}

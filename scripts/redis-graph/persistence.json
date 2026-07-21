@@ -1,0 +1,199 @@
+{
+  "subsystem": "persistence",
+  "components": [
+    {
+      "slug": "rdb-persistence",
+      "name": "RDB Persistence",
+      "paths": ["src/rdb.c", "src/rdb.h"],
+      "summary": "Point-in-time binary snapshot engine: BGSAVE fork, RDB serialization/loading, diskless replica sync.",
+      "description": "Serializes the whole dataset to the RDB binary format and loads it back: rdbSaveRio/rdbSaveObject/rdbSaveKeyValuePair on the write side, rdbLoadRio/rdbLoadObject on the read side, with LZF string compression (rdbSaveLzfStringObject) and a trailing CRC64 checksum. rdbSaveBackground forks a CHILD_TYPE_RDB child via redisFork so the parent keeps serving while copy-on-write pages diverge; the child reports COW bytes through the childinfo pipe (sendChildCowInfo) and backgroundSaveDoneHandler reaps it. Diskless full-sync uses rdbSaveToSlavesSockets — the child writes the RDB into server.rdb_pipe_read and the parent relays it to replica connections framed by rdbSaveRioWithEOFMark's '$EOF:<40-byte hex>' delimiter. Searchable as: BGSAVE, SAVE, dump.rdb, fork copy-on-write spike, 'Background saving started by pid', MISCONF stop-writes-on-bgsave-error, 'Bad file format reading the append only file'/corrupt RDB (rdbReportError), sanitize-dump-payload deep validation of RESTORE/DUMP payloads (lpValidateIntegrityAndDups, ziplistPairsConvertAndValidateIntegrity). Governed by save points, rdbcompression, rdbchecksum, dbfilename, dir, rdb-save-incremental-fsync (rioSetAutoSync), rdb-del-sync-files.",
+      "part_of": "service:redis-server",
+      "depends_on": ["rio-layer", "object-system", "keyspace", "lzf-compression", "checksums", "background-io", "module-system", "streams-core", "replication-core", "key-metadata"],
+      "uses_datastores": ["rdb-snapshot"],
+      "config_vars": ["save", "rdbcompression", "rdbchecksum", "dbfilename", "dir", "stop-writes-on-bgsave-error", "sanitize-dump-payload", "rdb-del-sync-files", "rdb-save-incremental-fsync"],
+      "loc": 5560
+    },
+    {
+      "slug": "aof-persistence",
+      "name": "AOF Persistence",
+      "paths": ["src/aof.c"],
+      "summary": "Multi-Part append-only file: manifest-tracked BASE/INCR/HISTORY files, fsync policies, AOFRW, BACKUP.",
+      "description": "Durable command log using the Multi-Part AOF layout: an aofManifest (appendonly.aof.manifest in appenddirname) tracks one BASE file (snapshot from last rewrite, written as RDB when aof-use-rdb-preamble yes — rdbSaveRio with RDBFLAGS_AOF_PREAMBLE), ordered INCR files of RESP commands, and HISTORY files awaiting GC (aofDelHistoryFiles). feedAppendOnlyFile buffers propagated commands, flushAppendOnlyFile/aofWrite apply the appendfsync policy — always fsyncs inline, everysec offloads to a bio thread (aof_background_fsync) and delays writes up to 2s if fsync lags, logging 'Asynchronous AOF fsync is taking too long (disk is busy?)'. AOFRW (rewriteAppendOnlyFileBackground, BGREWRITEAOF) forks CHILD_TYPE_AOF: the child writes a fresh BASE via rewriteAppendOnlyFile while the parent opens a new INCR (openNewIncrAofForAppend), then markRewrittenIncrAofAsHistory retires old files; aofRewriteLimited throttles retry storms. Also implements the BACKUP command: a consistent hard-linked BASE+INCR+manifest copy in backupdirname with lifecycle IDLE->PENDING->SNAPSHOTTING->INCREMENTING->SEALED. Searchable as: appendonly, AOF rewrite, aof manifest, truncated AOF, aof-load-truncated, aof-timestamp-enabled annotations, auto-aof-rewrite-percentage, fsync everysec latency.",
+      "part_of": "service:redis-server",
+      "depends_on": ["rio-layer", "rdb-persistence", "background-io", "server-core", "keyspace", "atomic-slot-migration"],
+      "uses_datastores": ["aof-log"],
+      "config_vars": ["appendonly", "appendfsync", "appendfilename", "appenddirname", "no-appendfsync-on-rewrite", "auto-aof-rewrite-percentage", "auto-aof-rewrite-min-size", "aof-load-truncated", "aof-load-corrupt-tail-max-size", "aof-use-rdb-preamble", "aof-timestamp-enabled", "aof-rewrite-incremental-fsync", "backupdirname"],
+      "loc": 3831
+    },
+    {
+      "slug": "rio-layer",
+      "name": "Rio Stream Abstraction",
+      "paths": ["src/rio.c", "src/rio.h"],
+      "summary": "Stream I/O abstraction (buffer/file/conn/fd/connset) with CRC64 checksumming used by RDB and AOF.",
+      "description": "Uniform read/write/tell/flush interface over five backends — rioInitWithBuffer (sds), rioInitWithFile, rioInitWithConn (replica socket with read_limit), rioInitWithFd (child-to-parent pipe for diskless sync), rioInitWithConnset (fan-out to multiple connections) — so rdb.c and aof.c serialize identically to memory, disk, or sockets. rioGenericUpdateChecksum maintains the rolling CRC64 embedded in RDB files; rioSetAutoSync implements incremental fsync every N bytes (rdb-save-incremental-fsync / aof-rewrite-incremental-fsync) to avoid huge fsync latency spikes; rioSetReclaimCache drops page cache during large dumps. Also provides RESP emission helpers used by AOF rewrite: rioWriteBulkCount/rioWriteBulkString/rioWriteBulkLongLong/rioWriteBulkDouble. Searchable as: rio, stream I/O abstraction, checksum mismatch, short read, auto-sync.",
+      "part_of": "service:redis-server",
+      "depends_on": ["checksums", "sds", "connection-layer"],
+      "config_vars": ["rdb-save-incremental-fsync", "aof-rewrite-incremental-fsync"],
+      "loc": 640
+    },
+    {
+      "slug": "persistence-checkers",
+      "name": "Persistence File Checkers",
+      "paths": ["src/redis-check-rdb.c", "src/redis-check-aof.c"],
+      "summary": "redis-check-rdb and redis-check-aof: offline validation and repair of RDB files and AOF sets.",
+      "description": "Offline integrity tools compiled into the server binary. redis_check_rdb_main replays a dump through rdbLoadObject in rdbCheckMode, tracking a state machine (RDB_CHECK_DOING_READ_TYPE/READ_KEY/READ_OBJECT_VALUE/CHECK_SUM in rdbstate) so a crash or error reports exactly which key/opcode was being parsed; counts keys, expires, already-expired. redis_check_aof_main classifies input as AOF_RESP, AOF_RDB_PREAMBLE, or AOF_MULTI_PART (fileIsManifest/fileIsRDB), walks manifests via checkMultiPartAof, validates RESP records (processRESP/processAnnotations), and supports --fix (truncate at last valid offset) and --truncate-to-timestamp using aof-timestamp-enabled annotations for point-in-time recovery. Searchable as: corrupt RDB, 'Bad data format', AOF truncated tail repair, aof manifest validation, redis-check-aof --fix.",
+      "part_of": "service:redis-server",
+      "depends_on": ["rdb-persistence", "aof-persistence", "rio-layer"],
+      "uses_datastores": ["rdb-snapshot", "aof-log"],
+      "loc": 1062
+    }
+  ],
+  "datastores": [
+    {
+      "slug": "rdb-snapshot",
+      "name": "RDB Snapshot File",
+      "summary": "Compact binary point-in-time dump (dump.rdb): typed opcodes, LZF-compressed strings, CRC64 trailer.",
+      "description": "The on-disk snapshot format written by rdbSaveRio: 'REDIS<version>' magic, aux fields (redis-ver, repl-id/repl-offset from rdbSaveInfo for replication continuity), per-db key/value records with type opcodes and millisecond expires, optional LZF compression, module aux data, functions, and a CRC64 footer. Filename set by dbfilename (default dump.rdb) in dir; also streamed over sockets for diskless full sync and embedded as the BASE file of the AOF (RDB preamble). Temp files are written as temp-<pid>.rdb then renamed for atomicity.",
+      "used_by": ["rdb-persistence", "persistence-checkers", "replication-core", "aof-persistence"]
+    },
+    {
+      "slug": "aof-log",
+      "name": "Append-Only File Set",
+      "summary": "Multi-Part AOF directory (appendonlydir): manifest plus BASE/INCR/HISTORY files logging every write.",
+      "description": "Durable write log stored in appenddirname: appendonly.aof.manifest lines like 'file appendonly.aof.2.base.rdb seq 2 type b' track one BASE (RDB or RESP snapshot), ordered INCR files of RESP-encoded commands (with optional '#TS' timestamp annotations when aof-timestamp-enabled), and HISTORY files pending deletion. Replayed at startup by loadAppendOnlyFiles/loadSingleAppendOnlyFile, which detects the 'REDIS' magic to load RDB-preamble bases. The BACKUP command hard-links BASE+INCR into backupdirname to pin inodes across rewrites and GC.",
+      "used_by": ["aof-persistence", "persistence-checkers"]
+    }
+  ],
+  "config_vars": [
+    {"name": "appendonly", "summary": "Master switch for AOF persistence.", "description": "When yes, every write is logged to the Multi-Part AOF set and replayed at startup (loadAppendOnlyFiles); toggling at runtime triggers startAppendOnly/stopAppendOnly with an initial AOFRW.", "configures": "aof-persistence", "default": "no"},
+    {"name": "appendfsync", "summary": "AOF fsync policy: always, everysec, or no.", "description": "Controls flushAppendOnlyFile durability: always fsyncs per write batch, everysec offloads fsync to a bio thread (may delay writes up to 2s when the disk is busy), no leaves flushing to the OS.", "configures": "aof-persistence", "default": "everysec"},
+    {"name": "save", "summary": "RDB save points: '<seconds> <changes>' pairs triggering BGSAVE.", "description": "serverCron triggers rdbSaveBackground when any point matches; 'save \"\"' disables snapshotting.", "configures": "rdb-persistence", "default": "3600 1 300 100 60 10000"},
+    {"name": "aof-use-rdb-preamble", "summary": "Write the AOF BASE file in RDB format instead of RESP.", "description": "When yes, rewriteAppendOnlyFile emits the BASE via rdbSaveRio(RDBFLAGS_AOF_PREAMBLE), producing appendonly.aof.N.base.rdb — faster rewrites and loads than a pure-RESP base.", "configures": "aof-persistence", "default": "yes"},
+    {"name": "appenddirname", "summary": "Directory (under dir) holding the Multi-Part AOF file set.", "description": "All BASE/INCR/HISTORY files and the manifest live here; created on demand by dirCreateIfMissing.", "configures": "aof-persistence", "default": "appendonlydir"},
+    {"name": "appendfilename", "summary": "Base name prefix for AOF files.", "description": "Prefix for manifest and BASE/INCR/HISTORY file names, e.g. appendonly.aof.1.incr.aof.", "configures": "aof-persistence", "default": "appendonly.aof"},
+    {"name": "auto-aof-rewrite-percentage", "summary": "Growth percentage over last-rewrite size that auto-triggers AOFRW.", "description": "With auto-aof-rewrite-min-size, drives automatic BGREWRITEAOF scheduling; aofRewriteLimited backs off after repeated failures.", "configures": "aof-persistence", "default": "100"},
+    {"name": "auto-aof-rewrite-min-size", "summary": "Minimum AOF size before automatic rewrites are considered.", "description": "Prevents rewrite churn on small datasets.", "configures": "aof-persistence", "default": "64mb"},
+    {"name": "aof-load-truncated", "summary": "Tolerate a truncated AOF tail at startup.", "description": "When yes, a half-written last command is truncated (truncateAppendOnlyFile) and the server starts with a log notice instead of refusing to load.", "configures": "aof-persistence", "default": "yes"},
+    {"name": "aof-load-corrupt-tail-max-size", "summary": "Max corrupt-tail bytes auto-truncated during AOF load.", "description": "Non-zero allows loadSingleAppendOnlyFile to discard up to this many trailing corrupt bytes rather than abort; 0 disables (createOffTConfig in config.c).", "configures": "aof-persistence", "default": "0"},
+    {"name": "aof-timestamp-enabled", "summary": "Emit '#TS' timestamp annotations into the AOF.", "description": "genAofTimestampAnnotationIfNeeded writes RESP-comment timestamps enabling redis-check-aof --truncate-to-timestamp point-in-time recovery.", "configures": "aof-persistence", "default": "no"},
+    {"name": "backupdirname", "summary": "Directory name (under dir) where BACKUP seals consistent copies.", "description": "Startup-only (IMMUTABLE_CONFIG); BACKUP hard-links BASE/INCR files plus a generated manifest here so they survive AOF rewrites and history GC.", "configures": "aof-persistence", "default": "backupdir"},
+    {"name": "rdbcompression", "summary": "LZF-compress string values inside RDB files.", "description": "Enables rdbSaveLzfStringObject for strings above a small threshold; trade CPU for smaller dumps.", "configures": "rdb-persistence", "default": "yes"},
+    {"name": "rdbchecksum", "summary": "Append and verify a CRC64 checksum on RDB files.", "description": "Maintained by rioGenericUpdateChecksum; disabling gains ~10% save/load performance but loses corruption detection.", "configures": "rdb-persistence", "default": "yes"},
+    {"name": "dbfilename", "summary": "RDB snapshot filename.", "description": "Snapshot written under dir; temp-<pid>.rdb is renamed onto this atomically.", "configures": "rdb-persistence", "default": "dump.rdb"},
+    {"name": "stop-writes-on-bgsave-error", "summary": "Reject writes (MISCONF) after a failed BGSAVE.", "description": "Makes persistence failures loud: writes error out until lastbgsave_status recovers.", "configures": "rdb-persistence", "default": "yes"},
+    {"name": "sanitize-dump-payload", "summary": "Deep-validate RESTORE/DUMP and module payloads on load.", "description": "no/yes/clients: 'yes' forces deep_integrity_validation in rdbLoadObject (full listpack/ziplist walks, dup detection); 'clients' sanitizes only client-supplied payloads unless the ACL user has skip-sanitize-payload.", "configures": "rdb-persistence", "default": "no"},
+    {"name": "rdb-del-sync-files", "summary": "Delete replication-only RDB files when persistence is disabled.", "description": "Cleans up RDBs used purely for full sync on instances with no persistence configured.", "configures": "rdb-persistence", "default": "no"}
+  ],
+  "features": [
+    {
+      "slug": "fork-bgsave-cow",
+      "name": "Fork-based BGSAVE with COW tracking",
+      "summary": "Point-in-time snapshots via fork; child COW memory reported to parent over the childinfo pipe.",
+      "description": "rdbSaveBackground forks CHILD_TYPE_RDB; the child serializes a frozen view while copy-on-write duplicates touched pages, and reports COW bytes/progress via sendChildInfoGeneric over server.child_info_pipe (childinfo.c) into INFO persistence fields. backgroundSaveDoneHandler finalizes lastbgsave_status; killRDBChild aborts. Symptoms indexed: memory doubling during BGSAVE, 'Background saving started by pid', fork latency.",
+      "lifecycle": "active",
+      "implemented_in": ["rdb-persistence"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "multi-part-aof",
+      "name": "Multi-Part AOF with manifest",
+      "summary": "AOF split into manifest-tracked BASE/INCR/HISTORY files; rewrites never rewrite the live tail.",
+      "description": "aofManifest tracks file name, seq, type (b/i/h) plus startoffset/endoffset per file; AOFRW writes a new BASE while the parent appends to a fresh INCR, then old files become HISTORY and are GC'd (aofDelHistoryFiles). aofUpgradePrepare migrates pre-7.0 single-file AOFs into the manifest scheme.",
+      "lifecycle": "active",
+      "implemented_in": ["aof-persistence", "persistence-checkers"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "aofrw",
+      "name": "Background AOF rewrite (AOFRW)",
+      "summary": "Fork-based compaction: child rewrites dataset as a minimal BASE (RDB preamble by default).",
+      "description": "rewriteAppendOnlyFileBackground forks CHILD_TYPE_AOF; the child emits either an RDB base (aof-use-rdb-preamble) or minimal RESP via rewriteObject/rewriteListObject/rewriteStreamObject etc., using per-type iterators and rioWriteBulk helpers. Triggered by BGREWRITEAOF or auto-aof-rewrite-* thresholds; aofRewriteLimited applies exponential back-off after repeated failures.",
+      "lifecycle": "active",
+      "implemented_in": ["aof-persistence", "rdb-persistence"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "diskless-rdb-sync",
+      "name": "Diskless RDB streaming to replicas",
+      "summary": "RDB streamed from a fork child through a pipe to replica sockets, framed by a $EOF hex mark.",
+      "description": "rdbSaveToSlavesSockets forks a child that writes the RDB into server.rdb_pipe_read; the parent event loop relays chunks to each waiting replica connection. rdbSaveRioWithEOFMark brackets the stream with '$EOF:<40-byte unguessable hex>' so replicas detect end-of-transfer without a length prefix. backgroundSaveDoneHandlerSocket handles completion.",
+      "lifecycle": "active",
+      "implemented_in": ["rdb-persistence", "rio-layer"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "backup-command",
+      "name": "BACKUP command (consistent hard-linked copy)",
+      "summary": "Online consistent backup reusing MP-AOF: hard-linked BASE + INCR + manifest sealed in backupdir.",
+      "description": "BACKUP drives a state machine IDLE->PENDING->SNAPSHOTTING->INCREMENTING->SEALED (server.backup_state); it snapshots a BASE, captures concurrent writes in an INCR, hard-links both into backupdirname (backupLinkFile) so inodes survive AOFRW and history GC, and writes a generated manifest (backupWriteManifest). ABORT/failures land in FAILED; CLEANUP resets. Blocks concurrent AOFRW while snapshotting/incrementing and postpones manual BGREWRITEAOF until sealed.",
+      "lifecycle": "active",
+      "implemented_in": ["aof-persistence"],
+      "provided_by": "service:redis-server"
+    },
+    {
+      "slug": "aof-point-in-time-truncate",
+      "name": "AOF timestamp annotations and PITR truncate",
+      "summary": "Optional #TS annotations in the AOF enable redis-check-aof --truncate-to-timestamp recovery.",
+      "description": "With aof-timestamp-enabled, genAofTimestampAnnotationIfNeeded interleaves timestamp annotation records; redis-check-aof --truncate-to-timestamp <unix-ts> (processAnnotations, AOF_CHECK_TIMESTAMP_TRUNCATED) cuts the log at the chosen instant for point-in-time restore.",
+      "lifecycle": "active",
+      "implemented_in": ["aof-persistence", "persistence-checkers"],
+      "provided_by": "service:redis-server"
+    }
+  ],
+  "decisions": [
+    {
+      "slug": "mpaof-base-incr-history",
+      "title": "AOF is a manifest-managed set of BASE/INCR/HISTORY files",
+      "statement": "Instead of one mutable appendonly.aof, the AOF is a directory of immutable files (one BASE snapshot, ordered INCR command logs, retired HISTORY files) coordinated by a manifest.",
+      "rationale": "Rewrites can produce a new BASE without touching the live append stream, aborted rewrites leave multiple ordered INCRs safely, and old files are garbage-collected instead of overwritten — eliminating the pre-7.0 rewrite buffer and rename races.",
+      "description": "The aof.c 'AOF Manifest file implementation' block defines the three file types and shows a sample manifest ('file appendonly.aof.2.base.rdb seq 2 type b ...'); markRewrittenIncrAofAsHistory and aofDelHistoryFiles implement retirement and GC.",
+      "affects": ["aof-persistence", "multi-part-aof"],
+      "evidence": "src/aof.c ~lines 44-73 header comment describing BASE/INCR/HISTORY types and example manifest content"
+    },
+    {
+      "slug": "rdb-preamble-aof-base",
+      "title": "AOF BASE defaults to RDB format (hybrid preamble)",
+      "statement": "When aof-use-rdb-preamble is yes (default), the AOF rewrite child writes the BASE file as an RDB dump rather than a RESP command replay.",
+      "rationale": "RDB is far denser and loads faster than replaying millions of RESP commands; the INCR tail keeps command-level durability on top of the binary snapshot.",
+      "description": "rewriteAppendOnlyFile branches on server.aof_use_rdb_preamble to call rdbSaveRio(SLAVE_REQ_NONE,&aof,&error,RDBFLAGS_AOF_PREAMBLE,NULL); loadSingleAppendOnlyFile sniffs the 'REDIS' magic to decide whether to route a BASE through rdbLoadRio.",
+      "affects": ["aof-persistence", "rdb-persistence", "aofrw"],
+      "evidence": "src/aof.c:2947-2949 (rdbSaveRio with RDBFLAGS_AOF_PREAMBLE) and src/aof.c:1665-1685 ('REDIS' magic sniff + 'Reading RDB preamble from AOF file...')"
+    },
+    {
+      "slug": "everysec-fsync-on-bio-thread",
+      "title": "everysec fsync runs on a background bio thread with a 2s write-delay grace",
+      "statement": "Under appendfsync everysec, fsync is offloaded to bio (aof_background_fsync); if a background fsync is still in flight, flushAppendOnlyFile postpones the write up to 2 seconds before writing anyway.",
+      "rationale": "Keeps fsync latency off the main thread while bounding unwritten-buffer growth; a busy disk degrades to at-most-2s data loss rather than blocking the event loop.",
+      "description": "flushAppendOnlyFile tracks server.aof_flush_postponed_start and logs 'Asynchronous AOF fsync is taking too long (disk is busy?)...' when forced to write during an in-flight fsync — the canonical symptom string for AOF disk-pressure incidents.",
+      "affects": ["aof-persistence"],
+      "evidence": "src/aof.c:1257-1270 postponed-flush logic and warning log string"
+    },
+    {
+      "slug": "backup-reuses-mpaof-hardlinks",
+      "title": "BACKUP reuses Multi-Part AOF machinery with hard links instead of copying",
+      "statement": "The BACKUP command builds a consistent copy from one fresh BASE, one INCR of concurrent writes, and a generated manifest, pinning files via hard links in backupdirname.",
+      "rationale": "Hard-linking pins the underlying inodes so backup files survive AOF rewrites and history GC with zero data copying; reusing MP-AOF gets snapshot+delta consistency for free.",
+      "description": "Explicit design comment above the BACKUP implementation documents the file composition and the IDLE->PENDING->SNAPSHOTTING->INCREMENTING->SEALED lifecycle; backupLinkFile does the hard-linking, backupWriteManifest seals.",
+      "affects": ["aof-persistence", "backup-command"],
+      "evidence": "src/aof.c ~lines 3168-3182 'BACKUP command implementation' comment block (hard-linked BASE/INCR, lifecycle states)"
+    },
+    {
+      "slug": "sanitize-dump-payload-gated",
+      "title": "Deep payload validation is opt-in via sanitize-dump-payload",
+      "statement": "Full structural validation of listpack/ziplist payloads during load runs only when sanitize-dump-payload is yes, or for client-supplied RESTORE payloads under 'clients' mode.",
+      "rationale": "Deep walks of every node are expensive; trusted sources (own RDB, master link, ACL skip-sanitize-payload users) skip them, while untrusted DUMP/RESTORE blobs get hardened parsing to prevent crafted-payload corruption or crashes.",
+      "description": "rdbLoadObject sets deep_integrity_validation from server.sanitize_dump_payload (SANITIZE_DUMP_YES / SANITIZE_DUMP_CLIENTS) and threads it into validators like lpValidateIntegrityAndDups and ziplistPairsConvertAndValidateIntegrity.",
+      "affects": ["rdb-persistence"],
+      "evidence": "src/rdb.c:2931-2934 deep_integrity_validation gating comment ('from either the master or a client using an ACL user with the skip-sanitize-payload flag')"
+    },
+    {
+      "slug": "diskless-eof-mark-framing",
+      "title": "Diskless RDB streams are delimited by an unguessable $EOF hex mark",
+      "statement": "Socket-target RDB transfers are framed as '$EOF:<40 bytes unguessable hex string>\\r\\n ... <mark>' instead of a length prefix.",
+      "rationale": "The RDB length is unknown when streaming begins from a fork child; a random 40-byte delimiter lets replicas detect end-of-payload safely without buffering the whole dump.",
+      "description": "rdbSaveRioWithEOFMark writes the '$EOF:' preamble and trailing mark around rdbSaveRio for rdbSaveToSlavesSockets transfers relayed via server.rdb_pipe_* from the child.",
+      "affects": ["rdb-persistence", "diskless-rdb-sync"],
+      "evidence": "src/rdb.c:2096-2107 comment and rioWrite of '$EOF:' in rdbSaveRioWithEOFMark"
+    }
+  ]
+}

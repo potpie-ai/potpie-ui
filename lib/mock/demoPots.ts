@@ -33,11 +33,15 @@ import type {
   PotRepository,
   PotRole,
   PotSource,
+  PotTimeline,
+  PotTimelineOptions,
   PredicateFamilyRow,
   ProjectGraph,
   ProjectGraphEdge,
   ProjectGraphNode,
   RawIngestionResult,
+  TimelineActivity,
+  TimelineEntityRef,
   TopEntityRow,
 } from "@/services/PotService";
 import type { ConnectedIntegration } from "@/services/IntegrationService";
@@ -1596,6 +1600,194 @@ export function getDemoProjectGraph(potId: string): ProjectGraph {
     edges,
     message: "ok",
   };
+}
+
+// ---- Activity timeline ------------------------------------------------------
+
+function entityRef(
+  key: string,
+  byKey: Map<string, ProjectGraphNode>,
+): TimelineEntityRef {
+  const node = byKey.get(key);
+  const name =
+    (node?.properties?.name as string | undefined) ||
+    key.slice(key.indexOf(":") + 1);
+  return { key, name, labels: node?.labels ?? [] };
+}
+
+/**
+ * Derive rich timeline items from a mock project graph. Activity nodes (the
+ * potpie pot) carry the full event shape; graphs without Activity nodes (the
+ * Redis pot's older ontology) fall back to merged PullRequest nodes so every
+ * hand-authored dataset still yields a timeline.
+ */
+function deriveTimelineFromGraph(
+  nodes: ProjectGraphNode[],
+  edges: ProjectGraphEdge[],
+): TimelineActivity[] {
+  const byKey = new Map(nodes.map((n) => [n.entity_key, n]));
+
+  // One pass over the edges: actor (person -PERFORMED/AUTHORED-> activity),
+  // touched and mentioned entities (activity -TOUCHED/MENTIONS-> entity).
+  const actorByActivity = new Map<string, string>();
+  const touchedByActivity = new Map<string, string[]>();
+  const mentionsByActivity = new Map<string, string[]>();
+  for (const e of edges) {
+    if (e.type === "PERFORMED" || e.type === "AUTHORED") {
+      if (!actorByActivity.has(e.to)) actorByActivity.set(e.to, e.from);
+    } else if (e.type === "TOUCHED") {
+      const arr = touchedByActivity.get(e.from);
+      if (arr) arr.push(e.to);
+      else touchedByActivity.set(e.from, [e.to]);
+    } else if (e.type === "MENTIONS") {
+      const arr = mentionsByActivity.get(e.from);
+      if (arr) arr.push(e.to);
+      else mentionsByActivity.set(e.from, [e.to]);
+    }
+  }
+
+  const items: TimelineActivity[] = [];
+  const hasActivities = nodes.some((n) => n.labels.includes("Activity"));
+  for (const n of nodes) {
+    const p = n.properties ?? {};
+    let timestamp: string | null = null;
+    let verb: string | null = null;
+    if (n.labels.includes("Activity")) {
+      timestamp = (p.occurred_at as string | undefined) ?? null;
+      verb = (p.verb_class as string | undefined) ?? null;
+    } else if (!hasActivities && n.labels.includes("PullRequest") && p.merged_at) {
+      timestamp = p.merged_at as string;
+      verb = "pr_merged";
+    } else {
+      continue;
+    }
+    if (!timestamp) continue;
+    const actorKey = actorByActivity.get(n.entity_key);
+    items.push({
+      id: n.entity_key,
+      activity_key: n.entity_key,
+      timestamp,
+      verb_class: verb,
+      title: (p.name as string | undefined) ?? n.entity_key,
+      activity_type: (p.activity_type as string | undefined) ?? null,
+      summary: (p.summary as string | undefined) ?? null,
+      description: (p.description as string | undefined) ?? null,
+      actor: actorKey ? entityRef(actorKey, byKey) : null,
+      repo_name: (p.repo_name as string | undefined) ?? null,
+      url: (p.url as string | undefined) ?? null,
+      number: (p.number as number | undefined) ?? null,
+      state: (p.state as string | undefined) ?? null,
+      touched: (touchedByActivity.get(n.entity_key) ?? []).map((k) =>
+        entityRef(k, byKey),
+      ),
+      mentions: (mentionsByActivity.get(n.entity_key) ?? []).map((k) =>
+        entityRef(k, byKey),
+      ),
+      source_system: "github",
+      evidence_strength: 0.9,
+    });
+  }
+  items.sort((a, b) => (b.timestamp ?? "").localeCompare(a.timestamp ?? ""));
+  return items;
+}
+
+/** Synthesized recent activity for pots without a hand-authored graph. */
+function buildGenericTimeline(cfg: DemoPotConfig): TimelineActivity[] {
+  const mk = (
+    idx: number,
+    msAgo: number,
+    verb: string,
+    activityType: string,
+    title: string,
+    summary: string,
+    personIdx: number,
+  ): TimelineActivity => ({
+    id: `activity:demo:${cfg.slug}-${idx}`,
+    activity_key: `activity:demo:${cfg.slug}-${idx}`,
+    timestamp: iso(msAgo),
+    verb_class: verb,
+    title,
+    activity_type: activityType,
+    summary,
+    actor: {
+      key: `person:${cfg.people[personIdx % cfg.people.length].login}`,
+      name: cfg.people[personIdx % cfg.people.length].name,
+      labels: ["Person"],
+    },
+    repo_name: cfg.primaryRepo,
+    touched: [
+      {
+        key: `repository:${cfg.primaryRepo}`,
+        name: cfg.primaryRepo,
+        labels: ["Repository"],
+      },
+    ],
+    mentions: [],
+    source_system: "github",
+    evidence_strength: 0.9,
+  });
+  return [
+    mk(1, 5 * HOUR, "pr_opened", "pull_request", `#8424 ${cfg.features[2].name} follow-ups`, `Opens the follow-up work planned after the ${cfg.features[2].name} rollout.`, 2),
+    mk(2, 22 * HOUR, "deploy_succeeded", "deployment", `Deploy ${cfg.services[0]} · production`, `Rolled out the ${cfg.features[0].name} groundwork to production.`, 0),
+    mk(3, DAY + 6 * HOUR, "pr_merged", "pull_request", `#8421 ${cfg.features[0].name} groundwork`, `Merged the groundwork PR behind a feature flag in ${cfg.services[0]}.`, 0),
+    mk(4, 2 * DAY, "pr_review_approved", "review", `Review #8421 · approved`, `Approved after a pass over the ${cfg.services[0]} persistence changes.`, 1),
+    mk(5, 3 * DAY, "github_issue_opened", "issue", `Flaky ${cfg.services[2]} integration test`, `Intermittent timeout in the ${cfg.services[2]} suite under parallel runs.`, 3),
+    mk(6, 5 * DAY, "discussion_posted", "discussion", `RFC: ${cfg.features[1].name} rollout plan`, `Thread on sequencing the ${cfg.features[1].name} rollout across environments.`, 1),
+    mk(7, 8 * DAY, "alert_fired", "alert", `Latency alert · ${cfg.services[1]}`, `p95 latency crossed the alert threshold for ${cfg.services[1]}; auto-resolved after rollback.`, 2),
+    mk(8, 12 * DAY, "release_published", "release", `${cfg.slug} v2.4.0`, `Cut the v2.4.0 release including the ${cfg.features[0].name} groundwork.`, 0),
+  ];
+}
+
+const demoTimelineCache = new Map<string, TimelineActivity[]>();
+
+function demoTimelineItems(potId: string): TimelineActivity[] {
+  const cached = demoTimelineCache.get(potId);
+  if (cached) return cached;
+  let items: TimelineActivity[];
+  if (potId === DEMO_POTPIE_POT_ID) {
+    items = deriveTimelineFromGraph(POTPIE_GRAPH_NODES, POTPIE_GRAPH_EDGES);
+  } else if (potId === DEMO_REDIS_POT_ID) {
+    items = deriveTimelineFromGraph(REDIS_GRAPH_NODES, REDIS_GRAPH_EDGES);
+  } else {
+    items = buildGenericTimeline(configFor(potId));
+  }
+  demoTimelineCache.set(potId, items);
+  return items;
+}
+
+const WINDOW_MS: Record<string, number> = {
+  "24h": DAY,
+  "7d": 7 * DAY,
+  "14d": 14 * DAY,
+  "30d": 30 * DAY,
+  "90d": 90 * DAY,
+  "180d": 180 * DAY,
+};
+
+export function getDemoPotTimeline(
+  potId: string,
+  options: PotTimelineOptions = {},
+): PotTimeline {
+  // Same resolution rules as the backend endpoint: explicit `since` wins,
+  // otherwise the relative window applies ("all" and unknown windows are
+  // unbounded). The result-size `limit` is deliberately ignored — the demo
+  // pots exist to be explored.
+  let since: string | null = options.since ?? null;
+  if (!since && options.window && WINDOW_MS[options.window]) {
+    since = iso(WINDOW_MS[options.window]);
+  }
+  const until = options.until ?? null;
+  const verbs = options.verbClasses?.length
+    ? new Set(options.verbClasses)
+    : null;
+  const items = demoTimelineItems(potId).filter((it) => {
+    if (!it.timestamp) return false;
+    if (since && it.timestamp < since) return false;
+    if (until && it.timestamp > until) return false;
+    if (verbs && (!it.verb_class || !verbs.has(it.verb_class))) return false;
+    return true;
+  });
+  return { pot_id: potId, items, window: { since, until } };
 }
 
 // ---- Context query (Resolve / Agentic / Evidence) ---------------------------

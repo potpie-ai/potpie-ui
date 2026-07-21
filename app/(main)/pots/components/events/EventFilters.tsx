@@ -171,7 +171,12 @@ export function EventFilters({
             {dateLabel}
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="pot-theme w-auto space-y-3 p-4">
+        <PopoverContent
+          align="start"
+          // The shared PopoverContent defaults to bg-primary/text-black —
+          // repaint with the pot-theme popover tokens.
+          className="pot-theme w-auto space-y-3 bg-popover p-4 text-popover-foreground"
+        >
           <div className="space-y-1.5">
             <label
               className="text-[13px] font-medium text-foreground"

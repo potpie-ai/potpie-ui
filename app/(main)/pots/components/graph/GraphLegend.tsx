@@ -1,31 +1,75 @@
 "use client";
 
-// Bottom-left floating legend: one dot+label chip per ontology category, plus
-// the grey "unloaded frontier" affordance hint.
+// Bottom-left floating legend, now doubling as a category filter: one
+// dot+label chip per ontology category present in the loaded data. Clicking a
+// chip hides/shows every node type in that category ("partial" when only some
+// of its types are hidden via the Filters popover). The grey "unloaded
+// frontier" affordance hint stays.
 
 import React from "react";
 import { GlassPanel } from "@/app/(main)/pots/components/kit";
 import { cn } from "@/lib/utils";
-import { CATEGORY_META, CATEGORY_ORDER } from "./ontology";
+import { categoryDisplay } from "./ontology";
 
-export default function GraphLegend({ className }: { className?: string }) {
+export type LegendCategory = {
+  key: string;
+  count: number;
+  state: "on" | "partial" | "off";
+};
+
+export default function GraphLegend({
+  categories,
+  onToggleCategory,
+  onSoloCategory,
+  className,
+}: {
+  categories: LegendCategory[];
+  onToggleCategory: (category: string) => void;
+  /** Show only this category (alt-click); on the solo itself, restores all. */
+  onSoloCategory: (category: string) => void;
+  className?: string;
+}) {
   return (
     <GlassPanel className={cn("max-w-[340px] px-3.5 py-2.5", className)}>
-      <div className="flex flex-wrap gap-x-3.5 gap-y-1.5">
-        {CATEGORY_ORDER.map((c) => {
-          const meta = CATEGORY_META[c];
+      <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+        {categories.map((c) => {
+          const meta = categoryDisplay(c.key);
+          const base =
+            c.state === "off"
+              ? `${meta.blurb || meta.label} — hidden, click to show`
+              : c.state === "partial"
+                ? `${meta.blurb || meta.label} — some types hidden, click to hide all`
+                : `${meta.blurb || meta.label} — click to hide`;
+          const title = `${base} · ⌥-click to show only this category`;
           return (
-            <span
-              key={c}
-              title={meta.blurb}
-              className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
+            <button
+              key={c.key}
+              type="button"
+              onClick={(e) =>
+                e.altKey ? onSoloCategory(c.key) : onToggleCategory(c.key)
+              }
+              title={title}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded text-[11px] transition-colors",
+                c.state === "off"
+                  ? "text-muted-foreground/50 line-through decoration-muted-foreground/40 hover:text-muted-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
             >
               <span
                 aria-hidden
-                className={cn("h-2 w-2 shrink-0 rounded-full", meta.dot)}
+                className={cn(
+                  "h-2 w-2 shrink-0 rounded-full",
+                  meta.dot,
+                  c.state === "off" && "opacity-30",
+                  c.state === "partial" && "opacity-60",
+                )}
               />
               {meta.label}
-            </span>
+              <span className="font-mono text-[10px] text-muted-foreground/70">
+                {c.count}
+              </span>
+            </button>
           );
         })}
       </div>

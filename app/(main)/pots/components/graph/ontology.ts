@@ -104,11 +104,20 @@ const UNKNOWN_CATEGORY_META: CategoryMeta = {
   hexDark: "#94a3b8",
 };
 
+/** Pseudo-category key for nodes whose labels map to no known category. */
+export const OTHER_CATEGORY = "other";
+
 export function categoryMeta(cat: string): CategoryMeta {
   return CATEGORY_META[cat as CategoryKey] ?? {
     ...UNKNOWN_CATEGORY_META,
     label: cat,
   };
+}
+
+/** Like categoryMeta but renders null/"other" as the neutral "Other" bucket. */
+export function categoryDisplay(cat: string | null | undefined): CategoryMeta {
+  if (!cat || cat === OTHER_CATEGORY) return UNKNOWN_CATEGORY_META;
+  return categoryMeta(cat);
 }
 
 /** First label that maps to a known ontology category wins. */

@@ -19,6 +19,9 @@ export type GraphStatsPanelProps = {
   trimmable: boolean;
   showingAll: boolean;
   onToggleShowAll: () => void;
+  /** "key" draws only structural edges at rest; "all" draws every edge. */
+  edgeMode: "key" | "all";
+  onToggleEdgeMode: () => void;
   refreshing: boolean;
   onRefresh: () => void;
   onOpenDetails: () => void;
@@ -33,6 +36,8 @@ export default function GraphStatsPanel({
   trimmable,
   showingAll,
   onToggleShowAll,
+  edgeMode,
+  onToggleEdgeMode,
   refreshing,
   onRefresh,
   onOpenDetails,
@@ -46,7 +51,9 @@ export default function GraphStatsPanel({
         title={
           trimmed
             ? "Rendered / loaded — the canvas starts from the most-connected core; double-click nodes to reveal more"
-            : "Nodes and edges currently on the canvas"
+            : edgeMode === "key"
+              ? "Loaded nodes and edges — only key structural edges are drawn until you select a node"
+              : "Nodes and edges currently on the canvas"
         }
       >
         {trimmed
@@ -69,6 +76,20 @@ export default function GraphStatsPanel({
           {showingAll ? "Focus" : "Show all"}
         </Button>
       ) : null}
+
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 px-2 text-[13px] font-medium"
+        onClick={onToggleEdgeMode}
+        title={
+          edgeMode === "key"
+            ? "Only key structural edges are drawn — select a node to see all of its edges, or click to draw every edge"
+            : "Every edge is drawn — click to show only key structural edges"
+        }
+      >
+        {edgeMode === "key" ? "All edges" : "Key edges"}
+      </Button>
 
       <span aria-hidden className="mx-0.5 h-5 w-px bg-border/70" />
 

@@ -1,52 +1,81 @@
 "use client";
 
-// Neo4j-browser-style force graph for the pot ontology, rendered as plain SVG
-// driven by d3-force. Flat category-coloured discs with a darker rim, captions
-// wrapped inside the disc, relationship-type labels along the edges, and
-// arrowheads at the target end. The SVG background stays transparent so the
-// page's `pot-dots` texture shows through, exactly like the old WebGL canvas.
+// Neo4j-browser-style graph for the pot ontology, built to render EVERY loaded
+// node efficiently: nodes are SVG (crisp captions, DOM hit-testing, CSS
+// fades) while all edges are drawn on a single 2D <canvas> underneath. A
+// dense pot (~800 nodes / ~2.4k edges) carries ~5k DOM elements instead of
+// the ~20k a full-SVG scene needs, and pan/zoom repaints one canvas plus a
+// much smaller vector layer.
 //
-// Layout: hub-and-ring via a spanning-forest backbone. The OSS explorer's
-// ring look is a property of its data — satellites there carry a single
-// edge, so d3's default physics pins each one at link distance from its hub.
-// A pot graph is dense (hundreds of nodes, ~6 edges each), and with six
-// links tugging every node toward six different places all distances
-// equalise into a hairball no matter the constants. So the simulation is fed
-// a tree even though every edge still renders: each node picks ONE parent —
-// the smallest neighbour that is still a clear hub (≥2× its degree), falling
-// back to its nearest-bigger neighbour (adopting the *biggest* neighbour
-// instead collapses the forest into a single star around the global
-// maximum) — and only that link is stiff. Every other edge keeps ~zero
-// strength: visible, but no pull.
+// Layout is computed ONCE per structure change and then frozen. d3-force is
+// used purely as a headless solver — synchronous ticks at build time, then
+// discarded — so there is no live simulation, no post-settle animation and
+// no reheat when data changes. Dragging a node simply moves it (and pins it
+// there); its edges follow via a canvas repaint while the rest of the
+// composition stays put.
+//
+// Layout shape: hub-and-ring via a spanning-forest backbone. A pot graph is
+// dense (~6 edges per node), and with six links tugging every node toward six
+// different places all distances equalise into a hairball no matter the
+// constants. So the solver is fed a tree even though every edge still
+// renders: each node picks ONE parent — the smallest neighbour that is still
+// a clear hub (≥2× its degree), falling back to its nearest-bigger neighbour
+// (adopting the *biggest* neighbour instead collapses the forest into a
+// single star around the global maximum) — and only that link is stiff.
+// Every other edge keeps ~zero strength: visible, but no pull.
 //
 // Each cluster is then laid out as a balloon tree: depth-d nodes share ring
 // d around the cluster root, ring radii grow with each generation's seat
 // demand, and every subtree owns an angular wedge so branches never cross.
 // Cluster roots are circle-packed by their computed footprint so clusters
-// never spawn entangled. The stiff backbone link pins each child at its
-// seeded distance from its hub while local-only charge spreads ring-mates
-// apart, so the composition settles into hubs wearing rings instead of a
-// uniform-density soup.
+// never spawn entangled. The synchronous settle only relaxes residual
+// overlap — the first (and only) paint is already rings-around-hubs.
 //
-// Rendering strategy: React owns the *structure* (which nodes/edges exist)
-// and mounts each element once; everything per-frame or per-interaction is
-// written straight into the DOM through element refs. That covers simulation
-// ticks and pan/zoom (positions) but also selection emphasis, fades and
-// label visibility — routing a click through React means reconciling every
-// disc and edge (~1.3k memoised components) and repainting them together,
-// which read as a visible blink on dense pots. A click now costs plain
-// attribute writes and lets the CSS opacity transitions do the fading.
+// Rendering strategy
+// - <canvas> (bottom): every edge — quadratic curves, arrowheads,
+//   relationship labels, selection emphasis, frontier dashes — redrawn as a
+//   whole on pan/zoom/selection. Redraws are rAF-batched and land in the
+//   same frame as the SVG transform write, so the two layers never shear.
+//   Edges outside the viewport are culled per draw.
+// - <svg> (top): node discs only (disc + type icon + caption). React mounts
+//   them once per structure; drag positions and selection styling are written
+//   straight to the DOM through element refs, never via re-render. Icons and
+//   captions hide below a zoom threshold where they would rasterise
+//   unreadably small anyway.
+// - Pan/zoom never repaints the node layer mid-gesture: the world transform
+//   is only committed into the root <g> attribute (an SVG repaint of every
+//   disc) at gesture end, while the live delta rides on a composited CSS
+//   transform on the <svg> element itself — a pure GPU move. The svg bleeds
+//   BLEED px beyond the container so a pan has real pixels to reveal, and
+//   the raster is re-committed early if a gesture outruns the bleed or
+//   scales far enough for layer blur to show. The canvas below always draws
+//   at true resolution, so edges stay crisp even mid-zoom.
+// - Edge hit-testing is analytic (distance to the sampled curve) on click —
+//   no invisible fat hit paths in the DOM.
+//
+// Edge density: a dense pot's cross-links bury the composition, so by default
+// (edgeMode "key") only the spanning-forest backbone — the same skeleton the
+// layout is built around — plus frontier links is painted at rest. Every
+// other edge stays data-only until a selection involves it: selecting a node
+// paints ALL of its edges in their relationship colour. A small grey badge
+// (bottom-left of the disc) counts a node's undrawn edges so the density is
+// never silently hidden; edgeMode "all" paints everything all the time.
+// Hidden edges are also skipped by click hit-testing.
 //
 // Interactions
 // - drag background / wheel: pan + zoom (double-click background re-fits)
 // - drag node: reposition; the node stays pinned where you drop it (Neo4j
-//   behaviour) and the simulation reflows around it
-// - click node: select — its edges light up in their relationship colour and
-//   everything outside the one-hop neighbourhood fades
+//   behaviour); nothing else reflows
+// - hover node: after a short dwell a floating card shows quick details
+//   (name, type, category, connections, expand hints); any gesture hides it
+// - click node: select — every one of its edges (including resting-hidden
+//   ones) lights up in its relationship colour and everything outside the
+//   one-hop neighbourhood fades
 // - click edge: select — the edge and its two endpoints light up
 // - double-click node: expand neighbours
 // - edges are neutral grey until a selection involves them (no hover effects)
-// - a "+N" badge marks nodes with hidden neighbours (double-click reveals)
+// - a "+N" badge marks nodes with hidden neighbours (double-click reveals);
+//   a grey "N" badge counts edges not drawn at rest (click to show them)
 
 import React, {
   memo,
@@ -62,9 +91,14 @@ import {
   forceLink,
   forceManyBody,
   forceSimulation,
-  type Simulation,
   type SimulationNodeDatum,
 } from "d3-force";
+import type { LucideIcon } from "lucide-react";
+
+import { GlassPanel } from "@/app/(main)/pots/components/kit";
+import { cn } from "@/lib/utils";
+import { categoryDisplay } from "./ontology";
+import { iconForNode } from "./nodeIcons";
 
 // Graph model handed over by PotGraphExplorer. Mirrors the shape the explorer
 // used to build for reagraph so the data pipeline stays untouched.
@@ -89,7 +123,7 @@ export type PotGraphEdge = {
   label: string;
   /** Relationship-type colour — only painted while the edge is highlighted. */
   fill: string;
-  data?: { frontier?: boolean };
+  data?: { frontier?: boolean; type?: string };
 };
 
 export type PotGraphCanvasProps = {
@@ -103,11 +137,29 @@ export type PotGraphCanvasProps = {
   onExpand: (entityKey: string) => void;
   /** "auto" shows edge labels on selection/zoom; "all" shows every label. */
   labelType?: "auto" | "all";
+  /**
+   * "key" (default) paints only the structural backbone at rest — a node's
+   * remaining edges appear while it is selected, and a grey badge counts
+   * them. "all" paints every edge all the time.
+   */
+  edgeMode?: "key" | "all";
   /** Match the pot theme's dark surface (chrome colours only). */
   dark?: boolean;
+  /**
+   * Live search emphasis: while non-null, nodes in the set stay lit and
+   * everything else (and every edge not connecting two matches) fades.
+   * Takes precedence over the selection fade.
+   */
+  searchIds?: Set<string> | null;
+  /**
+   * Animated centering request. A new nonce pans/zooms the view to the node;
+   * if the node isn't in the current structure yet, the request stays pending
+   * until the next rebuild delivers it.
+   */
+  focusRequest?: { id: string; nonce: number } | null;
 };
 
-type SimNode = SimulationNodeDatum & {
+type LayoutNode = SimulationNodeDatum & {
   id: string;
   label: string;
   fill: string;
@@ -115,15 +167,21 @@ type SimNode = SimulationNodeDatum & {
   r: number;
   degree: number;
   hidden: number;
+  /** Incident edges not drawn at rest in "key" mode — the grey badge count. */
+  extraEdges: number;
   /** Caption geometry is fixed per data build, so it is computed once here. */
   fontSize: number;
   lines: string[];
+  /** Ontology node labels + category — drive the type icon and hover card. */
+  labels: string[];
+  category: string | null;
+  icon: LucideIcon;
 };
 
-type SimEdge = {
+type LayoutEdge = {
   id: string;
-  source: SimNode;
-  target: SimNode;
+  source: LayoutNode;
+  target: LayoutNode;
   label: string;
   fill: string;
   frontier: boolean;
@@ -131,28 +189,23 @@ type SimEdge = {
   bend: number;
   /** Stiff spanning-forest link (node → its hub); everything else is slack. */
   backbone: boolean;
+  /** Painted with no selection in "key" mode (backbone + frontier links). */
+  resting: boolean;
   /** Rest length for the link force (ring radius for backbone links). */
   dist: number;
 };
 
 type ViewTransform = { k: number; x: number; y: number };
 
-/** DOM handles for one edge so ticks/highlights can restyle it without React. */
-type EdgeEls = {
-  g: SVGGElement | null;
-  path: SVGPathElement | null;
-  loop: SVGCircleElement | null;
-  arrow: SVGPathElement | null;
-  hit: SVGPathElement | null;
-  labelG: SVGGElement | null;
-  labelText: SVGTextElement | null;
-};
-
-/** DOM handles for one node disc (group + always-mounted selection halo). */
+/** DOM handles for one node disc (group, selection halo, edge-count hint). */
 type NodeEls = {
   g: SVGGElement | null;
   halo: SVGCircleElement | null;
+  hint: SVGGElement | null;
 };
+
+/** Hover card anchor: node + its screen-space centre/radius at hover time. */
+type HoverState = { node: LayoutNode; x: number; y: number; rk: number };
 
 const MIN_ZOOM = 0.12;
 const MAX_ZOOM = 3;
@@ -160,6 +213,13 @@ const MAX_ZOOM = 3;
 const FIT_MAX_ZOOM = 1.1;
 /** Zoom level past which "auto" mode shows every relationship label. */
 const LABEL_ZOOM = 1.05;
+/** Below this zoom node captions rasterise unreadably small — hide them. */
+const CAPTION_ZOOM = 0.4;
+/** Extra px the node layer is rasterised beyond the container per side. */
+const BLEED = 350;
+/** Re-commit the raster once the composited layer scales past these. */
+const RASTER_SCALE_MAX = 1.6;
+const RASTER_SCALE_MIN = 0.625;
 // Backbone physics: each node keeps one stiff link — to its hub — and all
 // other edges go nearly slack. Rings form because a hub's satellites share
 // the same rest length while charge spreads them around the rim.
@@ -171,10 +231,12 @@ const FRONTIER_CAPTION_FONT = 8.5;
 const ARROW_LENGTH = 7;
 const ARROW_HALF_WIDTH = 3;
 const LOOP_R = 13;
+const EDGE_LABEL_FONT =
+  '7.5px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
 
-// Chrome colours the theme tokens can't reach (SVG paints raw hex). Node fills
-// always arrive per-element from the ontology palette; edges rest in neutral
-// grey and only take their relationship colour while highlighted.
+// Chrome colours the theme tokens can't reach (canvas/SVG paint raw hex).
+// Node fills always arrive per-element from the ontology palette; edges rest
+// in neutral grey and only take their relationship colour while highlighted.
 const CHROME = {
   light: {
     halo: "#fafcfb",
@@ -256,8 +318,8 @@ function wrapCaption(
 
 // ---- Edge geometry ----------------------------------------------------------
 
-// One shared computation used both by the JSX render (initial attributes) and
-// the per-tick imperative updater, so the two can never drift apart.
+// One shared computation used by the canvas painter and the click hit-test,
+// so the drawn curve and the clickable curve can never drift apart.
 type EdgeGeo =
   | {
       loop: true;
@@ -269,14 +331,23 @@ type EdgeGeo =
     }
   | {
       loop: false;
-      d: string;
-      arrowD: string;
+      sx: number;
+      sy: number;
+      cpx: number;
+      cpy: number;
+      ex: number;
+      ey: number;
+      tipX: number;
+      tipY: number;
+      /** Unit direction of the curve at the target end (for the arrowhead). */
+      u1x: number;
+      u1y: number;
       labelX: number;
       labelY: number;
       labelAngle: number;
     };
 
-function edgeGeometry(edge: SimEdge): EdgeGeo {
+function edgeGeometry(edge: LayoutEdge): EdgeGeo {
   const sx = edge.source.x ?? 0;
   const sy = edge.source.y ?? 0;
   const tx = edge.target.x ?? 0;
@@ -330,12 +401,38 @@ function edgeGeometry(edge: SimEdge): EdgeGeo {
 
   return {
     loop: false,
-    d: `M ${startX} ${startY} Q ${cpx} ${cpy} ${endX} ${endY}`,
-    arrowD: `M ${tipX} ${tipY} L ${endX + -u1y * ARROW_HALF_WIDTH} ${endY + u1x * ARROW_HALF_WIDTH} L ${endX + u1y * ARROW_HALF_WIDTH} ${endY - u1x * ARROW_HALF_WIDTH} Z`,
+    sx: startX,
+    sy: startY,
+    cpx,
+    cpy,
+    ex: endX,
+    ey: endY,
+    tipX,
+    tipY,
+    u1x,
+    u1y,
     labelX: midX,
     labelY: midY - 4,
     labelAngle: angle,
   };
+}
+
+/** Squared-distance-free point-to-segment distance. */
+function distToSegment(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  const t = lenSq
+    ? clamp(((px - ax) * dx + (py - ay) * dy) / lenSq, 0, 1)
+    : 0;
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 }
 
 export default function PotGraphCanvas({
@@ -345,57 +442,77 @@ export default function PotGraphCanvas({
   onSelect,
   onExpand,
   labelType = "auto",
+  edgeMode = "key",
   dark = false,
+  searchIds = null,
+  focusRequest = null,
 }: PotGraphCanvasProps) {
   const chrome = dark ? CHROME.dark : CHROME.light;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const rootGRef = useRef<SVGGElement | null>(null);
 
-  const simRef = useRef<Simulation<SimNode, SimEdge> | null>(null);
-  const simNodesRef = useRef<SimNode[]>([]);
-  const simEdgesRef = useRef<SimEdge[]>([]);
+  const layoutNodesRef = useRef<LayoutNode[]>([]);
+  const layoutEdgesRef = useRef<LayoutEdge[]>([]);
   const sizeRef = useRef({ w: 0, h: 0 });
   const needsFitRef = useRef(true);
   /** Once the user pans/zooms/drags we stop auto-fitting on data changes. */
   const userMovedRef = useRef(false);
+  // Positions survive across structure rebuilds even for nodes that leave and
+  // re-enter (type filters toggling off/on), so filtering never scrambles the
+  // composition the user has learned.
+  const posCacheRef = useRef(
+    new Map<
+      string,
+      { x?: number; y?: number; fx?: number | null; fy?: number | null }
+    >(),
+  );
 
-  // Element registries the tick/highlight updaters write through.
+  // Element registry the drag/highlight updaters write through (nodes only —
+  // edges have no DOM at all).
   const nodeElsRef = useRef(new Map<string, NodeEls>());
-  const edgeElsRef = useRef(new Map<string, EdgeEls>());
 
-  // Pan/zoom lives in a ref and is applied to the root <g> imperatively; even
-  // the "zoomed in enough for edge labels" flip restyles through the
-  // registries, so zooming never re-renders React either.
+  // Pan/zoom lives in a ref; the canvas repaint is rAF-batched — rAF runs
+  // before the next paint, so both layers land in the same frame.
   const viewRef = useRef<ViewTransform>({ k: 1, x: 0, y: 0 });
-  const labelsVisibleRef = useRef(false);
+  /** View the root <g> attribute was last rasterised at (commitRaster). */
+  const rasterRef = useRef<ViewTransform>({ k: 1, x: 0, y: 0 });
+  const wheelCommitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const captionsVisibleRef = useRef(true);
 
-  // Bumped when the sim node/edge arrays are rebuilt so React re-renders the
-  // element structure; positions never pass through state. Also gates the
-  // first-paint fade-in of the settled composition.
+  // Bumped when the layout arrays are rebuilt so React re-renders the node
+  // structure; positions are final by then and never pass through state. Also
+  // gates the first-paint fade-in of the settled composition.
   const [structureVersion, setStructureVersion] = useState(0);
 
   // Edge selection is canvas-local (there is no edge inspector); node
   // selection lives with the explorer via selectedId/onSelect.
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  // Edge whose hit area was under the pointer when the current press started;
-  // resolved to a selection on release if the press never became a pan.
-  const pendingEdgeRef = useRef<string | null>(null);
 
-  // Latest-value mirrors so applyHighlight stays referentially stable while
+  // Latest-value mirrors so the painters stay referentially stable while
   // always reading the current selection / theme / label mode.
   const selectedIdRef = useRef<string | null>(selectedId);
   const selectedEdgeIdRef = useRef<string | null>(null);
   const chromeRef = useRef(chrome);
   const labelTypeRef = useRef(labelType);
+  const edgeModeRef = useRef(edgeMode);
+  const searchRef = useRef<Set<string> | null>(null);
+  // Render-phase mirror so the structure effect (which runs in the same
+  // commit as a reveal-and-focus pick) can see the pending request and skip
+  // the auto-fit that would otherwise fight the focus animation.
+  const focusReqRef = useRef(focusRequest);
+  focusReqRef.current = focusRequest;
+  /** Nonce of the last focusRequest that actually ran. */
+  const handledFocusRef = useRef(0);
 
   useEffect(() => {
     if (selectedId) setSelectedEdgeId(null);
   }, [selectedId]);
 
   const dragRef = useRef<{
-    node: SimNode;
+    node: LayoutNode;
     startX: number;
     startY: number;
     rect: DOMRect;
@@ -409,125 +526,323 @@ export default function PotGraphCanvas({
     moved: boolean;
   } | null>(null);
 
-  // Selection emphasis, fades and label visibility written straight through
-  // the element registries — the styling twin of applyPositions. Runs on
-  // selection changes, label-zoom threshold crossings and after structure
-  // rebuilds; never through a React re-render.
+  // ---- Hover card -----------------------------------------------------------
+
+  // Quick-details card for the disc under the cursor, shown after a short
+  // dwell. Its position is captured once at show time; every gesture that
+  // would move the anchor (pan, zoom, drag, focus animation) hides the card
+  // instead, so it never has to track a live transform.
+  const [hover, setHover] = useState<HoverState | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearHover = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setHover((h) => (h ? null : h));
+  }, []);
+
+  const onNodeHoverStart = useCallback((node: LayoutNode) => {
+    if (dragRef.current || panRef.current) return;
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => {
+      hoverTimerRef.current = null;
+      if (dragRef.current || panRef.current) return;
+      const t = viewRef.current;
+      setHover({
+        node,
+        x: (node.x ?? 0) * t.k + t.x,
+        y: (node.y ?? 0) * t.k + t.y,
+        rk: node.r * t.k,
+      });
+    }, 180);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    },
+    [],
+  );
+
+  // ---- Canvas edge painter --------------------------------------------------
+
+  /**
+   * Repaint every (visible) edge. Selection emphasis, fades, frontier dashes
+   * and relationship labels are all decided here per draw, so a repaint is
+   * the single answer to "anything edge-related changed".
+   */
+  const drawEdges = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const { w, h } = sizeRef.current;
+    if (!w || !h) return;
+    const dpr = window.devicePixelRatio || 1;
+    const pw = Math.round(w * dpr);
+    const ph = Math.round(h * dpr);
+    if (canvas.width !== pw) canvas.width = pw;
+    if (canvas.height !== ph) canvas.height = ph;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const t = viewRef.current;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, pw, ph);
+    ctx.setTransform(dpr * t.k, 0, 0, dpr * t.k, dpr * t.x, dpr * t.y);
+
+    // World-space viewport (padded) for culling.
+    const pad = 80;
+    const vx0 = -t.x / t.k - pad;
+    const vy0 = -t.y / t.k - pad;
+    const vx1 = (w - t.x) / t.k + pad;
+    const vy1 = (h - t.y) / t.k + pad;
+
+    // Selection emphasis: node selection lights its whole neighbourhood, edge
+    // selection lights just that edge. An active search overrides both fades.
+    const nodeId = selectedIdRef.current;
+    const edgeId = selectedEdgeIdRef.current;
+    const search = searchRef.current;
+    const hasFocus = nodeId !== null || edgeId !== null;
+    const palette = chromeRef.current;
+    const drawAll = edgeModeRef.current === "all";
+    const labelsEverywhere =
+      labelTypeRef.current === "all" || t.k >= LABEL_ZOOM;
+
+    ctx.lineJoin = "round";
+    ctx.font = EDGE_LABEL_FONT;
+    ctx.textAlign = "center";
+
+    for (const e of layoutEdgesRef.current) {
+      const emphasized =
+        edgeId === e.id ||
+        (nodeId !== null &&
+          (e.source.id === nodeId || e.target.id === nodeId));
+      // "key" mode: an edge outside the resting set only paints while a
+      // selection involves it (before geometry — this is the hot skip).
+      if (!drawAll && !e.resting && !emphasized) continue;
+
+      const geo = edgeGeometry(e);
+
+      if (geo.loop) {
+        if (
+          geo.cx + LOOP_R < vx0 ||
+          geo.cx - LOOP_R > vx1 ||
+          geo.cy + LOOP_R < vy0 ||
+          geo.cy - LOOP_R > vy1
+        )
+          continue;
+      } else {
+        if (
+          Math.max(geo.sx, geo.ex, geo.cpx) < vx0 ||
+          Math.min(geo.sx, geo.ex, geo.cpx) > vx1 ||
+          Math.max(geo.sy, geo.ey, geo.cpy) < vy0 ||
+          Math.min(geo.sy, geo.ey, geo.cpy) > vy1
+        )
+          continue;
+      }
+
+      const stroke = emphasized ? e.fill : palette.edge;
+
+      let alpha = 1;
+      if (search) {
+        alpha =
+          search.has(e.source.id) && search.has(e.target.id) ? 1 : 0.06;
+      } else if (hasFocus && !emphasized) {
+        alpha = 0.12;
+      }
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = emphasized ? 2.4 : 1.3;
+      ctx.setLineDash(e.frontier ? [4, 4] : []);
+
+      if (geo.loop) {
+        ctx.beginPath();
+        ctx.arc(geo.cx, geo.cy, LOOP_R, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(geo.sx, geo.sy);
+        ctx.quadraticCurveTo(geo.cpx, geo.cpy, geo.ex, geo.ey);
+        ctx.stroke();
+        // Arrowhead at the target rim.
+        ctx.setLineDash([]);
+        ctx.fillStyle = stroke;
+        ctx.beginPath();
+        ctx.moveTo(geo.tipX, geo.tipY);
+        ctx.lineTo(
+          geo.ex - geo.u1y * ARROW_HALF_WIDTH,
+          geo.ey + geo.u1x * ARROW_HALF_WIDTH,
+        );
+        ctx.lineTo(
+          geo.ex + geo.u1y * ARROW_HALF_WIDTH,
+          geo.ey - geo.u1x * ARROW_HALF_WIDTH,
+        );
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Skip label paint for near-invisible edges (search/selection fades).
+      if ((labelsEverywhere || emphasized) && alpha > 0.5) {
+        ctx.save();
+        ctx.translate(geo.labelX, geo.labelY);
+        ctx.rotate((geo.labelAngle * Math.PI) / 180);
+        ctx.setLineDash([]);
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = palette.halo;
+        ctx.strokeText(e.label, 0, 0);
+        ctx.fillStyle = emphasized ? e.fill : palette.edgeLabel;
+        ctx.fillText(e.label, 0, 0);
+        ctx.restore();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }, []);
+
+  const rafRef = useRef(0);
+  const scheduleDraw = useCallback(() => {
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      drawEdges();
+    });
+  }, [drawEdges]);
+
+  useEffect(
+    () => () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      // Reset so a remount (StrictMode dev double-mount) can schedule again.
+      rafRef.current = 0;
+    },
+    [],
+  );
+
+  // ---- Node styling (imperative) --------------------------------------------
+
+  // Selection emphasis and fades for the SVG node layer, written straight
+  // through the element registry — a click never reconciles the discs. The
+  // matching edge styling happens inside drawEdges, so this always schedules
+  // a repaint too.
   const applyHighlight = useCallback(() => {
     const nodeId = selectedIdRef.current;
     const edgeId = selectedEdgeIdRef.current;
-    const palette = chromeRef.current;
+    const search = searchRef.current;
 
     const activeNodes = new Set<string>();
-    const activeEdges = new Set<string>();
+    let edgeSelected = false;
     if (nodeId) {
       activeNodes.add(nodeId);
-      for (const e of simEdgesRef.current) {
+      for (const e of layoutEdgesRef.current) {
         if (e.source.id === nodeId || e.target.id === nodeId) {
-          activeEdges.add(e.id);
           activeNodes.add(e.source.id);
           activeNodes.add(e.target.id);
         }
       }
     } else if (edgeId) {
-      const edge = simEdgesRef.current.find((e) => e.id === edgeId);
+      const edge = layoutEdgesRef.current.find((e) => e.id === edgeId);
       if (edge) {
-        activeEdges.add(edge.id);
+        edgeSelected = true;
         activeNodes.add(edge.source.id);
         activeNodes.add(edge.target.id);
       }
     }
-    const hasFocus = nodeId !== null || activeEdges.size > 0;
-    const labelsEverywhere =
-      labelTypeRef.current === "all" || labelsVisibleRef.current;
-
-    const edgeEls = edgeElsRef.current;
-    for (const e of simEdgesRef.current) {
-      const els = edgeEls.get(e.id);
-      if (!els) continue;
-      const emphasized = activeEdges.has(e.id);
-      const stroke = emphasized ? e.fill : palette.edge;
-      const width = emphasized ? "2.4" : "1.3";
-      if (els.g) els.g.style.opacity = hasFocus && !emphasized ? "0.12" : "1";
-      els.path?.setAttribute("stroke", stroke);
-      els.path?.setAttribute("stroke-width", width);
-      els.loop?.setAttribute("stroke", stroke);
-      els.loop?.setAttribute("stroke-width", width);
-      els.arrow?.setAttribute("fill", stroke);
-      if (els.labelG)
-        els.labelG.style.display = labelsEverywhere || emphasized ? "" : "none";
-      els.labelText?.setAttribute(
-        "fill",
-        emphasized ? e.fill : palette.edgeLabel,
-      );
-    }
+    const hasFocus = nodeId !== null || edgeSelected;
 
     const nodeEls = nodeElsRef.current;
-    for (const n of simNodesRef.current) {
+    for (const n of layoutNodesRef.current) {
       const els = nodeEls.get(n.id);
       if (!els) continue;
       const selected = n.id === nodeId;
-      const emphasized =
-        nodeId === null && activeEdges.size > 0 && activeNodes.has(n.id);
-      if (els.g)
-        els.g.style.opacity = hasFocus && !activeNodes.has(n.id) ? "0.16" : "1";
+      const emphasized = edgeSelected && activeNodes.has(n.id);
+      if (els.g) {
+        let opacity = "1";
+        if (search) opacity = search.has(n.id) ? "1" : "0.12";
+        else if (hasFocus && !activeNodes.has(n.id)) opacity = "0.16";
+        els.g.style.opacity = opacity;
+      }
       if (els.halo) {
         els.halo.style.display = selected || emphasized ? "" : "none";
         els.halo.setAttribute("opacity", selected ? "0.3" : "0.18");
       }
+      // The selected node is showing every edge, so its hidden-edge count
+      // would be a lie while the selection lasts.
+      if (els.hint) els.hint.style.display = selected ? "none" : "";
     }
-  }, []);
+    scheduleDraw();
+  }, [scheduleDraw]);
 
-  const applyView = useCallback(() => {
-    const t = viewRef.current;
-    rootGRef.current?.setAttribute(
-      "transform",
-      `translate(${t.x},${t.y}) scale(${t.k})`,
-    );
-    const labelsVisible = t.k >= LABEL_ZOOM;
-    if (labelsVisible !== labelsVisibleRef.current) {
-      labelsVisibleRef.current = labelsVisible;
-      applyHighlight();
-    }
-  }, [applyHighlight]);
-
-  /** Write current simulation positions straight into the DOM. */
-  const applyPositions = useCallback(() => {
-    const nodeEls = nodeElsRef.current;
-    for (const n of simNodesRef.current) {
-      nodeEls
-        .get(n.id)
-        ?.g?.setAttribute("transform", `translate(${n.x ?? 0},${n.y ?? 0})`);
-    }
-    const edgeEls = edgeElsRef.current;
-    for (const e of simEdgesRef.current) {
-      const els = edgeEls.get(e.id);
-      if (!els) continue;
-      const geo = edgeGeometry(e);
-      if (geo.loop) {
-        els.loop?.setAttribute("cx", String(geo.cx));
-        els.loop?.setAttribute("cy", String(geo.cy));
-      } else {
-        els.path?.setAttribute("d", geo.d);
-        els.hit?.setAttribute("d", geo.d);
-        els.arrow?.setAttribute("d", geo.arrowD);
-      }
-      els.labelG?.setAttribute(
-        "transform",
-        `translate(${geo.labelX},${geo.labelY}) rotate(${geo.labelAngle})`,
+  // Caption level-of-detail: one attribute flip, CSS does the rest.
+  const applyCaptionLod = useCallback(() => {
+    const captionsVisible = viewRef.current.k >= CAPTION_ZOOM;
+    if (captionsVisible !== captionsVisibleRef.current) {
+      captionsVisibleRef.current = captionsVisible;
+      svgRef.current?.setAttribute(
+        "data-captions",
+        captionsVisible ? "on" : "off",
       );
     }
   }, []);
 
+  /**
+   * Rasterise the node layer at the current view: bake the world transform
+   * into the root <g> attribute (this is the expensive SVG repaint of every
+   * disc) and clear the composited CSS delta. Runs at gesture end — never
+   * per pan/zoom frame.
+   */
+  const commitRaster = useCallback(() => {
+    const t = viewRef.current;
+    rasterRef.current = { ...t };
+    rootGRef.current?.setAttribute(
+      "transform",
+      `translate(${t.x + BLEED},${t.y + BLEED}) scale(${t.k})`,
+    );
+    const svg = svgRef.current;
+    if (svg) svg.style.transform = "";
+    applyCaptionLod();
+    scheduleDraw();
+  }, [applyCaptionLod, scheduleDraw]);
+
+  /**
+   * Live view update: express the delta between the current view and the
+   * last raster as a CSS transform on the <svg> element — a composited GPU
+   * move, no SVG repaint. Falls back to an immediate re-raster when the
+   * gesture outruns the bleed margin or the layer scale would look mushy.
+   */
+  const applyView = useCallback(() => {
+    const t = viewRef.current;
+    const r = rasterRef.current;
+    const s = t.k / r.k;
+    // CSS transform (origin at the svg's top-left O = (-BLEED,-BLEED) in
+    // container coords) mapping the rasterised layer onto the current view.
+    // A rastered content point sits at c = w·r.k + r; the CSS transform
+    // moves it to O + T + s·(c − O), and equating with the target w·t.k + t
+    // gives T = t − s·r + (s−1)·O, i.e. minus (s−1)·BLEED on each axis.
+    const tx = t.x - s * r.x - (s - 1) * BLEED;
+    const ty = t.y - s * r.y - (s - 1) * BLEED;
+    if (
+      s > RASTER_SCALE_MAX ||
+      s < RASTER_SCALE_MIN ||
+      Math.abs(tx) > BLEED * 0.8 ||
+      Math.abs(ty) > BLEED * 0.8
+    ) {
+      commitRaster();
+      return;
+    }
+    const svg = svgRef.current;
+    if (svg) svg.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+    applyCaptionLod();
+    scheduleDraw();
+  }, [applyCaptionLod, commitRaster, scheduleDraw]);
+
   const fitToView = useCallback(() => {
     const { w, h } = sizeRef.current;
-    const simNodes = simNodesRef.current;
-    if (!w || !h || simNodes.length === 0) return;
+    const layoutNodes = layoutNodesRef.current;
+    if (!w || !h || layoutNodes.length === 0) return;
     let minX = Infinity,
       minY = Infinity,
       maxX = -Infinity,
       maxY = -Infinity;
-    for (const n of simNodes) {
+    for (const n of layoutNodes) {
       minX = Math.min(minX, (n.x ?? 0) - n.r);
       maxX = Math.max(maxX, (n.x ?? 0) + n.r);
       minY = Math.min(minY, (n.y ?? 0) - n.r);
@@ -543,14 +858,63 @@ export default function PotGraphCanvas({
     const cy = (minY + maxY) / 2;
     viewRef.current = { k, x: w / 2 - k * cx, y: h / 2 - k * cy };
     needsFitRef.current = false;
-    applyView();
-  }, [applyView]);
+    commitRaster();
+  }, [commitRaster]);
 
-  // ---- Simulation lifecycle -------------------------------------------------
+  // ---- Animated focus (search / details-sheet picks) ------------------------
+
+  const focusAnimRef = useRef(0);
+  const cancelFocusAnim = useCallback(() => {
+    if (focusAnimRef.current) {
+      cancelAnimationFrame(focusAnimRef.current);
+      focusAnimRef.current = 0;
+    }
+  }, []);
+
+  /** Ease the view to a target transform; any user gesture cancels it. */
+  const animateViewTo = useCallback(
+    (target: ViewTransform) => {
+      cancelFocusAnim();
+      clearHover();
+      const from = { ...viewRef.current };
+      const start = performance.now();
+      const DURATION = 340;
+      const step = (now: number) => {
+        const u = clamp((now - start) / DURATION, 0, 1);
+        const e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+        viewRef.current = {
+          k: from.k + (target.k - from.k) * e,
+          x: from.x + (target.x - from.x) * e,
+          y: from.y + (target.y - from.y) * e,
+        };
+        if (u < 1) {
+          applyView();
+          focusAnimRef.current = requestAnimationFrame(step);
+        } else {
+          focusAnimRef.current = 0;
+          commitRaster();
+        }
+      };
+      focusAnimRef.current = requestAnimationFrame(step);
+    },
+    [applyView, cancelFocusAnim, clearHover, commitRaster],
+  );
+
+  useEffect(() => cancelFocusAnim, [cancelFocusAnim]);
+
+  // ---- Structure + one-shot layout ------------------------------------------
 
   useEffect(() => {
-    const prev = new Map(simNodesRef.current.map((n) => [n.id, n]));
-    const firstBuild = prev.size === 0;
+    // The rebuild replaces every LayoutNode object, so a visible hover card
+    // would be anchored to a stale (possibly removed) node.
+    clearHover();
+    // Fold the outgoing structure's positions into the persistent cache so
+    // nodes that leave (filters) and later return keep their spot.
+    const cache = posCacheRef.current;
+    for (const n of layoutNodesRef.current) {
+      cache.set(n.id, { x: n.x, y: n.y, fx: n.fx, fy: n.fy });
+    }
+    const firstBuild = cache.size === 0;
 
     const degree = new Map<string, number>();
     for (const e of edges) {
@@ -558,8 +922,8 @@ export default function PotGraphCanvas({
       degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
     }
 
-    const simNodes: SimNode[] = nodes.map((n) => {
-      const old = prev.get(n.id);
+    const layoutNodes: LayoutNode[] = nodes.map((n) => {
+      const old = cache.get(n.id);
       const frontier = Boolean(n.data?.frontier);
       const d = degree.get(n.id) ?? 0;
       // Hubs grow markedly bigger than satellites so the hierarchy reads at a
@@ -567,6 +931,8 @@ export default function PotGraphCanvas({
       const r = frontier ? 13 : clamp(16 + Math.sqrt(d) * 3.4, 16, 40);
       const fontSize = frontier ? FRONTIER_CAPTION_FONT : CAPTION_FONT;
       const maxChars = Math.max(3, Math.floor((r * 2 - 8) / (fontSize * 0.56)));
+      const labels = n.data?.labels ?? [];
+      const category = n.data?.category ?? null;
       return {
         id: n.id,
         label: n.label,
@@ -575,18 +941,24 @@ export default function PotGraphCanvas({
         r,
         degree: d,
         hidden: n.data?.hiddenCount ?? 0,
+        extraEdges: 0,
         fontSize,
-        lines: wrapCaption(n.label, maxChars, r >= 24 ? 3 : 2),
+        // One line fewer than the icon-less layout used: the type icon now
+        // owns the top of the disc and the hover card carries the full name.
+        // Every connected node (r ≥ 19) keeps two lines; only degree-0 discs
+        // and frontier stubs are too small for icon + two lines.
+        lines: wrapCaption(n.label, maxChars, r >= 19 ? 2 : 1),
+        labels,
+        category,
+        icon: iconForNode(labels, category),
         x: old?.x,
         y: old?.y,
-        vx: old?.vx,
-        vy: old?.vy,
-        fx: old?.fx,
-        fy: old?.fy,
+        fx: old?.fx ?? undefined,
+        fy: old?.fy ?? undefined,
       };
     });
 
-    const byId = new Map(simNodes.map((n) => [n.id, n]));
+    const byId = new Map(layoutNodes.map((n) => [n.id, n]));
 
     // ---- Spanning-forest backbone ------------------------------------------
     // Each node adopts its nearest-bigger neighbour as parent hub: of the
@@ -611,17 +983,17 @@ export default function PotGraphCanvas({
       addNeighbour(e.source, e.target);
       addNeighbour(e.target, e.source);
     }
-    const outranks = (a: SimNode, b: SimNode) =>
+    const outranks = (a: LayoutNode, b: LayoutNode) =>
       a.degree > b.degree || (a.degree === b.degree && a.id > b.id);
     // Prefer the smallest neighbour that is still a clear hub (≥2× degree):
     // pure nearest-bigger parenting lets near-peer intermediates steal
     // satellites into long chains, leaving even degree-60 hubs with a handful
     // of adopted children and no visible ring. Skipping to a decisively
     // bigger parent halves the tree depth and fills the rings back out.
-    const parentOf = new Map<string, SimNode>();
-    for (const n of simNodes) {
-      let best: SimNode | undefined;
-      let hub: SimNode | undefined;
+    const parentOf = new Map<string, LayoutNode>();
+    for (const n of layoutNodes) {
+      let best: LayoutNode | undefined;
+      let hub: LayoutNode | undefined;
       for (const id of neighbours.get(n.id) ?? []) {
         const m = byId.get(id)!;
         if (!outranks(m, n)) continue;
@@ -631,7 +1003,7 @@ export default function PotGraphCanvas({
       const parent = hub ?? best;
       if (parent) parentOf.set(n.id, parent);
     }
-    const childrenOf = new Map<string, SimNode[]>();
+    const childrenOf = new Map<string, LayoutNode[]>();
     parentOf.forEach((p, childId) => {
       const child = byId.get(childId)!;
       const arr = childrenOf.get(p.id);
@@ -651,8 +1023,8 @@ export default function PotGraphCanvas({
     // already-on-canvas parent.
     const seatOf = new Map<string, { dx: number; dy: number; dist: number }>();
     const clusterR = new Map<string, number>();
-    const seatArc = (n: SimNode) => 2 * (n.r + 16);
-    const roots = simNodes.filter((n) => !parentOf.has(n.id));
+    const seatArc = (n: LayoutNode) => 2 * (n.r + 16);
+    const roots = layoutNodes.filter((n) => !parentOf.has(n.id));
     for (const root of roots) {
       // Leaf weight per subtree (children precede parents in reverse order).
       const order = [root];
@@ -668,7 +1040,7 @@ export default function PotGraphCanvas({
         );
       }
       // Ring radii from per-depth seat demand.
-      const levels: SimNode[][] = [[root]];
+      const levels: LayoutNode[][] = [[root]];
       const depthOf = new Map<string, number>([[root.id, 0]]);
       for (let d = 0; d < levels.length; d++) {
         for (const n of levels[d]) {
@@ -728,9 +1100,8 @@ export default function PotGraphCanvas({
 
     // Circle-pack the cluster roots: biggest at the origin, each next one
     // walked along a spiral until it clears every footprint already placed —
-    // the old fixed-pitch spiral seeded small clusters inside big ones and
-    // the springs kept them entangled forever. Rebuilds keep existing
-    // positions; only newcomers are packed.
+    // a fixed-pitch spiral would seed small clusters inside big ones.
+    // Rebuilds keep existing positions; only newcomers are packed.
     const placedRoots: { x: number; y: number; R: number }[] = [];
     roots.forEach((root, i) => {
       const R = clusterR.get(root.id) ?? root.r;
@@ -756,10 +1127,9 @@ export default function PotGraphCanvas({
       root.y = y;
       placedRoots.push({ x, y, R });
     });
-
     // Deterministic seeding: every newcomer lands exactly on its seat, so the
-    // first paint is already rings-around-hubs and the simulation only has to
-    // relax residual overlap.
+    // pre-settle composition is already rings-around-hubs and the synchronous
+    // solve only has to relax residual overlap.
     const queue = [...roots];
     while (queue.length) {
       const p = queue.shift()!;
@@ -794,13 +1164,13 @@ export default function PotGraphCanvas({
     // Exactly one stiff link per child even when parallel edges duplicate the
     // child↔parent pair — extra copies stay slack so strengths don't stack.
     const backboneClaimed = new Set<string>();
-    const simEdges: SimEdge[] = edges
+    const layoutEdges: LayoutEdge[] = edges
       .filter((e) => byId.has(e.source) && byId.has(e.target))
       .map((e) => {
         const s = byId.get(e.source)!;
         const t = byId.get(e.target)!;
-        let child: SimNode | null = null;
-        let hub: SimNode | null = null;
+        let child: LayoutNode | null = null;
+        let hub: LayoutNode | null = null;
         if (parentOf.get(s.id)?.id === t.id) {
           child = s;
           hub = t;
@@ -811,43 +1181,85 @@ export default function PotGraphCanvas({
         const backbone =
           child !== null && hub !== null && !backboneClaimed.has(child.id);
         if (backbone) backboneClaimed.add(child!.id);
+        const frontier = Boolean(e.data?.frontier);
         return {
           id: e.id,
           source: s,
           target: t,
           label: e.label,
           fill: e.fill,
-          frontier: Boolean(e.data?.frontier),
+          frontier,
           bend: bendFor(e),
           backbone,
+          // Frontier links always paint — they only exist because the user
+          // expanded that node, so hiding them would undo the gesture.
+          resting: backbone || frontier,
           dist: backbone
             ? (seatOf.get(child!.id)?.dist ?? CROSS_LINK_DISTANCE)
             : CROSS_LINK_DISTANCE,
         };
       });
 
-    simNodesRef.current = simNodes;
-    simEdgesRef.current = simEdges;
-
-    let sim = simRef.current;
-    if (!sim) {
-      sim = forceSimulation<SimNode>().on("tick", applyPositions);
-      simRef.current = sim;
+    // Resting coverage: a childless local maximum has no backbone edge at all
+    // (no parent, and no neighbour adopted it), which would strand it looking
+    // disconnected while edges exist. Give every such node its strongest link
+    // — the edge to its highest-degree neighbour — as a resting edge.
+    const restingTouched = new Set<string>();
+    const looseIncident = new Map<string, LayoutEdge[]>();
+    for (const e of layoutEdges) {
+      if (e.resting) {
+        restingTouched.add(e.source.id);
+        restingTouched.add(e.target.id);
+      } else if (e.source.id !== e.target.id) {
+        for (const end of [e.source.id, e.target.id]) {
+          const arr = looseIncident.get(end);
+          if (arr) arr.push(e);
+          else looseIncident.set(end, [e]);
+        }
+      }
     }
-    // Only the backbone is stiff — every satellite is pinned at its hub's
-    // ring radius while the remaining edges pull almost nothing, so the tree
-    // structure (not the dense edge soup) decides the layout. Hubs repel in
-    // proportion to their ring size, pushing whole clusters apart; satellites
-    // repel mildly, which is what spreads them evenly around the rim.
-    // Collide keeps captioned discs from overlapping; forceCenter re-centres
-    // the composition without squeezing it.
-    sim
-      .alphaDecay(simNodes.length > 160 ? 0.035 : 0.0228)
+    for (const n of layoutNodes) {
+      if (restingTouched.has(n.id)) continue;
+      const candidates = looseIncident.get(n.id);
+      if (!candidates?.length) continue;
+      let best = candidates[0];
+      let bestDegree = -1;
+      for (const e of candidates) {
+        const other = e.source.id === n.id ? e.target : e.source;
+        if (other.degree > bestDegree) {
+          bestDegree = other.degree;
+          best = e;
+        }
+      }
+      best.resting = true;
+      restingTouched.add(best.source.id);
+      restingTouched.add(best.target.id);
+    }
+    // The grey per-node hint counts what "key" mode keeps hidden at rest
+    // (self-loops count once — they belong to a single disc).
+    for (const e of layoutEdges) {
+      if (e.resting) continue;
+      e.source.extraEdges += 1;
+      if (e.target.id !== e.source.id) e.target.extraEdges += 1;
+    }
+
+    layoutNodesRef.current = layoutNodes;
+    layoutEdgesRef.current = layoutEdges;
+
+    // One-shot headless solve: same force recipe as the old live simulation —
+    // only the backbone is stiff, hubs repel in proportion to their ring
+    // size, collide keeps captioned discs apart — but run synchronously via
+    // tick() and then discarded. Positions are frozen after this; nothing
+    // ever animates or reheats. Rebuilds solve from a lower alpha so the
+    // existing composition shifts as little as possible while newcomers
+    // settle in. User-pinned nodes (fx/fy from drags) stay pinned.
+    const solver = forceSimulation<LayoutNode>(layoutNodes)
+      .stop()
+      .alphaDecay(layoutNodes.length > 160 ? 0.035 : 0.0228)
       .velocityDecay(0.42)
-      .nodes(simNodes)
       .force(
         "link",
-        forceLink<SimNode, SimEdge>(simEdges)
+        forceLink<LayoutNode, LayoutEdge>(layoutEdges)
           .id((d) => d.id)
           .distance((l) => l.dist)
           .strength((l) =>
@@ -859,7 +1271,7 @@ export default function PotGraphCanvas({
         // distanceMax keeps repulsion local: satellites spread around their
         // own rim without distant clusters pumping the whole composition into
         // a uniform-density gas (which is what erased the ring structure).
-        forceManyBody<SimNode>()
+        forceManyBody<LayoutNode>()
           .strength((n) => {
             const kids = childrenOf.get(n.id)?.length ?? 0;
             return kids > 0 ? Math.max(-1500, -(520 + kids * 36)) : -260;
@@ -868,54 +1280,81 @@ export default function PotGraphCanvas({
       )
       .force(
         "collide",
-        forceCollide<SimNode>()
+        forceCollide<LayoutNode>()
           .radius((d) => d.r + 10)
           .iterations(2),
       )
-      .force("center", forceCenter<SimNode>(0, 0));
-
+      .force("center", forceCenter<LayoutNode>(0, 0));
     if (firstBuild) {
-      // Settle synchronously so the first paint is already composed, then let
-      // a small residual alpha breathe the layout into place.
-      sim.alpha(1);
-      sim.tick(simNodes.length > 160 ? 110 : 180);
-      needsFitRef.current = true;
-      sim.alpha(0.06).restart();
+      solver.tick(layoutNodes.length > 160 ? 130 : 200);
     } else {
-      sim.alpha(0.5).restart();
-      if (!userMovedRef.current) needsFitRef.current = true;
+      solver.alpha(0.5);
+      solver.tick(60);
+    }
+    // Drop the solver's internal handles so nothing keeps ticking state alive.
+    solver.force("link", null).force("charge", null).force("collide", null);
+
+    if (firstBuild) needsFitRef.current = true;
+    else if (!userMovedRef.current) needsFitRef.current = true;
+    // A pending focus request owns the camera: skip the auto-fit so the
+    // reveal-and-focus pick animates straight to its node instead of
+    // refitting the whole graph first.
+    if (
+      focusReqRef.current &&
+      focusReqRef.current.nonce !== handledFocusRef.current
+    ) {
+      needsFitRef.current = false;
     }
     if (needsFitRef.current) fitToView();
     setStructureVersion((v) => v + 1);
-  }, [nodes, edges, fitToView, applyPositions]);
+  }, [nodes, edges, fitToView, clearHover]);
+
+  // Run (or retry) a pending focus request. structureVersion is a dependency
+  // because a pick can target a node that only exists after the rebuild the
+  // same commit triggers.
+  useEffect(() => {
+    const req = focusRequest;
+    if (!req || req.nonce === handledFocusRef.current) return;
+    const node = layoutNodesRef.current.find((n) => n.id === req.id);
+    if (!node) return; // not in the structure yet — the rebuild re-runs this
+    const { w, h } = sizeRef.current;
+    if (!w || !h) return;
+    handledFocusRef.current = req.nonce;
+    userMovedRef.current = true;
+    needsFitRef.current = false;
+    // Zoom in to a readable level when far out, never zoom out.
+    const k = clamp(Math.max(viewRef.current.k, 0.9), MIN_ZOOM, MAX_ZOOM);
+    animateViewTo({
+      k,
+      x: w / 2 - k * (node.x ?? 0),
+      y: h / 2 - k * (node.y ?? 0),
+    });
+  }, [focusRequest, structureVersion, animateViewTo]);
 
   // Restyle when the selection, theme or label mode changes — and after every
   // structure rebuild (structureVersion), because freshly mounted elements
   // carry neutral attributes. Layout effect so the styling lands before
   // paint: child registration also runs in layout effects, and React runs
-  // children before parents, so the registries are complete here.
+  // children before parents, so the registry is complete here.
   useLayoutEffect(() => {
     void structureVersion;
     selectedIdRef.current = selectedId;
     selectedEdgeIdRef.current = selectedEdgeId;
     chromeRef.current = dark ? CHROME.dark : CHROME.light;
     labelTypeRef.current = labelType;
+    edgeModeRef.current = edgeMode;
+    searchRef.current = searchIds ?? null;
     applyHighlight();
   }, [
     selectedId,
     selectedEdgeId,
     labelType,
+    edgeMode,
     dark,
+    searchIds,
     structureVersion,
     applyHighlight,
   ]);
-
-  useEffect(
-    () => () => {
-      simRef.current?.stop();
-    },
-    [],
-  );
 
   // Track container size; the first measurement triggers the pending fit.
   useEffect(() => {
@@ -926,20 +1365,26 @@ export default function PotGraphCanvas({
       if (!cr) return;
       sizeRef.current = { w: cr.width, h: cr.height };
       if (needsFitRef.current) fitToView();
+      else scheduleDraw();
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [fitToView]);
+  }, [fitToView, scheduleDraw]);
 
   // Wheel zoom around the cursor. React's synthetic onWheel is passive, so the
   // listener is attached manually to be able to preventDefault page scroll.
+  // Each event only moves the composited layer; the raster is re-committed
+  // (crisp discs) shortly after the wheel goes quiet.
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      cancelFocusAnim();
+      clearHover();
       userMovedRef.current = true;
-      const rect = svg.getBoundingClientRect();
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
       const px = e.clientX - rect.left;
       const py = e.clientY - rect.top;
       const factor = Math.exp(-e.deltaY * 0.0016);
@@ -948,19 +1393,93 @@ export default function PotGraphCanvas({
       const kr = k / t.k;
       viewRef.current = { k, x: px - (px - t.x) * kr, y: py - (py - t.y) * kr };
       applyView();
+      if (wheelCommitRef.current) clearTimeout(wheelCommitRef.current);
+      wheelCommitRef.current = setTimeout(commitRaster, 160);
     };
     svg.addEventListener("wheel", onWheel, { passive: false });
-    return () => svg.removeEventListener("wheel", onWheel);
-  }, [applyView]);
+    return () => {
+      svg.removeEventListener("wheel", onWheel);
+      if (wheelCommitRef.current) clearTimeout(wheelCommitRef.current);
+    };
+  }, [applyView, commitRaster, cancelFocusAnim, clearHover]);
+
+  // ---- Edge hit-testing -----------------------------------------------------
+
+  /**
+   * Nearest edge within a click-tolerance of the world point, or null. The
+   * curve is sampled into segments — 2.4k edges × a dozen distance checks is
+   * far below a millisecond, and it only runs on click.
+   */
+  const hitTestEdge = useCallback((wx: number, wy: number): string | null => {
+    const k = viewRef.current.k;
+    // Constant *screen* tolerance (~10px) regardless of zoom.
+    const tolerance = Math.max(9, 10 / k);
+    // Mirror the draw-time visibility: an edge "key" mode isn't painting
+    // (not resting, not part of the current selection) is not clickable.
+    const nodeId = selectedIdRef.current;
+    const edgeId = selectedEdgeIdRef.current;
+    const drawAll = edgeModeRef.current === "all";
+    let best: string | null = null;
+    let bestD = tolerance;
+    for (const e of layoutEdgesRef.current) {
+      if (
+        !drawAll &&
+        !e.resting &&
+        e.id !== edgeId &&
+        !(
+          nodeId !== null &&
+          (e.source.id === nodeId || e.target.id === nodeId)
+        )
+      )
+        continue;
+      const geo = edgeGeometry(e);
+      if (geo.loop) {
+        const d = Math.abs(Math.hypot(wx - geo.cx, wy - geo.cy) - LOOP_R);
+        if (d < bestD) {
+          bestD = d;
+          best = e.id;
+        }
+        continue;
+      }
+      if (
+        wx < Math.min(geo.sx, geo.ex, geo.cpx) - tolerance ||
+        wx > Math.max(geo.sx, geo.ex, geo.cpx) + tolerance ||
+        wy < Math.min(geo.sy, geo.ey, geo.cpy) - tolerance ||
+        wy > Math.max(geo.sy, geo.ey, geo.cpy) + tolerance
+      )
+        continue;
+      let ax = geo.sx;
+      let ay = geo.sy;
+      const SAMPLES = 12;
+      for (let i = 1; i <= SAMPLES; i++) {
+        const s = i / SAMPLES;
+        const u = 1 - s;
+        const bx = u * u * geo.sx + 2 * u * s * geo.cpx + s * s * geo.ex;
+        const by = u * u * geo.sy + 2 * u * s * geo.cpy + s * s * geo.ey;
+        const d = distToSegment(wx, wy, ax, ay, bx, by);
+        if (d < bestD) {
+          bestD = d;
+          best = e.id;
+        }
+        ax = bx;
+        ay = by;
+      }
+    }
+    return best;
+  }, []);
 
   // ---- Pointer interactions -------------------------------------------------
 
   const onNodePointerDown = useCallback(
-    (node: SimNode, e: React.PointerEvent<SVGGElement>) => {
+    (node: LayoutNode, e: React.PointerEvent<SVGGElement>) => {
       if (e.button !== 0) return;
       e.stopPropagation();
+      cancelFocusAnim();
+      clearHover();
       e.currentTarget.setPointerCapture(e.pointerId);
-      const rect = svgRef.current?.getBoundingClientRect();
+      // Container rect, not the svg's — the svg bleeds past the container
+      // and rides a CSS transform during gestures.
+      const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
       dragRef.current = {
         node,
@@ -970,7 +1489,7 @@ export default function PotGraphCanvas({
         moved: false,
       };
     },
-    [],
+    [cancelFocusAnim, clearHover],
   );
 
   const onNodePointerMove = useCallback(
@@ -982,16 +1501,22 @@ export default function PotGraphCanvas({
         Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 4
       )
         return;
-      if (!drag.moved) {
-        drag.moved = true;
-        userMovedRef.current = true;
-        simRef.current?.alphaTarget(0.25).restart();
-      }
+      drag.moved = true;
+      userMovedRef.current = true;
       const t = viewRef.current;
-      drag.node.fx = (e.clientX - drag.rect.left - t.x) / t.k;
-      drag.node.fy = (e.clientY - drag.rect.top - t.y) / t.k;
+      const x = (e.clientX - drag.rect.left - t.x) / t.k;
+      const y = (e.clientY - drag.rect.top - t.y) / t.k;
+      // Move the node and pin it (fx/fy survive future rebuild solves).
+      drag.node.x = x;
+      drag.node.y = y;
+      drag.node.fx = x;
+      drag.node.fy = y;
+      nodeElsRef.current
+        .get(drag.node.id)
+        ?.g?.setAttribute("transform", `translate(${x},${y})`);
+      scheduleDraw();
     },
-    [],
+    [scheduleDraw],
   );
 
   const onNodePointerUp = useCallback(
@@ -1000,7 +1525,6 @@ export default function PotGraphCanvas({
       if (!drag) return;
       dragRef.current = null;
       e.currentTarget.releasePointerCapture(e.pointerId);
-      simRef.current?.alphaTarget(0);
       // A press that never travelled is a click: select. A real drag leaves
       // fx/fy set so the node stays pinned where it was dropped.
       if (!drag.moved) onSelect(drag.node.id);
@@ -1008,14 +1532,10 @@ export default function PotGraphCanvas({
     [onSelect],
   );
 
-  /** An edge press registers a candidate; the background pointerup decides. */
-  const onEdgePress = useCallback((id: string) => {
-    pendingEdgeRef.current = id;
-  }, []);
-
   const onBackgroundPointerDown = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
       if (e.button !== 0) return;
+      cancelFocusAnim();
       e.currentTarget.setPointerCapture(e.pointerId);
       const t = viewRef.current;
       panRef.current = {
@@ -1026,7 +1546,7 @@ export default function PotGraphCanvas({
         moved: false,
       };
     },
-    [],
+    [cancelFocusAnim],
   );
 
   const onBackgroundPointerMove = useCallback(
@@ -1055,46 +1575,70 @@ export default function PotGraphCanvas({
       panRef.current = null;
       e.currentTarget.releasePointerCapture(e.pointerId);
       if (!pan.moved) {
-        // A stationary press that started on an edge hit-area selects that
-        // edge; anywhere else it clears both selections.
-        const candidate = pendingEdgeRef.current;
-        setSelectedEdgeId(candidate);
+        // A stationary press selects the edge under the cursor (analytic
+        // hit-test — edges have no DOM), or clears both selections.
+        const rect = containerRef.current?.getBoundingClientRect();
+        const t = viewRef.current;
+        const hit = rect
+          ? hitTestEdge(
+              (e.clientX - rect.left - t.x) / t.k,
+              (e.clientY - rect.top - t.y) / t.k,
+            )
+          : null;
+        setSelectedEdgeId(hit);
         onSelect(null);
+      } else {
+        // Gesture over: bake the pan into the node-layer raster.
+        commitRaster();
       }
-      pendingEdgeRef.current = null;
     },
-    [onSelect],
+    [onSelect, hitTestEdge, commitRaster],
   );
 
-  // ---- Element registries ---------------------------------------------------
+  // ---- Element registry -----------------------------------------------------
 
   const registerNode = useCallback((id: string, els: NodeEls | null) => {
     if (els) nodeElsRef.current.set(id, els);
     else nodeElsRef.current.delete(id);
   }, []);
 
-  const registerEdge = useCallback((id: string, els: EdgeEls | null) => {
-    if (els) edgeElsRef.current.set(id, els);
-    else edgeElsRef.current.delete(id);
-  }, []);
-
-  const view = viewRef.current;
+  const raster = rasterRef.current;
 
   return (
     <div
       ref={containerRef}
-      className="h-full w-full cursor-grab active:cursor-grabbing"
+      className="relative h-full w-full cursor-grab active:cursor-grabbing"
+      // The first structure commit fades the pre-settled composition in
+      // instead of popping a fully-formed graph onto the screen.
+      style={{
+        opacity: structureVersion > 0 ? 1 : 0,
+        transition: "opacity 400ms ease",
+      }}
     >
+      <canvas
+        ref={canvasRef}
+        className="pointer-events-none absolute inset-0 h-full w-full"
+        aria-hidden
+      />
       <svg
         ref={svgRef}
-        className="h-full w-full select-none"
-        // The first structure commit fades the pre-settled composition in
-        // instead of popping a fully-formed graph onto the screen.
+        className="absolute select-none"
+        // Bled past the container so mid-gesture CSS pans reveal real pixels
+        // instead of a clipped void; willChange keeps the layer composited.
+        // Width/height are explicit because an abs-positioned replaced
+        // element won't stretch between opposing insets — it collapses to
+        // its intrinsic 300x150 instead.
         style={{
+          top: -BLEED,
+          left: -BLEED,
+          width: `calc(100% + ${BLEED * 2}px)`,
+          height: `calc(100% + ${BLEED * 2}px)`,
           touchAction: "none",
-          opacity: structureVersion > 0 ? 1 : 0,
-          transition: "opacity 400ms ease",
+          transformOrigin: "0 0",
+          willChange: "transform",
         }}
+        data-captions={captionsVisibleRef.current ? "on" : "off"}
+        data-edgehints={edgeMode === "all" ? "off" : "on"}
         role="img"
         aria-label="Project knowledge graph"
         onPointerDown={onBackgroundPointerDown}
@@ -1104,196 +1648,42 @@ export default function PotGraphCanvas({
       >
         <g
           ref={rootGRef}
-          transform={`translate(${view.x},${view.y}) scale(${view.k})`}
+          transform={`translate(${raster.x + BLEED},${raster.y + BLEED}) scale(${raster.k})`}
         >
-          <g>
-            {simEdgesRef.current.map((edge) => (
-              <EdgePath
-                key={edge.id}
-                edge={edge}
-                halo={chrome.halo}
-                muted={chrome.edge}
-                mutedLabel={chrome.edgeLabel}
-                register={registerEdge}
-                onPress={onEdgePress}
-              />
-            ))}
-          </g>
-          <g>
-            {simNodesRef.current.map((node) => (
-              <NodeDisc
-                key={node.id}
-                node={node}
-                captionFallback={chrome.caption}
-                captionOnFill={chrome.captionOnFill}
-                halo={chrome.halo}
-                register={registerNode}
-                onPointerDown={onNodePointerDown}
-                onPointerMove={onNodePointerMove}
-                onPointerUp={onNodePointerUp}
-                onExpand={onExpand}
-              />
-            ))}
-          </g>
+          {layoutNodesRef.current.map((node) => (
+            <NodeDisc
+              key={node.id}
+              node={node}
+              captionFallback={chrome.caption}
+              captionOnFill={chrome.captionOnFill}
+              halo={chrome.halo}
+              edgeChrome={chrome.edge}
+              register={registerNode}
+              onPointerDown={onNodePointerDown}
+              onPointerMove={onNodePointerMove}
+              onPointerUp={onNodePointerUp}
+              onExpand={onExpand}
+              onHoverStart={onNodeHoverStart}
+              onHoverEnd={clearHover}
+            />
+          ))}
         </g>
       </svg>
-    </div>
-  );
-}
-
-// ---- Edge ------------------------------------------------------------------
-
-// Renders with resting styles only (grey stroke, hidden label, full opacity);
-// applyHighlight owns everything selection-dependent, so this memo never
-// re-renders after mount unless the edge itself is rebuilt.
-const EdgePath = memo(function EdgePath({
-  edge,
-  halo,
-  muted,
-  mutedLabel,
-  register,
-  onPress,
-}: {
-  edge: SimEdge;
-  halo: string;
-  /** Resting stroke — every edge is this grey until highlighted. */
-  muted: string;
-  mutedLabel: string;
-  register: (id: string, els: EdgeEls | null) => void;
-  onPress: (id: string) => void;
-}) {
-  // Stable record the ref callbacks write into; ticks read it via the registry.
-  const els = useRef<EdgeEls>({
-    g: null,
-    path: null,
-    loop: null,
-    arrow: null,
-    hit: null,
-    labelG: null,
-    labelText: null,
-  }).current;
-
-  // Layout effect (not passive): the canvas re-applies highlight styling in
-  // its own layout effect right after a structure change, and children must
-  // already be registered when it runs.
-  useLayoutEffect(() => {
-    register(edge.id, els);
-    return () => register(edge.id, null);
-  }, [edge.id, els, register]);
-
-  const geo = edgeGeometry(edge);
-
-  if (geo.loop) {
-    return (
-      <g
-        ref={(el) => {
-          els.g = el;
-        }}
-        className="transition-opacity duration-150"
-      >
-        <circle
-          ref={(el) => {
-            els.loop = el;
-          }}
-          cx={geo.cx}
-          cy={geo.cy}
-          r={LOOP_R}
-          fill="none"
-          stroke={muted}
-          strokeWidth={1.3}
-          className="cursor-pointer"
-          onPointerDown={(e) => {
-            if (e.button === 0) onPress(edge.id);
-          }}
+      {hover ? (
+        // Keyed by node so moving between discs re-runs the entry animation.
+        <NodeHoverCard
+          key={hover.node.id}
+          hover={hover}
+          containerW={sizeRef.current.w}
+          edgeMode={edgeMode}
         />
-        <EdgeLabel geo={geo} label={edge.label} fill={mutedLabel} halo={halo} els={els} />
-      </g>
-    );
-  }
-
-  return (
-    <g
-      ref={(el) => {
-        els.g = el;
-      }}
-      className="transition-opacity duration-150"
-    >
-      <path
-        ref={(el) => {
-          els.path = el;
-        }}
-        d={geo.d}
-        fill="none"
-        stroke={muted}
-        strokeWidth={1.3}
-        strokeDasharray={edge.frontier ? "4 4" : undefined}
-      />
-      <path
-        ref={(el) => {
-          els.arrow = el;
-        }}
-        d={geo.arrowD}
-        fill={muted}
-      />
-      {/* Fat invisible hit area so the thin edge is comfortably clickable. */}
-      <path
-        ref={(el) => {
-          els.hit = el;
-        }}
-        d={geo.d}
-        fill="none"
-        stroke="transparent"
-        strokeWidth={12}
-        className="cursor-pointer"
-        onPointerDown={(e) => {
-          if (e.button === 0) onPress(edge.id);
-        }}
-      />
-      <EdgeLabel geo={geo} label={edge.label} fill={mutedLabel} halo={halo} els={els} />
-    </g>
-  );
-});
-
-// Always mounted but hidden by default; applyHighlight flips `display` when
-// the zoom, label mode or a selection wants the label visible. Keeping it in
-// the DOM means showing a label never triggers a React mount.
-function EdgeLabel({
-  geo,
-  label,
-  fill,
-  halo,
-  els,
-}: {
-  geo: EdgeGeo;
-  label: string;
-  fill: string;
-  halo: string;
-  els: EdgeEls;
-}) {
-  return (
-    <g
-      ref={(el) => {
-        els.labelG = el;
-      }}
-      transform={`translate(${geo.labelX},${geo.labelY}) rotate(${geo.labelAngle})`}
-      style={{ display: "none" }}
-      className="pointer-events-none"
-    >
-      <text
-        ref={(el) => {
-          els.labelText = el;
-        }}
-        textAnchor="middle"
-        className="font-mono"
-        fontSize={7.5}
-        fill={fill}
-        stroke={halo}
-        strokeWidth={2.5}
-        paintOrder="stroke"
-      >
-        {label}
-      </text>
-    </g>
+      ) : null}
+      <style>{`
+        svg[data-captions="off"] .gc-caption { display: none; }
+        svg[data-captions="off"] .gc-edgehint { display: none; }
+        svg[data-edgehints="off"] .gc-edgehint { display: none; }
+      `}</style>
+    </div>
   );
 }
 
@@ -1306,26 +1696,33 @@ const NodeDisc = memo(function NodeDisc({
   captionFallback,
   captionOnFill,
   halo,
+  edgeChrome,
   register,
   onPointerDown,
   onPointerMove,
   onPointerUp,
   onExpand,
+  onHoverStart,
+  onHoverEnd,
 }: {
-  node: SimNode;
+  node: LayoutNode;
   captionFallback: string;
   captionOnFill: string;
   halo: string;
+  /** Resting edge grey — strokes the hidden-edge hint badge. */
+  edgeChrome: string;
   register: (id: string, els: NodeEls | null) => void;
-  onPointerDown: (node: SimNode, e: React.PointerEvent<SVGGElement>) => void;
+  onPointerDown: (node: LayoutNode, e: React.PointerEvent<SVGGElement>) => void;
   onPointerMove: (e: React.PointerEvent<SVGGElement>) => void;
   onPointerUp: (e: React.PointerEvent<SVGGElement>) => void;
   onExpand: (id: string) => void;
+  onHoverStart: (node: LayoutNode) => void;
+  onHoverEnd: () => void;
 }) {
-  const els = useRef<NodeEls>({ g: null, halo: null }).current;
+  const els = useRef<NodeEls>({ g: null, halo: null, hint: null }).current;
 
-  // Layout effect for the same reason as EdgePath: the canvas restyles in a
-  // layout effect right after structure changes and needs the registry full.
+  // Layout effect: the canvas restyles in a layout effect right after
+  // structure changes and needs the registry full by then.
   useLayoutEffect(() => {
     register(node.id, els);
     return () => register(node.id, null);
@@ -1337,8 +1734,14 @@ const NodeDisc = memo(function NodeDisc({
   const captionColor =
     luminance(node.fill) > 168 ? captionFallback : captionOnFill;
 
+  // Type icon above the caption, the pair centred as one block in the disc.
+  const TypeIcon = node.icon;
+  const iconSize = node.frontier ? 9 : clamp(Math.round(node.r * 0.5), 10, 18);
+  const iconGap = node.frontier ? 1 : 1.5;
   const lineHeight = node.fontSize * 1.1;
-  const firstDy = -((node.lines.length - 1) / 2) * lineHeight;
+  const contentTop =
+    -(iconSize + iconGap + node.lines.length * lineHeight) / 2;
+  const firstDy = contentTop + iconSize + iconGap + lineHeight / 2;
   const badgeOffset = node.r * 0.75;
 
   return (
@@ -1351,6 +1754,8 @@ const NodeDisc = memo(function NodeDisc({
       onPointerDown={(e) => onPointerDown(node, e)}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerEnter={() => onHoverStart(node)}
+      onPointerLeave={onHoverEnd}
       onDoubleClick={(e) => {
         e.stopPropagation();
         onExpand(node.id);
@@ -1373,12 +1778,23 @@ const NodeDisc = memo(function NodeDisc({
         strokeWidth={2}
         strokeDasharray={node.frontier ? "3.5 3" : undefined}
       />
+      {/* gc-caption: hides with the captions below the readability zoom. */}
+      <TypeIcon
+        x={-iconSize / 2}
+        y={contentTop}
+        width={iconSize}
+        height={iconSize}
+        strokeWidth={2.25}
+        color={captionColor}
+        aria-hidden
+        className="gc-caption pointer-events-none"
+      />
       <text
         textAnchor="middle"
         fontSize={node.fontSize}
         fontWeight={600}
         fill={captionColor}
-        className="pointer-events-none"
+        className="gc-caption pointer-events-none"
       >
         {node.lines.map((line, i) => (
           <tspan key={i} x={0} y={firstDy + i * lineHeight} dy="0.35em">
@@ -1404,11 +1820,119 @@ const NodeDisc = memo(function NodeDisc({
           </text>
         </g>
       ) : null}
-      <title>
-        {node.hidden > 0
-          ? `${node.label} — ${node.hidden} hidden neighbour${node.hidden === 1 ? "" : "s"} (double-click to reveal)`
-          : node.label}
-      </title>
+      {/* Grey twin of the neighbour badge: edges "key" mode isn't drawing.
+          applyHighlight hides it while this node is selected; CSS hides it in
+          "all" mode and below caption zoom. */}
+      {node.extraEdges > 0 ? (
+        <g
+          ref={(el) => {
+            els.hint = el;
+          }}
+          transform={`translate(${-badgeOffset},${badgeOffset})`}
+          className="gc-edgehint pointer-events-none"
+        >
+          <circle r={8} fill={halo} stroke={edgeChrome} strokeWidth={1.25} />
+          <text
+            textAnchor="middle"
+            dy="0.35em"
+            fontSize={7}
+            fontWeight={600}
+            fill={captionFallback}
+            opacity={0.75}
+            className="font-mono"
+          >
+            {node.extraEdges > 99 ? "99+" : node.extraEdges}
+          </text>
+        </g>
+      ) : null}
     </g>
   );
 });
+
+// ---- Hover card --------------------------------------------------------------
+
+// Floating quick-details card anchored to the hovered disc. Pure HTML over
+// the canvas (same GlassPanel chrome as the rest of the graph overlays), so
+// the pot theme tokens style it on both surfaces. pointer-events-none keeps
+// it from ever stealing the hover it describes.
+function NodeHoverCard({
+  hover,
+  containerW,
+  edgeMode,
+}: {
+  hover: HoverState;
+  containerW: number;
+  edgeMode: "key" | "all";
+}) {
+  const { node, x, y, rk } = hover;
+  const meta = categoryDisplay(node.category);
+  const TypeIcon = node.icon;
+
+  // Above the disc by default; below when there's no headroom, and never
+  // hard against the container's left/right edge.
+  const below = y - rk < 150;
+  const left = clamp(x, 100, Math.max(100, containerW - 100));
+
+  const hint = node.frontier
+    ? "Not loaded yet — double-click to pull it in"
+    : node.hidden > 0
+      ? `${node.hidden} hidden neighbour${node.hidden === 1 ? "" : "s"} — double-click to reveal`
+      : edgeMode === "key" && node.extraEdges > 0
+        ? `${node.extraEdges} more edge${node.extraEdges === 1 ? "" : "s"} — click to show them`
+        : null;
+
+  return (
+    <div
+      className="pointer-events-none absolute z-10"
+      style={{
+        left,
+        top: below ? y + rk + 12 : y - rk - 12,
+        transform: below ? "translateX(-50%)" : "translate(-50%, -100%)",
+      }}
+    >
+      <GlassPanel className="w-max max-w-[19rem] overflow-hidden duration-150 animate-in fade-in zoom-in-95">
+        <div className="flex items-start gap-2.5 px-3 py-2.5">
+          <span
+            aria-hidden
+            className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg"
+            style={{ backgroundColor: `${node.fill}24`, color: node.fill }}
+          >
+            <TypeIcon className="h-4 w-4" strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <p className="line-clamp-2 text-[13px] font-medium leading-snug">
+              {node.label}
+            </p>
+            <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
+              {node.labels.slice(0, 3).join(" · ") || node.id}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 border-t border-border/60 px-3 py-1.5 text-[11px] text-muted-foreground">
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            <span
+              aria-hidden
+              className={cn(
+                "h-2 w-2 shrink-0 rounded-full",
+                meta.dot,
+                node.frontier && "opacity-40",
+              )}
+            />
+            <span className="truncate">{meta.label}</span>
+          </span>
+          <span aria-hidden className="text-border">
+            ·
+          </span>
+          <span className="shrink-0 font-mono text-[10px]">
+            {node.degree} connection{node.degree === 1 ? "" : "s"}
+          </span>
+        </div>
+        {hint ? (
+          <p className="border-t border-border/60 px-3 py-1.5 text-[10px] leading-snug text-muted-foreground/80">
+            {hint}
+          </p>
+        ) : null}
+      </GlassPanel>
+    </div>
+  );
+}

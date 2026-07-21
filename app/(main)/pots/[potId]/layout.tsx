@@ -15,6 +15,7 @@ import { PotContextProvider } from "./PotContext";
 const SECTIONS = [
   { slug: "overview", label: "Overview" },
   { slug: "graph", label: "Graph" },
+  { slug: "timeline", label: "Timeline" },
   { slug: "sources", label: "Sources" },
   { slug: "events", label: "Events" },
   { slug: "agent", label: "Agent setup" },

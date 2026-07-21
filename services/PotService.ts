@@ -14,6 +14,7 @@ import {
   getDemoInvitations,
   getDemoMembers,
   getDemoPatchedPot,
+  getDemoPotTimeline,
   getDemoProjectGraph,
   getDemoRawIngestionResult,
   getDemoRepositories,
@@ -460,6 +461,99 @@ export type ProjectGraph = {
   edges: ProjectGraphEdge[];
   message: string;
 };
+
+// ---- Activity timeline ------------------------------------------------------
+
+/** Lightweight pointer to another graph entity (person, repo, service, …). */
+export type TimelineEntityRef = {
+  key: string;
+  name: string;
+  labels: string[];
+};
+
+/**
+ * One event on the pot's activity timeline. The backend timeline reader
+ * returns a thin claim row (title/verb/keys); the demo pots enrich it with
+ * everything the mock graph knows (actor, summary, touched entities), so all
+ * fields beyond the core set are optional and the UI degrades gracefully.
+ */
+export type TimelineActivity = {
+  id: string;
+  activity_key: string;
+  /** Event time (occurred_at of the source event), ISO 8601. */
+  timestamp: string | null;
+  /** Event kind, e.g. "pr_merged", "deploy_succeeded", "alert_fired". */
+  verb_class: string | null;
+  title: string | null;
+  activity_type?: string | null;
+  summary?: string | null;
+  description?: string | null;
+  actor?: TimelineEntityRef | null;
+  repo_name?: string | null;
+  url?: string | null;
+  number?: number | null;
+  state?: string | null;
+  touched?: TimelineEntityRef[];
+  mentions?: TimelineEntityRef[];
+  source_system?: string | null;
+  source_ref?: string | null;
+  evidence_strength?: number | null;
+  score?: number | null;
+};
+
+export type PotTimeline = {
+  pot_id: string;
+  items: TimelineActivity[];
+  window: { since: string | null; until: string | null };
+};
+
+export type PotTimelineOptions = {
+  services?: string[];
+  /** Relative lookback ('24h', '7d', '30d', …); ignored when `since` is set. */
+  window?: string;
+  since?: string;
+  until?: string;
+  verbClasses?: string[];
+  limit?: number;
+  includeInvalidated?: boolean;
+};
+
+function refNameFromKey(key: string): string {
+  const idx = key.indexOf(":");
+  return idx >= 0 ? key.slice(idx + 1) : key;
+}
+
+/** Map a thin backend timeline row onto the UI's TimelineActivity shape. */
+function normalizeTimelineItem(row: Record<string, unknown>): TimelineActivity {
+  const str = (v: unknown) => (typeof v === "string" && v ? v : null);
+  const predicate = (str(row.predicate) ?? "").toUpperCase();
+  const subjectKey = str(row.subject_key);
+  const objectKey = str(row.object_key);
+  // For PERFORMED / AUTHORED the subject is the person acting; for
+  // TOUCHED / MENTIONS the object is the entity the activity touched.
+  const actorKey =
+    predicate === "PERFORMED" || predicate === "AUTHORED" ? subjectKey : null;
+  const touchedKey =
+    predicate === "TOUCHED" || predicate === "MENTIONS" ? objectKey : null;
+  return {
+    id: str(row.id) ?? str(row.activity_key) ?? crypto.randomUUID(),
+    activity_key: str(row.activity_key) ?? str(row.id) ?? "",
+    timestamp: str(row.timestamp),
+    verb_class: str(row.verb_class),
+    title: str(row.title),
+    actor: actorKey
+      ? { key: actorKey, name: refNameFromKey(actorKey), labels: ["Person"] }
+      : null,
+    touched: touchedKey
+      ? [{ key: touchedKey, name: refNameFromKey(touchedKey), labels: [] }]
+      : [],
+    source_system: str(row.source_system),
+    source_ref: str(row.source_ref),
+    evidence_strength:
+      typeof row.evidence_strength === "number" ? row.evidence_strength : null,
+    score: typeof row.score === "number" ? row.score : null,
+  };
+}
 
 function errorMessage(error: unknown, fallback: string) {
   if (axios.isAxiosError(error)) {
@@ -1160,6 +1254,44 @@ export default class PotService {
       }
     }
     return raw as ProjectGraph;
+  }
+
+  static async getPotTimeline(
+    potId: string,
+    options: PotTimelineOptions = {},
+  ): Promise<PotTimeline> {
+    if (isDemoPotId(potId)) return getDemoPotTimeline(potId, options);
+    const headers = await getHeaders();
+    const params = new URLSearchParams();
+    for (const s of options.services ?? []) params.append("service", s);
+    // "all" is a UI-only value — the backend has no unbounded window, so an
+    // explicit epoch `since` (which overrides `window`) opens it fully.
+    if (options.since) params.set("since", options.since);
+    else if (options.window === "all")
+      params.set("since", "1970-01-01T00:00:00Z");
+    else if (options.window) params.set("window", options.window);
+    if (options.until) params.set("until", options.until);
+    for (const v of options.verbClasses ?? []) params.append("verb_class", v);
+    if (options.limit) params.set("limit", String(options.limit));
+    if (options.includeInvalidated) params.set("include_invalidated", "true");
+    try {
+      const response = await axios.get(
+        `${baseUrl()}/api/v1/context/pots/${encodeURIComponent(potId)}/timeline?${params.toString()}`,
+        { headers },
+      );
+      const data = response.data as {
+        pot_id: string;
+        items?: Array<Record<string, unknown>>;
+        window?: { since: string | null; until: string | null };
+      };
+      return {
+        pot_id: data.pot_id,
+        items: (data.items ?? []).map(normalizeTimelineItem),
+        window: data.window ?? { since: null, until: null },
+      };
+    } catch (error) {
+      throw new Error(errorMessage(error, "Error loading activity timeline"));
+    }
   }
 
   static async searchContext(

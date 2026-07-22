@@ -115,7 +115,7 @@
   },
   "pnpm": {
     "overrides": {
-      "protobufjs": "7.6.4",
+      "protobufjs": "7.6.5",
       "@protobufjs/utf8": "1.1.1",
       "follow-redirects": "1.16.0",
       "postcss": "8.5.10",

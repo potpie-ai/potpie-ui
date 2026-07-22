@@ -6,6 +6,7 @@ import React, {
   ReactNode,
 } from "react";
 import AgentService from "@/services/AgentService";
+import { DEMO_WORKFLOW_AGENTS } from "@/lib/mock/demoWorkflows";
 
 interface Agent {
   id: string;
@@ -32,7 +33,8 @@ interface AgentDataProviderProps {
 export const AgentDataProvider: React.FC<AgentDataProviderProps> = ({
   children,
 }) => {
-  const [agents, setAgents] = useState<Agent[]>([]);
+  // Demo workflow agents are always present so demo graphs resolve names
+  const [agents, setAgents] = useState<Agent[]>(DEMO_WORKFLOW_AGENTS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,7 +50,7 @@ export const AgentDataProvider: React.FC<AgentDataProviderProps> = ({
           name: agent.name,
           description: agent.description,
         }));
-      setAgents(filtered);
+      setAgents([...DEMO_WORKFLOW_AGENTS, ...filtered]);
       console.log(
         `[AgentDataContext] Fetched ${filtered.length} agents successfully`
       );

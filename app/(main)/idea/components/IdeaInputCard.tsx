@@ -53,6 +53,40 @@ import {
   isDemoRepoName,
 } from "@/lib/mock/demoBuildFlow";
 
+/** Shown before the API model list loads (and as fallback if it fails). */
+const DEFAULT_MODELS: Model[] = [
+  {
+    id: "openai/gpt-5.5",
+    name: "GPT 5.5",
+    provider: "openai",
+    description: "OpenAI's flagship model, best for complex reasoning and code",
+    is_chat_model: true,
+    is_inference_model: true,
+  },
+  {
+    id: "anthropic/claude-sonnet-4-5",
+    name: "Claude Sonnet 4.5",
+    provider: "anthropic",
+    description: "Fast, balanced model for everyday coding tasks",
+    is_chat_model: true,
+    is_inference_model: true,
+  },
+  {
+    id: "gemini/gemini-2.5-pro",
+    name: "Gemini 2.5 Pro",
+    provider: "gemini",
+    description: "Google's long-context multimodal model",
+    is_chat_model: true,
+    is_inference_model: true,
+  },
+];
+
+const DEFAULT_MODEL = {
+  id: DEFAULT_MODELS[0].id,
+  name: DEFAULT_MODELS[0].name,
+  provider: DEFAULT_MODELS[0].provider,
+};
+
 interface IdeaInputCardProps {
   input: string;
   onInputChange: (value: string) => void;
@@ -170,8 +204,8 @@ export default function IdeaInputCard({
     id: string;
     name: string;
     provider: string;
-  } | null>({ id: "", name: "glm 4.7", provider: "z.ai" });
-  const [modelList, setModelList] = useState<Model[]>([]);
+  } | null>(DEFAULT_MODEL);
+  const [modelList, setModelList] = useState<Model[]>(DEFAULT_MODELS);
   /** Pro users: all models. Free users: all except OpenAI, Anthropic, Gemini (those show upgrade flag). */
   const isModelAvailable = (model: Model) => {
     if (!isFreeUser) return true;
@@ -190,15 +224,15 @@ export default function IdeaInputCard({
         });
       }
     } catch {
-      setCurrentModel({ id: "", name: "ZLM 4.7", provider: "zai" });
+      setCurrentModel(DEFAULT_MODEL);
     }
   }, []);
   const loadModelList = useCallback(async () => {
     try {
       const res = await ModelService.listModels();
-      setModelList(res.models ?? []);
+      if (res.models?.length) setModelList(res.models);
     } catch {
-      setModelList([]);
+      setModelList(DEFAULT_MODELS);
     }
   }, []);
   // Load model list for all users so dropdown shows API models (free users see grayed + Upgrade for non-available)
@@ -511,7 +545,7 @@ export default function IdeaInputCard({
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
 
-  const displayModelName = currentModel?.name ?? "ZLM 4.7";
+  const displayModelName = currentModel?.name ?? DEFAULT_MODEL.name;
 
   return (
     <div className={`relative space-y-4 transition-opacity duration-200 ${(loading || isSubmitting) ? "opacity-90 pointer-events-none" : ""}`}>

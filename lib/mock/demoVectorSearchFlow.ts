@@ -41,7 +41,7 @@ export const VECTOR_DEMO_PLAN_RUN_ID = "2d7b9f43-8c16-4a58-b3e7-91f0c4d82a65";
 export const VECTOR_DEMO_TASK_SPLITTING_ID = "6f1a3c85-2e97-4b06-9d24-e7c5b8a41f92";
 export const VECTOR_DEMO_CONVERSATION_ID = "8a5d2e91-4c73-4f18-b6a0-3e9f7c216d84";
 export const VECTOR_DEMO_RECIPE_TITLE = "Vector Search 2.0";
-export const VECTOR_DEMO_PR_URL = "https://github.com/potpietools/redis/pull/12";
+export const VECTOR_DEMO_PR_URL = "https://github.com/potpietools/redis/pull/3";
 export const VECTOR_DEMO_BRANCH = "feature/vector-search-2-0-bundle";
 export const VECTOR_DEMO_BASE_BRANCH = "unstable";
 export const VECTOR_DEMO_RECIPE_STATUS = "IMPLEMENTATION_READY";
@@ -86,7 +86,7 @@ const VECTOR_DEMO_QUESTIONS: RecipeQuestionsResponse = {
     ],
     "answer_recommendation": {
       "idx": 0,
-      "reasoning": "The three surfaces share one narrative: `VBATCH` fills the index fast, `MINSCORE` makes threshold search readable, and `VINFO DETAIL` proves what was built. All of them live in `modules/vector-sets/vset.c` and demo best as one bundle."
+      "reasoning": "The three surfaces share one narrative: `VBATCH` fills the index fast, `MINSCORE` makes threshold search readable, and `VINFO DETAIL` proves what was built. All of them live in `modules/vector-sets/vset.c` and ship best as one bundle."
     },
     "context_refs": [
       {
@@ -785,8 +785,8 @@ const VECTOR_DEMO_PLAN: PhasedPlan = {
     },
     {
       "phase_id": "phase-5",
-      "name": "Regression hardening and demo packaging",
-      "description": "Land dedicated regression suites and package the docs and examples that make the bundle demo ready.",
+      "name": "Regression hardening and release packaging",
+      "description": "Land dedicated regression suites and package the docs and examples that make the bundle release ready.",
       "summary": "Add focused suites for batch ingestion, FP32 batches, projection, MINSCORE, and DETAIL, and extend persistence, replication, and basic-command coverage over the new surfaces. Finish the README, teach the cli-tool to render nested DETAIL maps, and move glove-100 ingestion to VBATCH so the examples exercise the real feature.",
       "dependencies": [
         "phase-4"
@@ -846,7 +846,7 @@ const VECTOR_DEMO_PLAN: PhasedPlan = {
         {
           "plan_item_id": "phase-5-docs",
           "order": 2,
-          "title": "Package docs and examples for the demo flow",
+          "title": "Package docs and examples for the release",
           "description": "Document the three surfaces in the README and wire the example tooling to actually use them.",
           "detailed_description": "The README gains VBATCH, MINSCORE, and DETAIL sections using the exact option tokens the parser accepts. The cli-tool learns to render nested map replies so VINFO DETAIL output reads cleanly, its README shows VBATCH, MINSCORE, and DETAIL sessions, glove-100 ingestion switches from per-element VADD calls to VBATCH batches, and recall.py grows a minscore flag for threshold recall runs.",
           "dependencies": [
@@ -906,7 +906,7 @@ const VECTOR_DEMO_PLAN: PhasedPlan = {
     }
   ],
   "is_complete": true,
-  "summary": "Ship Vector Search 2.0 for the vector-sets module in six phases: lock the command contracts, build the VBATCH validation and apply passes, add MINSCORE threshold search, expose VINFO DETAIL graph diagnostics, then harden with regression suites and demo-ready docs and examples.",
+  "summary": "Ship Vector Search 2.0 for the vector-sets module in six phases: lock the command contracts, build the VBATCH validation and apply passes, add MINSCORE threshold search, expose VINFO DETAIL graph diagnostics, then harden with regression suites and release-ready docs and examples.",
   "estimated_total_effort": "6 engineering phases across the real vector-sets touchpoints: vset.c command surfaces, hnsw.c and hnsw.h graph statistics, commands.json metadata, the module regression suites under tests/, and the README plus cli-tool and glove-100 examples"
 };
 
@@ -942,7 +942,7 @@ const VECTOR_DEMO_LAYERS: TaskLayer[] = [
           {
             "path": "modules/vector-sets/README.md",
             "lang": "markdown",
-            "content": "diff --git a/modules/vector-sets/README.md b/modules/vector-sets/README.md\nindex d0f520c23..e363ac020 100644\n--- a/modules/vector-sets/README.md\n+++ b/modules/vector-sets/README.md\n@@ -66,1 +66,10 @@\n \n+**VBATCH: add or update many items into a vector set**\n+\n+    VBATCH key [REDUCE dim] VALUES dim count element value1 ... valueN [SETATTR json] ...\n+               [EF build-exploration-factor] [NOQUANT | Q8 | BIN] [M <numlinks>]\n+    VBATCH key [REDUCE dim] FP32 count element vector [SETATTR json] ...\n+               [EF build-exploration-factor] [NOQUANT | Q8 | BIN] [M <numlinks>]\n+\n+`VBATCH` validates the full payload before mutating the vector set, then applies all inserts and updates sequentially. The reply is the number of newly added elements. Existing elements are updated in place and are not counted in the reply.\n+\n@@ -269,7 +292,7 @@\n \n **VINFO: introspection command that shows info about a vector set**\n \n-    VINFO key\n+    VINFO key [DETAIL]\n \n Example:\n \n@@ -287,6 +310,15 @@\n     11) hnsw-max-node-uid\n     12) (integer) 3000000\n \n+With the optional `DETAIL` token, `VINFO` returns additional diagnostics that are useful during demos and tuning sessions:\n+\n+- projection usage\n+- bytes per stored vector\n+- estimated vector storage footprint\n+- attribute coverage\n+- default build/search effort\n+- graph link statistics and level histogram\n+\n **VSETATTR: associate or remove the JSON attributes of elements**\n \n     VSETATTR key element \"{... json ...}\""
+            "content": "diff --git a/modules/vector-sets/README.md b/modules/vector-sets/README.md\nindex d0f520c23..e363ac020 100644\n--- a/modules/vector-sets/README.md\n+++ b/modules/vector-sets/README.md\n@@ -66,1 +66,10 @@\n \n+**VBATCH: add or update many items into a vector set**\n+\n+    VBATCH key [REDUCE dim] VALUES dim count element value1 ... valueN [SETATTR json] ...\n+               [EF build-exploration-factor] [NOQUANT | Q8 | BIN] [M <numlinks>]\n+    VBATCH key [REDUCE dim] FP32 count element vector [SETATTR json] ...\n+               [EF build-exploration-factor] [NOQUANT | Q8 | BIN] [M <numlinks>]\n+\n+`VBATCH` validates the full payload before mutating the vector set, then applies all inserts and updates sequentially. The reply is the number of newly added elements. Existing elements are updated in place and are not counted in the reply.\n+\n@@ -269,7 +292,7 @@\n \n **VINFO: introspection command that shows info about a vector set**\n \n-    VINFO key\n+    VINFO key [DETAIL]\n \n Example:\n \n@@ -287,6 +310,15 @@\n     11) hnsw-max-node-uid\n     12) (integer) 3000000\n \n+With the optional `DETAIL` token, `VINFO` returns additional diagnostics that are useful during development and tuning sessions:\n+\n+- projection usage\n+- bytes per stored vector\n+- estimated vector storage footprint\n+- attribute coverage\n+- default build/search effort\n+- graph link statistics and level histogram\n+\n **VSETATTR: associate or remove the JSON attributes of elements**\n \n     VSETATTR key element \"{... json ...}\""
           }
         ],
         "logs": [
@@ -1303,7 +1303,7 @@ const VECTOR_DEMO_LAYERS: TaskLayer[] = [
           {
             "path": "modules/vector-sets/README.md",
             "lang": "markdown",
-            "content": "diff --git a/modules/vector-sets/README.md b/modules/vector-sets/README.md\nindex d0f520c23..e363ac020 100644\n--- a/modules/vector-sets/README.md\n+++ b/modules/vector-sets/README.md\n@@ -64,9 +64,30 @@ performed in the background, while the command is executed in the main thread.\n+**VBATCH: add or update many items into a vector set**\n+\n+    VBATCH key [REDUCE dim] VALUES dim count element value1 ... valueN [SETATTR json] ...\n+               [EF build-exploration-factor] [NOQUANT | Q8 | BIN] [M <numlinks>]\n+    VBATCH key [REDUCE dim] FP32 count element vector [SETATTR json] ...\n+               [EF build-exploration-factor] [NOQUANT | Q8 | BIN] [M <numlinks>]\n+\n+`VBATCH` validates the full payload before mutating the vector set, then applies all inserts and updates sequentially. The reply is the number of newly added elements. Existing elements are updated in place and are not counted in the reply.\n+\n+`VBATCH` is a good fit for demo and ingestion workloads because it reduces client round trips while preserving the same quantization, projection and attribute semantics of `VADD`.\n+\n **VSIM: return elements by vector similarity**\n\n-    VSIM key [ELE|FP32|VALUES] <vector or element> [WITHSCORES] [WITHATTRIBS] [COUNT num] [EPSILON delta] [EF search-exploration-factor] [FILTER expression] [FILTER-EF max-filtering-effort] [TRUTH] [NOTHREAD]\n+    VSIM key [ELE|FP32|VALUES] <vector or element> [WITHSCORES] [WITHATTRIBS] [COUNT num] [EPSILON delta | MINSCORE score] [EF search-exploration-factor] [FILTER expression] [FILTER-EF max-filtering-effort] [TRUTH] [NOTHREAD]\n@@ -94,6 +115,8 @@ It is possible to specify a `COUNT` and also to get the similarity score (from 1\n+Alternatively, it is possible to specify `MINSCORE` directly in similarity space. For example, `MINSCORE 0.85` means \"return at most `COUNT` items, but stop once similarity drops below 0.85\". `EPSILON` and `MINSCORE` are mutually exclusive because they describe the same threshold in different units.\n@@ -269,7 +292,7 @@ The command reports the neighbors for each level.\n **VINFO: introspection command that shows info about a vector set**\n\n-    VINFO key\n+    VINFO key [DETAIL]\n@@ -287,6 +310,15 @@ Example:\n+With the optional `DETAIL` token, `VINFO` returns additional diagnostics that are useful during demos and tuning sessions:\n+\n+- projection usage\n+- bytes per stored vector\n+- estimated vector storage footprint\n+- attribute coverage\n+- default build/search effort\n+- graph link statistics and level histogram"
+            "content": "diff --git a/modules/vector-sets/README.md b/modules/vector-sets/README.md\nindex d0f520c23..e363ac020 100644\n--- a/modules/vector-sets/README.md\n+++ b/modules/vector-sets/README.md\n@@ -64,9 +64,30 @@ performed in the background, while the command is executed in the main thread.\n+**VBATCH: add or update many items into a vector set**\n+\n+    VBATCH key [REDUCE dim] VALUES dim count element value1 ... valueN [SETATTR json] ...\n+               [EF build-exploration-factor] [NOQUANT | Q8 | BIN] [M <numlinks>]\n+    VBATCH key [REDUCE dim] FP32 count element vector [SETATTR json] ...\n+               [EF build-exploration-factor] [NOQUANT | Q8 | BIN] [M <numlinks>]\n+\n+`VBATCH` validates the full payload before mutating the vector set, then applies all inserts and updates sequentially. The reply is the number of newly added elements. Existing elements are updated in place and are not counted in the reply.\n+\n+`VBATCH` is a good fit for bulk-load and ingestion workloads because it reduces client round trips while preserving the same quantization, projection and attribute semantics of `VADD`.\n+\n **VSIM: return elements by vector similarity**\n\n-    VSIM key [ELE|FP32|VALUES] <vector or element> [WITHSCORES] [WITHATTRIBS] [COUNT num] [EPSILON delta] [EF search-exploration-factor] [FILTER expression] [FILTER-EF max-filtering-effort] [TRUTH] [NOTHREAD]\n+    VSIM key [ELE|FP32|VALUES] <vector or element> [WITHSCORES] [WITHATTRIBS] [COUNT num] [EPSILON delta | MINSCORE score] [EF search-exploration-factor] [FILTER expression] [FILTER-EF max-filtering-effort] [TRUTH] [NOTHREAD]\n@@ -94,6 +115,8 @@ It is possible to specify a `COUNT` and also to get the similarity score (from 1\n+Alternatively, it is possible to specify `MINSCORE` directly in similarity space. For example, `MINSCORE 0.85` means \"return at most `COUNT` items, but stop once similarity drops below 0.85\". `EPSILON` and `MINSCORE` are mutually exclusive because they describe the same threshold in different units.\n@@ -269,7 +292,7 @@ The command reports the neighbors for each level.\n **VINFO: introspection command that shows info about a vector set**\n\n-    VINFO key\n+    VINFO key [DETAIL]\n@@ -287,6 +310,15 @@ Example:\n+With the optional `DETAIL` token, `VINFO` returns additional diagnostics that are useful during development and tuning sessions:\n+\n+- projection usage\n+- bytes per stored vector\n+- estimated vector storage footprint\n+- attribute coverage\n+- default build/search effort\n+- graph link statistics and level histogram"
           },
           {
             "path": "modules/vector-sets/examples/cli-tool/cli.py",
@@ -1407,7 +1407,7 @@ export function getVectorDemoQuestionsResponse(): RecipeQuestionsResponse {
 
 export function submitVectorDemoAnswers(): SubmitRecipeAnswersResponse {
   return {
-    message: "Answers already recorded for the Vector Search 2.0 demo recipe.",
+    message: "Answers already recorded for the Vector Search 2.0 recipe.",
     recipe_id: VECTOR_DEMO_RECIPE_ID,
     new_status: VECTOR_DEMO_RECIPE_STATUS,
   };
@@ -1435,8 +1435,8 @@ export function getVectorDemoSpecStatus(): SpecStatusResponse {
 export function getVectorDemoSpecChatResponse(_message: string): SpecChatResponse {
   return {
     intent: "clarify",
-    message: "Updated the specification to emphasize the demo narrative around ingestion throughput — VBATCH cutting client round trips with all-or-nothing payload validation — and operator diagnostics, with VINFO DETAIL exposing storage footprint, attribute coverage, and HNSW graph health.",
-    explanation: "Updated the specification to emphasize the demo narrative around ingestion throughput — VBATCH cutting client round trips with all-or-nothing payload validation — and operator diagnostics, with VINFO DETAIL exposing storage footprint, attribute coverage, and HNSW graph health.",
+    message: "Updated the specification to emphasize ingestion throughput — VBATCH cutting client round trips with all-or-nothing payload validation — and operator diagnostics, with VINFO DETAIL exposing storage footprint, attribute coverage, and HNSW graph health.",
+    explanation: "Updated the specification to emphasize ingestion throughput — VBATCH cutting client round trips with all-or-nothing payload validation — and operator diagnostics, with VINFO DETAIL exposing storage footprint, attribute coverage, and HNSW graph health.",
     spec_output: VECTOR_DEMO_SPECIFICATION as unknown as SpecChatResponse["spec_output"],
     undo_token: "",
     next_actions: ["Review the requirements", "Open the phased plan"],
@@ -1495,7 +1495,7 @@ export function getVectorDemoTaskSplittingStatus(): TaskSplittingStatusResponse 
     branch_name: VECTOR_DEMO_BRANCH,
     base_branch: VECTOR_DEMO_BASE_BRANCH,
     head_sha: "84e350aac",
-    pr_number: 12,
+    pr_number: 3,
     agent_activity: VECTOR_DEMO_AGENT_ACTIVITY,
   };
 }
@@ -1524,7 +1524,7 @@ export function createVectorDemoConversation() {
 export function getVectorDemoConversationMessages(): LoadedMessage[] {
   return [
   {
-    "id": "demo-msg-1",
+    "id": "msg-1",
     "text": "Walk me through the Vector Search 2.0 bundle. Why does VBATCH validate the whole payload before applying anything, and how is MINSCORE different from EPSILON?",
     "sender": "user",
     "citations": [],
@@ -1534,7 +1534,7 @@ export function getVectorDemoConversationMessages(): LoadedMessage[] {
     "thinking": null
   },
   {
-    "id": "demo-msg-2",
+    "id": "msg-2",
     "text": "VBATCH is deliberately all-or-nothing: it first parses every element into a `vbatchItem` array and runs `vectorSetValidateInsertParameters` — checking vector dimension, REDUCE projection compatibility, quantization type, and the M parameter against the existing set — before the first insert happens. That way a malformed element in the middle of a large ingestion batch fails the whole command instead of leaving the vector set half-mutated, and the reply stays a clean count of newly added elements (updates are applied in place but not counted). MINSCORE and EPSILON describe the same cutoff in different units: EPSILON is a distance delta, while MINSCORE is expressed directly in similarity space where 1 means identical and 0 means opposite, so `MINSCORE 0.85` stops returning results once similarity drops below 0.85. Because they are two spellings of one threshold, the parser rejects them together with an explicit mutually-exclusive error.",
     "sender": "agent",
     "citations": [],
@@ -1542,7 +1542,7 @@ export function getVectorDemoConversationMessages(): LoadedMessage[] {
     "attachments": [],
     "tool_calls": [
       {
-        "call_id": "demo-tool-1",
+        "call_id": "tool-call-1",
         "event_type": "call",
         "tool_name": "ReadFile",
         "tool_response": "",
@@ -1553,7 +1553,7 @@ export function getVectorDemoConversationMessages(): LoadedMessage[] {
         "is_complete": true
       },
       {
-        "call_id": "demo-tool-1",
+        "call_id": "tool-call-1",
         "event_type": "result",
         "tool_name": "ReadFile",
         "tool_response": "Captured the two-pass VBATCH flow (parse all vbatchItems, validate via vectorSetValidateInsertParameters, then apply sequentially and ReplicateVerbatim) and the VSIM parsing that range-checks MINSCORE into [0,1] and rejects combining it with EPSILON.",
@@ -1618,7 +1618,7 @@ export function streamVectorDemoConversationReply(
           resolve({
             message: current,
             citations: [],
-            sessionId: "vector-demo-session",
+            sessionId: "sess-vector-01",
           });
         }
       }, 260 * (index + 1));

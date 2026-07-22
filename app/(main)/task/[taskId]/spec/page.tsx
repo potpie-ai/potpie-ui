@@ -48,8 +48,12 @@ import { SharedMarkdown } from "@/components/chat/SharedMarkdown";
 import { getStreamEventPayload, normalizeMarkdownForPreview } from "@/lib/utils";
 import {
   StreamTimeline,
+  StreamTraceStats,
   type StreamTimelineItem,
 } from "@/components/stream/StreamTimeline";
+import { buildSpecAgentTrace } from "@/lib/utils/specTrace";
+import { isVectorDemoRecipeId } from "@/lib/mock/demoVectorSearchFlow";
+import { VECTOR_DEMO_SPEC_TRACE } from "@/lib/mock/demoSpecTrace";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -1072,22 +1076,39 @@ const SpecPage = () => {
     }
   }, [recipeId, status, hasSpecContent, streamItems]);
 
-  // Restore stream timeline from sessionStorage on load when spec is completed (e.g. after refresh)
+  // Restore stream timeline from sessionStorage on load when spec is completed (e.g. after refresh).
+  // If no live trace was captured, reconstruct agent activity (reasoning, file
+  // reads, context engine queries) from the spec output so the left panel is
+  // never empty for a finished spec.
   useEffect(() => {
     if (!recipeId || status !== "COMPLETED" || !hasSpecContent || runIdFromUrl) return;
     if (streamItems.length > 0) return;
     if (hasRestoredThinkingRef.current === recipeId) return;
     hasRestoredThinkingRef.current = recipeId;
+    // Demo recipe: use the curated trace (real fixture paths + pot-graph
+    // entities) instead of sessionStorage or generic reconstruction.
+    if (isVectorDemoRecipeId(recipeId)) {
+      setStreamItems(VECTOR_DEMO_SPEC_TRACE);
+      return;
+    }
     try {
       const raw = sessionStorage.getItem(`${THINKING_STORAGE_KEY}_${recipeId}`);
-      if (!raw) return;
-      const data = JSON.parse(raw) as { streamItems?: StreamTimelineItem[] };
-      const items = Array.isArray(data.streamItems) ? data.streamItems : [];
-      if (items.length > 0) setStreamItems(items);
+      if (raw) {
+        const data = JSON.parse(raw) as { streamItems?: StreamTimelineItem[] };
+        const items = Array.isArray(data.streamItems) ? data.streamItems : [];
+        if (items.length > 0) {
+          setStreamItems(items);
+          return;
+        }
+      }
     } catch {
       // ignore
     }
-  }, [recipeId, status, hasSpecContent, runIdFromUrl, streamItems.length]);
+    const trace = buildSpecAgentTrace(specProgress, {
+      userPrompt: recipeData?.user_prompt,
+    });
+    if (trace.length > 0) setStreamItems(trace);
+  }, [recipeId, status, hasSpecContent, runIdFromUrl, streamItems.length, specProgress, recipeData?.user_prompt]);
 
   // Reset restore ref when recipe changes so we can restore for the new recipe
   useEffect(() => {
@@ -1217,6 +1238,14 @@ const SpecPage = () => {
                               {streamProgress ? `${streamProgress.step}: ${streamProgress.message}` : "Generating specification…"}
                             </p>
                           )}
+                          {streamItems.length > 0 && (
+                            <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
+                                Agent activity
+                              </p>
+                              <StreamTraceStats items={streamItems} />
+                            </div>
+                          )}
                           <StreamTimeline
                             items={streamItems}
                             endRef={streamOutputEndRef}
@@ -1336,12 +1365,14 @@ const SpecPage = () => {
                         setError(null);
                         setStreamProgress(null);
                         setStreamItems([]);
-                        // Also clear persisted timeline so restore effect cannot rehydrate stale data
+                        // Also clear persisted timeline so restore effect cannot rehydrate stale data,
+                        // and allow the restore/reconstruct effect to run again for the new spec
                         try {
                           sessionStorage.removeItem(`${THINKING_STORAGE_KEY}_${recipeId}`);
                         } catch {
                           // ignore storage errors
                         }
+                        hasRestoredThinkingRef.current = null;
                         // Then try to start streaming to get run_id for live updates
                         let runId = "";
                         try {

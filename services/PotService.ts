@@ -837,7 +837,7 @@ export default class PotService {
       const [source] = getDemoSources(potId);
       return {
         id: source.id,
-        repository_id: `demo-repo-${body.owner}-${body.repo}`,
+        repository_id: `repo-${body.owner}-${body.repo}`,
         source,
         already_attached: true,
       };
@@ -972,7 +972,15 @@ export default class PotService {
       q?: string;
     } = {},
   ): Promise<PotEventPage> {
-    if (isDemoPotId(potId)) return getDemoEventPage(potId);
+    if (isDemoPotId(potId)) {
+      return getDemoEventPage(potId, {
+        status: options.status,
+        source_system: options.source_system,
+        from_date: options.from_date,
+        to_date: options.to_date,
+        q: options.q,
+      });
+    }
     const headers = await getHeaders();
     const params: Record<string, string | number | string[]> = {};
     if (options.limit != null) params.limit = options.limit;
@@ -1095,7 +1103,7 @@ export default class PotService {
     potId: string,
   ): Promise<{ pot_id: string; batch_id: string | null; status: string }> {
     if (isDemoPotId(potId)) {
-      return { pot_id: potId, batch_id: `demo-flush-${potId.slice(0, 8)}`, status: "flushed" };
+      return { pot_id: potId, batch_id: `flush-${potId.slice(0, 8)}`, status: "flushed" };
     }
     const headers = await getHeaders();
     try {
@@ -1144,7 +1152,7 @@ export default class PotService {
       return {
         status: "queued",
         pot_id: potId,
-        batch_id: `demo-batch-${potId.slice(0, 8)}`,
+        batch_id: `batch-${potId.slice(0, 8)}`,
         event_ids: eventIds,
         count: eventIds.length,
       };

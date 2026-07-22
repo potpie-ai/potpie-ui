@@ -351,7 +351,7 @@ export default function TimelineSidePanel({
               data-day={group.day}
               className="scroll-mt-1"
             >
-              <header className="sticky top-0 z-10 flex items-baseline gap-2 bg-background/95 px-2 pb-1 pt-2.5 backdrop-blur-sm">
+              <header className="sticky top-0 z-20 flex items-baseline gap-2 bg-background/95 px-2 pb-1 pt-2.5 backdrop-blur-sm">
                 <h3 className="text-xs font-semibold text-foreground">
                   {formatDayHeading(group.day)}
                 </h3>

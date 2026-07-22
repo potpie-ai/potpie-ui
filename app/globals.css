@@ -377,6 +377,29 @@
   animation: bounce-drop 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
+/* Agent trace timeline: item entrance + context engine shimmer */
+.animate-trace-in {
+  animation: fadeInUp 0.3s ease-out both;
+}
+
+@keyframes ce-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.ce-shimmer {
+  background: linear-gradient(105deg,
+      transparent 25%,
+      rgba(182, 227, 67, 0.14) 50%,
+      transparent 75%);
+  animation: ce-shimmer 1.9s ease-in-out infinite;
+}
+
 /* Slow spin animation for logo spinner */
 @keyframes spin-slow {
   from {

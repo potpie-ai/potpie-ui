@@ -3236,7 +3236,7 @@ const NODES: BareNode[] = [
    "Activity"
   ],
   "properties": {
-   "name": "PR #425 — feat: seed data (demo)",
+   "name": "PR #425 — feat: seed data",
    "activity_type": "pull_request",
    "verb_class": "pr_merged",
    "occurred_at": "2026-06-10T07:24:22Z",
@@ -3246,8 +3246,8 @@ const NODES: BareNode[] = [
    "repo_name": "potpie-ai/potpie-ui",
    "head_branch": "feat/seed-data",
    "base_branch": "staging",
-   "summary": "Revived the 88-commits-behind seed-data demo branch, retargeted it from main to staging, and resolved the workflow and spec-page conflicts.",
-   "description": "Merged 2026-06-10 by Deepesh Genani; supersedes the abandoned PR #386. The demo seed-data branch had fallen 88 commits behind main, so this PR merges origin/main in and retargets the whole thing at `staging`, which is what the staging deploy pipeline actually builds from. Two conflict classes were resolved deliberately: the four .github/workflows deploy YAMLs took main's security-hardened versions (pinned action SHAs plus Workload Identity Federation auth with key fallback) over the branch's floating action tags, and app/(main)/task/[taskId]/spec/page.tsx kept the branch's Generate-Plan handler with its explicit `regenerate` path through PlanService.regeneratePlan and stream-error fallback. The seed-data-specific work lives in commits 61ca996, 09c8b3c, 215dc3d and ac0a60f. This is the change that makes the scripted product demo reproducible for any account."
+   "summary": "Revived the 88-commits-behind seed-data branch, retargeted it from main to staging, and resolved the workflow and spec-page conflicts.",
+   "description": "Merged 2026-06-10 by Deepesh Genani; supersedes the abandoned PR #386. The seed-data branch had fallen 88 commits behind main, so this PR merges origin/main in and retargets the whole thing at `staging`, which is what the staging deploy pipeline actually builds from. Two conflict classes were resolved deliberately: the four .github/workflows deploy YAMLs took main's security-hardened versions (pinned action SHAs plus Workload Identity Federation auth with key fallback) over the branch's floating action tags, and app/(main)/task/[taskId]/spec/page.tsx kept the branch's Generate-Plan handler with its explicit `regenerate` path through PlanService.regeneratePlan and stream-error fallback. The seed-data-specific work lives in commits 61ca996, 09c8b3c, 215dc3d and ac0a60f. This is the change that makes the seeded starter content reproducible for any account."
   }
  },
  {
@@ -3613,7 +3613,7 @@ const NODES: BareNode[] = [
    "Activity"
   ],
   "properties": {
-   "name": "Commit 182697d — fix(demo): make Start Implementation work for the demo recipe",
+   "name": "Commit 182697d — fix(seed): make Start Implementation work for the seeded recipe",
    "activity_type": "commit",
    "verb_class": "commit_pushed",
    "occurred_at": "2026-06-10T18:40:00Z",
@@ -3622,8 +3622,8 @@ const NODES: BareNode[] = [
    "repo_name": "potpie-ai/potpie-ui",
    "head_branch": "feat/seed-data",
    "base_branch": "staging",
-   "summary": "Wired the Start Implementation action into the scripted demo recipe so the seeded flow completes end to end.",
-   "description": "Committed by Nandan on 2026-06-10 to feat/seed-data, immediately after PR #425 merged. Before this, the seeded demo would render the plan but the Start Implementation button dead-ended because the demo recipe had no handler bound for the implementation step, breaking the walkthrough at the most important moment. The fix threads the demo build flow through lib/mock/demoBuildFlow.ts so the button advances the scripted run. Together with e94854e this is the pair of commits that make the Potpie product demo reliably reproducible from a fresh account."
+   "summary": "Wired the Start Implementation action into the seeded recipe so the flow completes end to end.",
+   "description": "Committed by Nandan on 2026-06-10 to feat/seed-data, immediately after PR #425 merged. Before this, the seeded flow would render the plan but the Start Implementation button dead-ended because the seeded recipe had no handler bound for the implementation step, breaking the walkthrough at the most important moment. The fix threads the seeded build flow through lib/mock/demoBuildFlow.ts so the button advances the run. Together with e94854e this is the pair of commits that make the seeded flows reliably reproducible from a fresh account."
   }
  },
  {
@@ -3633,7 +3633,7 @@ const NODES: BareNode[] = [
    "Activity"
   ],
   "properties": {
-   "name": "Commit e94854e — feat(demo): enable redis DLQ demo flow for all accounts",
+   "name": "Commit e94854e — feat(seed): enable redis DLQ flow for all accounts",
    "activity_type": "commit",
    "verb_class": "commit_pushed",
    "occurred_at": "2026-06-10T17:55:00Z",
@@ -3642,8 +3642,8 @@ const NODES: BareNode[] = [
    "repo_name": "potpie-ai/potpie-ui",
    "head_branch": "feat/seed-data",
    "base_branch": "staging",
-   "summary": "Removed the account allowlist gating the Redis dead-letter-queue demo scenario so any signed-in account can run it.",
-   "description": "Committed by Nandan on 2026-06-10. The Redis DLQ scenario — the scripted 'messages piling up in the dead letter queue' investigation used in sales demos — had been gated behind a hardcoded allowlist of internal accounts, so anyone demoing from a fresh or customer account silently got the empty state instead. This commit removes the gate and enables the flow for all accounts. Search terms: demo not showing, redis DLQ scenario missing, seed data empty for new account."
+   "summary": "Removed the account allowlist gating the Redis dead-letter-queue scenario so any signed-in account can run it.",
+   "description": "Committed by Nandan on 2026-06-10. The Redis DLQ scenario — the guided 'messages piling up in the dead letter queue' investigation — had been gated behind a hardcoded allowlist of internal accounts, so anyone running it from a fresh or customer account silently got the empty state instead. This commit removes the gate and enables the flow for all accounts. Search terms: redis DLQ scenario missing, seed data empty for new account."
   }
  },
  {
@@ -3786,7 +3786,7 @@ const NODES: BareNode[] = [
    "head_branch": "fix/Debugflow-UI",
    "base_branch": "feat/debug-tools-integration",
    "summary": "Webview screens for the in-editor debug agent flow, stacked on the feat/debug-tools-integration branch; still open.",
-   "description": "Opened 2026-05-14 by Shambhavi Shinde against feat/debug-tools-integration rather than main, which is why it has never merged. It adds the webview UI for the debug agent experience inside VS Code — the panels a developer sees when Potpie investigates a failing test or stack trace in the editor. Paired with PR #21 ('Unblocked real debug agent flow, deleted demo flow'), which attempted to swap the scripted demo path for the real agent and was closed. Together the two are the record of the debug-agent-in-editor effort that stalled in May 2026; relevant to any question about why the extension still ships a demo debug flow."
+   "description": "Opened 2026-05-14 by Shambhavi Shinde against feat/debug-tools-integration rather than main, which is why it has never merged. It adds the webview UI for the debug agent experience inside VS Code — the panels a developer sees when Potpie investigates a failing test or stack trace in the editor. Paired with PR #21 ('Unblocked real debug agent flow, deleted sample flow'), which attempted to swap the scripted sample path for the real agent and was closed. Together the two are the record of the debug-agent-in-editor effort that stalled in May 2026; relevant to any question about why the extension still ships a sample debug flow."
   }
  },
  {
@@ -4195,14 +4195,14 @@ const NODES: BareNode[] = [
    "CodeAsset"
   ],
   "properties": {
-   "name": "demoBuildFlow.ts — the scripted Redis DLQ demo",
+   "name": "demoBuildFlow.ts — seeded Redis DLQ build flow",
    "repo_name": "potpie-ai/potpie-ui",
    "path": "lib/mock/demoBuildFlow.ts",
    "language": "typescript",
    "loc": 2220,
    "symbol": "DEMO_RECIPE_ID",
-   "summary": "Every canned response for the 'Dead Letter Q Support' demo recipe, keyed off fixed demo UUIDs.",
-   "description": "A self-contained fixture module that lets the whole idea → questions → spec → plan → codegen build flow run with no backend. It exports fixed identifiers (`DEMO_RECIPE_ID`, `DEMO_PROJECT_ID`, `DEMO_QUESTION_RUN_ID`, `DEMO_SPEC_RUN_ID`, `DEMO_PLAN_RUN_ID`, `DEMO_TASK_SPLITTING_ID`, `DEMO_CONVERSATION_ID`, `DEMO_PR_URL`, and the `potpietools/redis` repo on branch `unstable`), predicates (`isDemoRecipeId`, `isDemoConversationId`, `isDemoRepoName`, `isRedisDlqDemoRequest`, `isDemoBuildFlowActive`) and a getter per step (`getDemoRecipeDetails`, `getDemoQuestionsResponse`, `submitDemoAnswers`, `startDemoSpecGeneration`, `getDemoSpecStatus`, `getDemoPlanStatus`, `getDemoTaskSplittingItems`, `createDemoPullRequest`, `streamDemoConversationReply`). Services intercept these ids before any axios call. Grep here to change demo copy or call `resetDemoBuildFlowState`."
+   "summary": "Seeded responses for the 'Dead Letter Q Support' recipe, keyed off fixed UUIDs.",
+   "description": "A self-contained fixture module that lets the whole idea → questions → spec → plan → codegen build flow run with no backend. It exports fixed identifiers (`DEMO_RECIPE_ID`, `DEMO_PROJECT_ID`, `DEMO_QUESTION_RUN_ID`, `DEMO_SPEC_RUN_ID`, `DEMO_PLAN_RUN_ID`, `DEMO_TASK_SPLITTING_ID`, `DEMO_CONVERSATION_ID`, `DEMO_PR_URL`, and the `potpietools/redis` repo on branch `unstable`), predicates (`isDemoRecipeId`, `isDemoConversationId`, `isDemoRepoName`, `isRedisDlqDemoRequest`, `isDemoBuildFlowActive`) and a getter per step (`getDemoRecipeDetails`, `getDemoQuestionsResponse`, `submitDemoAnswers`, `startDemoSpecGeneration`, `getDemoSpecStatus`, `getDemoPlanStatus`, `getDemoTaskSplittingItems`, `createDemoPullRequest`, `streamDemoConversationReply`). Services intercept these ids before any axios call. Grep here to change seeded copy or call `resetDemoBuildFlowState`."
   }
  },
  {
@@ -4285,8 +4285,8 @@ const NODES: BareNode[] = [
    "language": "typescript",
    "loc": 1346,
    "symbol": "ChatService",
-   "summary": "Static-method axios client for creating, streaming, resuming and sharing conversations, with demo interception.",
-   "description": "The default-exported `ChatService` class and the `ToolCall` / `LoadedMessage` shapes the chat UI renders. Static methods cover the whole conversation lifecycle: `createChat`, `createConversation`, `streamMessage`, `streamWithRetry`, `resumeActiveSession`, `resumeWithCursor`, `detectActiveSession`, `checkBackgroundTaskStatus`, `pollForFinalMessage`, `loadMessages`, `loadConversationInfo`, `regenerateMessage`, `stopMessage`, `enhancePrompt`, `updateAgent`, plus `getAllChats`, `renameChat`, `deleteChat`, `shareConversation` and `getChatAccess`. Demo and vector-demo conversation ids are intercepted up front and served from lib/mock/demoBuildFlow.ts instead of the network. Grep here for generateSessionId, streamWithRetry backoff, SessionInfo/TaskStatus, or a chat request that never reaches the backend."
+   "summary": "Static-method axios client for creating, streaming, resuming and sharing conversations, with seeded-flow interception.",
+   "description": "The default-exported `ChatService` class and the `ToolCall` / `LoadedMessage` shapes the chat UI renders. Static methods cover the whole conversation lifecycle: `createChat`, `createConversation`, `streamMessage`, `streamWithRetry`, `resumeActiveSession`, `resumeWithCursor`, `detectActiveSession`, `checkBackgroundTaskStatus`, `pollForFinalMessage`, `loadMessages`, `loadConversationInfo`, `regenerateMessage`, `stopMessage`, `enhancePrompt`, `updateAgent`, plus `getAllChats`, `renameChat`, `deleteChat`, `shareConversation` and `getChatAccess`. Seeded conversation ids are intercepted up front and served from lib/mock/demoBuildFlow.ts instead of the network. Grep here for generateSessionId, streamWithRetry backoff, SessionInfo/TaskStatus, or a chat request that never reaches the backend."
   }
  },
  {
@@ -4477,13 +4477,13 @@ const NODES: BareNode[] = [
    "CodeAsset"
   ],
   "properties": {
-   "name": "legacy/pyproject.toml — optional legacy demo host manifest",
+   "name": "legacy/pyproject.toml — optional legacy server host manifest",
    "repo_name": "potpie-ai/potpie",
    "path": "legacy/pyproject.toml",
    "language": "toml",
    "loc": 330,
-   "summary": "Setuptools manifest for `potpie-legacy`, the deletable FastAPI/Celery demo host.",
-   "description": "Project file for the `potpie-legacy` distribution, whose own description reads 'Optional Potpie demo host (FastAPI, agents, Celery, seed). Delete this folder if you only need core packages.' It depends on `potpie-context-core`, `potpie-context-engine[all]` and `potpie-integrations` alongside the old server stack (alembic, anthropic, aiohttp and the rest), and is built with setuptools rather than the hatchling used by the modern packages. `.pre-commit-config.yaml` excludes `^legacy/` from ruff and ruff-format, which is why lint sweeps over the shipped packages never touch it. Grep here when deciding whether a dependency belongs to the shipped CLI or only to the deprecated server."
+   "summary": "Setuptools manifest for `potpie-legacy`, the deletable FastAPI/Celery server host.",
+   "description": "Project file for the `potpie-legacy` distribution, whose own description reads 'Optional Potpie server host (FastAPI, agents, Celery, seed). Delete this folder if you only need core packages.' It depends on `potpie-context-core`, `potpie-context-engine[all]` and `potpie-integrations` alongside the old server stack (alembic, anthropic, aiohttp and the rest), and is built with setuptools rather than the hatchling used by the modern packages. `.pre-commit-config.yaml` excludes `^legacy/` from ruff and ruff-format, which is why lint sweeps over the shipped packages never touch it. Grep here when deciding whether a dependency belongs to the shipped CLI or only to the deprecated server."
   }
  },
  {
@@ -5598,8 +5598,8 @@ const NODES: BareNode[] = [
    "path": "services/PotService.ts",
    "language": "typescript",
    "loc": 1220,
-   "summary": "Axios client for every pot, source, member, invitation, event, ingestion and graph endpoint, with demo-pot interception.",
-   "description": "The single frontend gateway to the context-engine HTTP API: listPots, pot CRUD, source registration and refresh, member and invitation flows (PotRole owner/user, PotPendingInvitation with token for accept/decline), ingestion event listing and detail, ingestion config, the pipeline snapshot, graph overview and context queries. Every call first checks the demo interceptors from lib/mock/demoPots (isDemoPotId, isDemoEventId, isDemoInviteToken, getDemo*) so the three seeded demo pots resolve without a backend. Base URL comes from NEXT_PUBLIC_BASE_URL and auth headers from app/utils/headers.util. Start here when a pots screen shows stale or missing data."
+   "summary": "Axios client for every pot, source, member, invitation, event, ingestion and graph endpoint, with seeded-pot interception.",
+   "description": "The single frontend gateway to the context-engine HTTP API: listPots, pot CRUD, source registration and refresh, member and invitation flows (PotRole owner/user, PotPendingInvitation with token for accept/decline), ingestion event listing and detail, ingestion config, the pipeline snapshot, graph overview and context queries. Every call first checks the seeded-pot interceptors from lib/mock/demoPots (isDemoPotId, isDemoEventId, isDemoInviteToken, getDemo*) so the three seeded pots resolve without a backend. Base URL comes from NEXT_PUBLIC_BASE_URL and auth headers from app/utils/headers.util. Start here when a pots screen shows stale or missing data."
   }
  },
  {
@@ -5616,7 +5616,7 @@ const NODES: BareNode[] = [
    "loc": 191,
    "symbol": "StreamEvent",
    "summary": "Parses the per-event activity stream and per-pot status stream line by line without an SSE library.",
-   "description": "Client for the two live streams the context engine publishes over Redis Streams. The server emits newline-delimited JSON so this parses line-by-line with a buffer-chunks/extract-complete-lines loop mirroring the chat stream parser, no EventSource needed. StreamEvent covers type 'activity' | 'status' | 'end' with kind, sequence, the monotonic per-batch `seq` cursor from the durable execution log, `part_id` and `done` for coalesced model text/thinking parts (the client grows a part in place instead of appending each flush), title/body/payload/run_id for activity, and status/stage/message/metadata for status. Demo pots are served by streamDemoEventActivity / streamDemoPotStatus. Read this for duplicated or out-of-order stream lines and stuck 'processing' indicators."
+   "description": "Client for the two live streams the context engine publishes over Redis Streams. The server emits newline-delimited JSON so this parses line-by-line with a buffer-chunks/extract-complete-lines loop mirroring the chat stream parser, no EventSource needed. StreamEvent covers type 'activity' | 'status' | 'end' with kind, sequence, the monotonic per-batch `seq` cursor from the durable execution log, `part_id` and `done` for coalesced model text/thinking parts (the client grows a part in place instead of appending each flush), title/body/payload/run_id for activity, and status/stage/message/metadata for status. Seeded pots are served by streamDemoEventActivity / streamDemoPotStatus. Read this for duplicated or out-of-order stream lines and stuck 'processing' indicators."
   }
  },
  {
@@ -5632,8 +5632,8 @@ const NODES: BareNode[] = [
    "language": "typescript",
    "loc": 58,
    "symbol": "usePots",
-   "summary": "React Query hook that prepends the demo pots and records a degraded flag when the real fetch fails.",
-   "description": "Wraps PotService.listPots in a TanStack Query under POTS_QUERY_KEY = ['pots']. The three DEMO_POTS are prepended for every account so the list, sidebar and detail layout always have something to resolve, mirroring RecipeService.getAllRecipes. On fetch failure it still returns the demo pots but writes a sibling cache entry POTS_DEGRADED_KEY = ['pots','degraded'] (sharing the 'pots' prefix so useInvalidatePots covers it) so the index can distinguish 'backend down' from 'no real pots' and offer a retry via usePotsDegraded. Read this when the pots list looks populated but real pots are missing."
+   "summary": "React Query hook that prepends the seeded pots and records a degraded flag when the real fetch fails.",
+   "description": "Wraps PotService.listPots in a TanStack Query under POTS_QUERY_KEY = ['pots']. The three DEMO_POTS are prepended for every account so the list, sidebar and detail layout always have something to resolve, mirroring RecipeService.getAllRecipes. On fetch failure it still returns the seeded pots but writes a sibling cache entry POTS_DEGRADED_KEY = ['pots','degraded'] (sharing the 'pots' prefix so useInvalidatePots covers it) so the index can distinguish 'backend down' from 'no real pots' and offer a retry via usePotsDegraded. Read this when the pots list looks populated but real pots are missing."
   }
  },
  {
@@ -6917,7 +6917,7 @@ const NODES: BareNode[] = [
    "name": "Activity is the single timeline collapse point",
    "statement": "Pull requests, commits, issues, incidents, deployments, alerts, reviews, releases and discussions all mint as one `Activity` entity distinguished by an `activity_type` property, instead of getting distinct entity labels.",
    "rationale": "ontology.md states it as the headline rule: 'Activity is the single timeline collapse point. PRs, commits, issues, incidents, and deployments do not get distinct entity types — they all mint as one Activity entity (key prefix `activity`).' One label keeps the timeline query surface small: `recent_changes.timeline` and every windowed read sort a single `valid_at`/`occurred_at` axis rather than unioning six labels, and the `@Activity` endpoint sentinel lets TOUCHED/PERFORMED/AUTHORED/IN_PERIOD/MENTIONS each be declared once.",
-   "alternatives_rejected": "Distinct `PullRequest`, `Commit`, `Issue`, `Incident`, `Deployment`, `Alert`, `Runbook`, `Conversation` and `Episode` labels (the original demo vocabulary) — rejected because every timeline predicate would need to enumerate all of them in `allowed_pairs`, and cross-source correlation (a deploy that followed a PR) would need per-label queries.",
+   "alternatives_rejected": "Distinct `PullRequest`, `Commit`, `Issue`, `Incident`, `Deployment`, `Alert`, `Runbook`, `Conversation` and `Episode` labels (the original draft vocabulary) — rejected because every timeline predicate would need to enumerate all of them in `allowed_pairs`, and cross-source correlation (a deploy that followed a PR) would need per-label queries.",
    "decided_at": "2025-12-04",
    "lifecycle": "accepted",
    "summary": "One Activity label for every timestamped event; type lives in `activity_type`, not in the label.",
@@ -9776,7 +9776,7 @@ const NODES: BareNode[] = [
    "title": "Graph quality review, June 2026 cycle",
    "path": "docs/reviews/graph-quality-2026-06.md",
    "url": "https://github.com/potpie-ai/potpie/blob/main/docs/reviews/graph-quality-2026-06.md",
-   "summary": "Monthly review of `graph quality` output across demo and internal pots: duplicate candidates, stale facts, orphan entities and thin descriptions.",
+   "summary": "Monthly review of `graph quality` output across customer-facing and internal pots: duplicate candidates, stale facts, orphan entities and thin descriptions.",
    "description": "The recurring internal review that reads `potpie graph quality summary|duplicate-candidates|stale-facts|conflicting-claims|orphan-entities` across the internal pots and turns the output into work. The June 2026 cycle's headline findings were: a long tail of orphan entities minted as edge endpoints and then never referenced again; duplicate candidates concentrated on Person and Service keys where one agent used a display name and another used a handle; and a large fraction of claims carrying descriptions under the retrieval-card bar, which the ontology treats as a warning rather than a reject and which therefore silently degrades recall in `prior_occurrences` and `preferences_for_scope` reads. It also tallies QualityIssue markers by downgrade kind, which is how the label-downgrade and RELATED_TO-fallback counts in this graph are tracked over time. Search this for 'why is retrieval bad', 'duplicate entity keys', 'thin descriptions', 'orphan entity cleanup'."
   }
  },
@@ -10070,7 +10070,7 @@ const NODES: BareNode[] = [
    "name": "PART_OF and FIXES edge types downgraded to RELATED_TO",
    "issue_kind": "edge_downgrade",
    "detected_at": "2026-06-02T11:24:00Z",
-   "summary": "Retired predicates from the older demo vocabulary (PART_OF, FIXES, IMPLEMENTS, RESOLVES) were rewritten to RELATED_TO instead of their renamed equivalents.",
+   "summary": "Retired predicates from the older draft vocabulary (PART_OF, FIXES, IMPLEMENTS, RESOLVES) were rewritten to RELATED_TO instead of their renamed equivalents.",
    "description": "The ontology's rename table is explicit: PART_OF becomes IMPLEMENTED_IN or TOUCHED, DOCUMENTS becomes MENTIONS or AFFECTS, RESOLVES becomes RESOLVED, and IMPLEMENTS becomes IMPLEMENTED_IN. There are also deliberately no temporal or causal edges — no TRIGGERED_BY, PRECEDED_BY, HOTSPOT, CAUSED, CALLS, DELIVERS, WATCHES, INVESTIGATES, PARTICIPATED_IN or DEPLOYS — because the timeline is a read-time query over valid_at. A batch authored against the old vocabulary emitted PART_OF and FIXES edges; soft-fail rewrote every one to RELATED_TO at confidence 0.3 rather than applying the rename map, so the semantic relation was lost even though a correct target predicate existed. Repairing this requires re-authoring, since the downgrade is not reversible from the stored edge."
   }
  },
@@ -10568,7 +10568,7 @@ const NODES: BareNode[] = [
    "name": "Pots web surface (overview, sources, members, agent setup)",
    "lifecycle": "completed",
    "summary": "The Next.js pot workspace at `/pots/[potId]` with Overview, Graph, Sources, Events, Agent setup, Members and Add context sections.",
-   "description": "The web home for a pot, implemented in `app/(main)/pots/` of potpie-ui with a shared nav defined in `app/(main)/pots/[potId]/layout.tsx` (SECTIONS: overview, graph, sources, events, agent, users, add-context). Panels include `PotOverview`, `PotSourcesPanel`, `PotMembersPanel`, `PotAgentSetupPanel`, `PotAddContextPanel` and `PotContextQueryCard`, built on the shared `components/kit.tsx` primitives and the `.pot-theme` token set. Pot lookup resolves by exact id first, then by slug with real pots taking precedence over frontend-only demo pots so a real pot named `potpie` is never shadowed. Search terms: pot workspace, pot detail page, agent setup instructions, copy CLI snippet, pot sources list."
+   "description": "The web home for a pot, implemented in `app/(main)/pots/` of potpie-ui with a shared nav defined in `app/(main)/pots/[potId]/layout.tsx` (SECTIONS: overview, graph, sources, events, agent, users, add-context). Panels include `PotOverview`, `PotSourcesPanel`, `PotMembersPanel`, `PotAgentSetupPanel`, `PotAddContextPanel` and `PotContextQueryCard`, built on the shared `components/kit.tsx` primitives and the `.pot-theme` token set. Pot lookup resolves by exact id first, then by slug with real pots taking precedence over locally seeded pots so a real pot named `potpie` is never shadowed. Search terms: pot workspace, pot detail page, agent setup instructions, copy CLI snippet, pot sources list."
   }
  },
  {

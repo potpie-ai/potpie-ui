@@ -8,9 +8,6 @@ import { toast } from "@/components/ui/sonner";
 import { LucideLoader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { parseApiError } from "@/lib/utils";
-import { useProFeatureError } from "@/lib/hooks/useProFeatureError";
-import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
-import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
 
 export default function CreateWorkflowPage() {
   const router = useRouter();
@@ -19,29 +16,6 @@ export default function CreateWorkflowPage() {
   const [templateWorkflow, setTemplateWorkflow] = useState<Workflow | null>(
     null
   );
-  const [backendAccessible, setBackendAccessible] = useState<boolean | null>(null);
-  const { isModalOpen, setIsModalOpen } = useProFeatureError();
-
-  // Check backend accessibility on mount
-  useEffect(() => {
-    const checkBackend = async () => {
-      const accessible = await isWorkflowsBackendAccessible();
-      setBackendAccessible(accessible);
-      if (!accessible) {
-        // Backend not accessible, show modal immediately
-        setIsModalOpen(true);
-      }
-    };
-    checkBackend();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
-
-  const handleModalCancel = () => {
-    // Redirect away from workflows if backend is not accessible
-    if (backendAccessible === false) {
-      router.push("/");
-    }
-  };
 
   // Handle template parameter from URL
   useEffect(() => {
@@ -137,22 +111,15 @@ export default function CreateWorkflowPage() {
   }
 
   return (
-    <>
-      <div className="h-[100vh] w-full overflow-hidden">
-        <WorkflowEditor
-          workflow={templateWorkflow || undefined}
-          mode="edit"
-          onSave={handleSave}
-          onCancel={handleCancel}
-          onModeChange={handleModeChange}
-          onExecutionsClick={handleExecutionsClick}
-        />
-      </div>
-      <ProFeatureModal 
-        open={isModalOpen} 
-        onOpenChange={setIsModalOpen}
-        onCancel={handleModalCancel}
+    <div className="h-[100vh] w-full overflow-hidden">
+      <WorkflowEditor
+        workflow={templateWorkflow || undefined}
+        mode="edit"
+        onSave={handleSave}
+        onCancel={handleCancel}
+        onModeChange={handleModeChange}
+        onExecutionsClick={handleExecutionsClick}
       />
-    </>
+    </div>
   );
 }

@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 import React, { useEffect, useState } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 
 import { useQuery } from "@tanstack/react-query";
@@ -50,7 +50,6 @@ import {
 } from "@/lib/state/Reducers/User";
 
 import { ProFeatureModal } from "./ProFeatureModal";
-import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
 import { ChatHistoryPanel } from "./ChatHistoryPanel";
 import {
   Tooltip,
@@ -61,23 +60,11 @@ import {
 
 export function AppSidebar() {
   const [proModalOpen, setProModalOpen] = useState(false);
-  const [isCheckingBackend, setIsCheckingBackend] = useState(false);
-  const [isBackendAccessible, setIsBackendAccessible] = useState<boolean | null>(null);
 
   const { user } = useAuthContext();
   const pathname = usePathname().split("/").pop();
   const dispatch: AppDispatch = useDispatch();
   const { toggleSidebar, open } = useSidebar();
-  const router = useRouter();
-
-  // Check backend accessibility on mount
-  useEffect(() => {
-    const checkBackend = async () => {
-      const accessible = await isWorkflowsBackendAccessible();
-      setIsBackendAccessible(accessible);
-    };
-    checkBackend();
-  }, []);
 
   const userId = user?.uid;
   const { total_human_messages } = useSelector(
@@ -242,32 +229,11 @@ export function AppSidebar() {
             <SidebarMenu>
               {SidebarItems[0].links.map((link) => {
                 const isActive = pathname === link.href.split("/").pop();
-                // Check if this is the workflows link
-                const isWorkflowsLink = link.href === "/workflows";
 
-                const handleClick = async (e: React.MouseEvent) => {
+                const handleClick = (e: React.MouseEvent) => {
                   if (link.showProModal) {
                     e.preventDefault();
                     setProModalOpen(true);
-                  } else if (isWorkflowsLink) {
-                    e.preventDefault();
-
-                    // Check backend accessibility before navigating
-                    if (isCheckingBackend) {
-                      return; // Already checking, prevent double clicks
-                    }
-
-                    setIsCheckingBackend(true);
-                    const accessible = await isWorkflowsBackendAccessible();
-                    setIsCheckingBackend(false);
-
-                    if (accessible) {
-                      // Backend is accessible, allow navigation
-                      router.push(link.href);
-                    } else {
-                      // Backend not accessible, show pro feature modal
-                      setProModalOpen(true);
-                    }
                   } else if (link.handleTrack) {
                     handleTrack();
                   }
@@ -276,13 +242,13 @@ export function AppSidebar() {
                   <React.Fragment key={link.title}>
                     <SidebarMenuItem>
                       <SidebarMenuButton
-                        asChild={!link.showProModal && !isWorkflowsLink}
+                        asChild={!link.showProModal}
                         isActive={isActive}
-                        disabled={link.disabled || (isWorkflowsLink && isCheckingBackend)}
-                        onClick={link.showProModal || isWorkflowsLink ? handleClick : link.handleTrack ? handleTrack : undefined}
+                        disabled={link.disabled}
+                        onClick={link.showProModal ? handleClick : link.handleTrack ? handleTrack : undefined}
                         tooltip={link.title}
                       >
-                        {link.showProModal || isWorkflowsLink ? (
+                        {link.showProModal ? (
                           <button
                             className="flex gap-2 items-center w-full overflow-hidden"
                             onClick={handleClick}

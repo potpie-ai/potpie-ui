@@ -27,9 +27,12 @@ import {
   parseApiError,
 } from "@/lib/utils";
 import { ExecutionTreeVisualizer } from "@/app/(main)/workflows/components/execution-tree/ExecutionTreeVisualizer";
-import { useProFeatureError } from "@/lib/hooks/useProFeatureError";
-import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
-import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
+import {
+  getDemoExecutionById,
+  getDemoExecutionTree,
+  getDemoWorkflowById,
+  isDemoWorkflowId,
+} from "@/lib/mock/demoWorkflows";
 
 export default function ExecutionDetailPage() {
   const params: { workflowId: string; executionId: string } = useParams();
@@ -42,36 +45,14 @@ export default function ExecutionDetailPage() {
   >();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [backendAccessible, setBackendAccessible] = useState<boolean | null>(null);
-  const { isModalOpen, setIsModalOpen, handleError } = useProFeatureError();
-
-  // Check backend accessibility on mount
-  useEffect(() => {
-    const checkBackend = async () => {
-      const accessible = await isWorkflowsBackendAccessible();
-      setBackendAccessible(accessible);
-      if (!accessible) {
-        // Backend not accessible, show modal immediately
-        setIsModalOpen(true);
-      }
-    };
-    checkBackend();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
-
-  const handleModalCancel = () => {
-    // Redirect away from workflows if backend is not accessible
-    if (backendAccessible === false) {
-      router.push("/");
-    }
-  };
 
   useEffect(() => {
     async function fetchData() {
-      // Check if backend is accessible before fetching
-      const accessible = await isWorkflowsBackendAccessible();
-      if (!accessible) {
-        // Backend not accessible, don't fetch
+      // Demo workflows are served from hardcoded data, no backend needed
+      if (isDemoWorkflowId(params.workflowId)) {
+        setWorkflow(getDemoWorkflowById(params.workflowId));
+        setExecution(getDemoExecutionById(params.executionId));
+        setExecutionTree(getDemoExecutionTree(params.executionId));
         setLoading(false);
         return;
       }
@@ -107,10 +88,6 @@ export default function ExecutionDetailPage() {
         }
       } catch (error) {
         console.error("Error fetching data:", error);
-        if (handleError(error)) {
-          // Pro feature error was handled, modal is shown
-          return;
-        }
         const errorMessage = parseApiError(error);
         toast.error(errorMessage);
       } finally {
@@ -126,6 +103,11 @@ export default function ExecutionDetailPage() {
   // Function to refresh execution tree data
   const refreshExecutionTree = async () => {
     if (!params.workflowId || !params.executionId) return;
+
+    if (isDemoWorkflowId(params.workflowId)) {
+      setExecutionTree(getDemoExecutionTree(params.executionId));
+      return;
+    }
 
     try {
       setRefreshing(true);
@@ -196,23 +178,47 @@ export default function ExecutionDetailPage() {
 
   if (!workflow || !execution) {
     return (
-      <>
-        <div className="flex w-full h-svh items-center justify-center">
-          <div className="text-center">
-            <h2 className="text-xl font-semibold mb-2">Execution not found</h2>
-            <p className="text-gray-600">
-              The execution you&apos;re looking for doesn&apos;t exist.
-            </p>
-          </div>
+      <div className="flex w-full h-svh items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Execution not found</h2>
+          <p className="text-gray-600">
+            The execution you&apos;re looking for doesn&apos;t exist.
+          </p>
         </div>
-        <ProFeatureModal 
-          open={isModalOpen} 
-          onOpenChange={setIsModalOpen}
-          onCancel={handleModalCancel}
-        />
-      </>
+      </div>
     );
   }
+
+  const eventLog = (execution.execution_logs ?? [])
+    .flatMap(
+      (nodeLog) =>
+        nodeLog.logs?.map((event) => ({
+          nodeId: nodeLog.node_id,
+          status: event.status,
+          timestamp: event.timestamp,
+          details: event.details,
+        })) ?? []
+    )
+    .sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+  const getEventDotColor = (status: string) => {
+    switch (status) {
+      case "success":
+      case "completed":
+        return "bg-green-500";
+      case "error":
+      case "failed":
+        return "bg-red-500";
+      case "warning":
+        return "bg-yellow-500";
+      case "running":
+        return "bg-blue-500";
+      default:
+        return "bg-gray-400";
+    }
+  };
 
   return (
     <div className="w-full p-4">
@@ -284,6 +290,35 @@ export default function ExecutionDetailPage() {
               </p>
             </div>
           </div>
+          {execution.trigger_data &&
+            Object.keys(execution.trigger_data).length > 0 && (
+              <div className="mt-6 pt-4 border-t border-gray-100">
+                <h4 className="text-sm font-medium text-gray-600 mb-2">
+                  Trigger Event
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(execution.trigger_data).map(
+                    ([key, value]) => (
+                      <span
+                        key={key}
+                        className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700"
+                      >
+                        <span className="font-medium">{key}:</span>
+                        <span className="max-w-[320px] truncate">
+                          {String(value)}
+                        </span>
+                      </span>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+          {execution.error_message && (
+            <div className="mt-6 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3">
+              <XCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-red-700">{execution.error_message}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -331,11 +366,48 @@ export default function ExecutionDetailPage() {
           </CardContent>
         </Card>
       )}
-      <ProFeatureModal 
-        open={isModalOpen} 
-        onOpenChange={setIsModalOpen}
-        onCancel={handleModalCancel}
-      />
+
+      {/* Event Log */}
+      {eventLog.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Event Log</CardTitle>
+              <span className="text-sm text-gray-500">
+                {eventLog.length} events
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              {eventLog.map((event, index) => (
+                <div
+                  key={index}
+                  className="flex items-start gap-3 rounded-md px-2 py-2 hover:bg-gray-50"
+                >
+                  <div
+                    className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${getEventDotColor(
+                      event.status
+                    )}`}
+                  />
+                  <div className="w-20 flex-shrink-0 pt-0.5 font-mono text-xs text-gray-500">
+                    {formatLocalTime(event.timestamp, "h:mm:ss A")}
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className="flex-shrink-0 font-mono text-[10px]"
+                  >
+                    {event.nodeId}
+                  </Badge>
+                  <p className="min-w-0 flex-1 text-sm text-gray-700">
+                    {event.details}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

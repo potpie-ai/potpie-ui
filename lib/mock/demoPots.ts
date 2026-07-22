@@ -9,9 +9,10 @@
 // they see a demo pot / event id, so clicking a demo pot renders end-to-end
 // without ever hitting the backend.
 //
-// This data is intentionally illustrative — the team refines the copy later;
-// the wiring is what matters. Nothing here is persisted or mutated on the
-// server: mutating actions on a demo pot resolve to synthetic no-op responses.
+// The Potpie pot's event stream is demo-grade copy (hand-written payloads +
+// reconciliation runs); the remaining fixtures are illustrative. Nothing here
+// is persisted or mutated on the server: mutating actions on a demo pot
+// resolve to synthetic no-op responses.
 
 import type {
   ContextAnswerEnvelope,
@@ -23,6 +24,7 @@ import type {
   GraphLabelRow,
   GraphOverview,
   Pot,
+  PotEpisodeStep,
   PotEvent,
   PotEventPage,
   PotIngestPipeline,
@@ -30,6 +32,7 @@ import type {
   PotIntegration,
   PotInvitation,
   PotMember,
+  PotReconciliationRun,
   PotRepository,
   PotRole,
   PotSource,
@@ -62,7 +65,7 @@ export const DEMO_POTPIE_POT_ID = "e7c9a4b1-2f3d-4a6e-9b8c-1d0e5f6a7b20";
 export const DEMO_REDIS_POT_ID = "b2d4f6a8-1c3e-4d5f-8a9b-0c1d2e3f4a50";
 export const DEMO_KAFKA_POT_ID = "a1c3e5f7-9b8d-4c6a-b2e4-f6a8c0d2e480";
 
-const DEMO_OWNER_USER_ID = "demo-user-owner-0001";
+const DEMO_OWNER_USER_ID = "user-owner-0001";
 
 const DEMO_POT_IDS: ReadonlySet<string> = new Set([
   DEMO_POTPIE_POT_ID,
@@ -129,7 +132,17 @@ const DEFAULT_INTEGRATIONS = (cfg: DemoPotConfig): DemoIntegrationSeed[] => [
 
 // The Potpie pot is the flagship demo, so its event stream is hand-written
 // against the real potpie-ai PR/issue history rather than templated off the
-// config. Ordering here is display order; `minsAgo` drives the timestamps.
+// config. Seeds are ordered most-recent-first; `minsAgo` drives every
+// timestamp. Each processed event carries the payload its connector
+// delivered (plus a human `episode_body` that doubles as the row preview)
+// and the reconciliation run the agent executed, so the detail sheet demos
+// end-to-end: Summary → Activity → Payload.
+
+const EPISODE_STEPS_DONE: DemoStepSeed[] = [
+  { kind: "read_context", status: "done" },
+  { kind: "apply_graph_mutations", status: "done" },
+];
+
 const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
   {
     suffix: "recon-split",
@@ -139,6 +152,77 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     source_channel: "agent",
     title: "Reconciling the product / engine / core split (#1018)",
     minsAgo: 3,
+    repo: "potpie-ai/potpie",
+    stepDone: 3,
+    stepTotal: 6,
+    steps: [
+      { kind: "read_context", status: "done" },
+      { kind: "apply_graph_mutations", status: "processing" },
+    ],
+    payload: {
+      batch_id: "batch_01K0V6QD8N",
+      trigger: "windowed_flush",
+      episode_count: 2,
+      source_description: "context-engine · reconciliation worker",
+      episode_body:
+        "Windowed batch covering PR #1018 (refactor: split distribution into product / engine / core) and its linked RFC. Re-parents the engine and core components under the new layers, refreshes service boundaries, and ties the decision to its evidence before the episodes are marked reconciled.",
+    },
+    run: {
+      planSummary:
+        "Fold PR #1018 and the accepted three-layer RFC into the graph: re-parent engine/ and core/ components under the new layers, refresh service boundaries, and link the decision to the PR and RFC as evidence.",
+      episodeCount: 2,
+      entityMutations: 11,
+      edgeMutations: 19,
+      work: [
+        {
+          title: "Read GitHub PR",
+          body: `github_get_pull_request(repo="potpie-ai/potpie", number=1018)`,
+          payload: { tool: "github_get_pull_request" },
+        },
+        {
+          kind: "tool_result",
+          title: "PR #1018 · +2,481 −1,904 across 63 files",
+          body: `refactor: split distribution into product / engine / core
+Moves context_engine/* into engine/, extracts core/ (ontology + store); product/ keeps the API surface. Links the accepted RFC "Three-layer distribution split".`,
+        },
+        {
+          title: "Searched the graph",
+          body: `context_search("distribution split product engine core")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          kind: "tool_result",
+          title: "6 matches",
+          body: `Decision "Three-layer distribution split" · Document "RFC · Three-layer distribution split" · Components context-engine, context-core, graph-workbench, ingestion-worker`,
+        },
+        {
+          title: "Reviewed graph overview",
+          body: `context_graph_overview(categories=["product_architecture"])`,
+          payload: { tool: "context_graph_overview" },
+        },
+      ],
+    },
+  },
+  {
+    suffix: "linear-1974",
+    status: "queued",
+    ingestion_kind: "raw_episode",
+    source_system: "linear",
+    source_channel: "linear",
+    title: "POT-1974 · GitLab connector OAuth refresh failing",
+    minsAgo: 5,
+    payload: {
+      identifier: "POT-1974",
+      team: "Core",
+      state: "Todo",
+      priority: "Urgent",
+      assignee: "Yash Krishan",
+      labels: ["integrations", "bug"],
+      url: "https://linear.app/potpie/issue/POT-1974",
+      source_description: "Linear · Core (POT)",
+      episode_body:
+        "Urgent from Linear: GitLab issue sync has failed on every poll since Jul 19 — the refresh grant returns invalid_grant and tokens now expire after two hours. Suspicion: the connector never rotates its refresh token after GitLab's 16.11 upgrade. Waiting in the current 5-minute ingestion window.",
+    },
   },
   {
     suffix: "pr-1020",
@@ -150,15 +234,67 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     event_type: "pull_request",
     action: "closed",
     minsAgo: 18,
-  },
-  {
-    suffix: "linear-1974",
-    status: "queued",
-    ingestion_kind: "raw_episode",
-    source_system: "linear",
-    source_channel: "linear",
-    title: "POT-1974 · GitLab connector OAuth refresh failing",
-    minsAgo: 5,
+    payload: {
+      number: 1020,
+      title: "fix(deps): upgrade torch past CVE-2025-3000",
+      author: "Dsantra92",
+      merged_by: "nndn",
+      base: "main",
+      head: "fix/torch-cve-2025-3000",
+      additions: 46,
+      deletions: 21,
+      changed_files: 4,
+      labels: ["dependencies", "security"],
+      html_url: "https://github.com/potpie-ai/potpie/pull/1020",
+      source_description: "GitHub webhook · potpie-ai/potpie",
+      episode_body:
+        "Bumps torch 2.9.0 → 2.9.1 to clear CVE-2025-3000 (RCE via crafted pickle in torch.load). Adds a weights_only=True guard in the embedding loader and pins the patched minor in requirements and the lockfile. Merged by Nandan after CI and Snyk went green.",
+    },
+    run: {
+      planSummary:
+        "Ingest the torch security bump: record the fix, update the pinned dependency version, and link the PR to the CVE and the standing pin-to-patched-minors preference.",
+      entityMutations: 3,
+      edgeMutations: 5,
+      work: [
+        {
+          title: "Read GitHub PR",
+          body: `github_get_pull_request(repo="potpie-ai/potpie", number=1020)`,
+          payload: { tool: "github_get_pull_request" },
+        },
+        {
+          kind: "tool_result",
+          title: "PR #1020 · +46 −21 across 4 files",
+          body: `fix(deps): upgrade torch past CVE-2025-3000
+torch 2.9.0 → 2.9.1 · weights_only=True guard added in embedding loader · requirements + lockfile pinned.`,
+        },
+        {
+          title: "Searched the graph",
+          body: `context_search("torch dependency CVE pinning")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          kind: "tool_result",
+          title: "2 matches",
+          body: `Dependency torch (pinned 2.9.0) · Preference "Pin ML dependencies to exact patched minors"`,
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=3, edges=5)
++ Fix "torch 2.9.1 clears CVE-2025-3000"
+~ Dependency torch · version 2.9.0 → 2.9.1
++ PullRequest #1020 —RESOLVES→ CVE-2025-3000 · —AUTHORED_BY→ Deeptendu Santra`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 3, edge_upserts_applied: 5 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-pr-1020")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "issue-1008",
@@ -170,6 +306,58 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     event_type: "issues",
     action: "opened",
     minsAgo: 47,
+    steps: EPISODE_STEPS_DONE,
+    payload: {
+      number: 1008,
+      title: "MCP: naive as_of crashes context_resolve",
+      author: "shmbhvi101",
+      state: "open",
+      labels: ["bug", "mcp"],
+      comments: 3,
+      html_url: "https://github.com/potpie-ai/potpie/issues/1008",
+      source_description: "GitHub webhook · potpie-ai/potpie",
+      episode_body:
+        "Passing a naive datetime as as_of to context_resolve raises TypeError: can't compare offset-naive and offset-aware datetimes deep in the bitemporal filter. MCP clients send bare ISO strings without tzinfo; repro and traceback attached on the issue.",
+    },
+    run: {
+      planSummary:
+        "Record issue #1008, link it to the known naive-vs-aware datetime bug pattern, and mark the context_resolve interface as affected so the recurrence surfaces in debug memory.",
+      entityMutations: 2,
+      edgeMutations: 4,
+      work: [
+        {
+          title: "Read GitHub issue",
+          body: `github_get_issue(repo="potpie-ai/potpie", number=1008)`,
+          payload: { tool: "github_get_issue" },
+        },
+        {
+          title: "Searched the graph",
+          body: `context_search("naive datetime as_of bitemporal")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          kind: "tool_result",
+          title: "3 matches",
+          body: `BugPattern "naive vs aware datetime at API boundary" · Fix #961 "coerce valid_at to UTC on write" · Interface context_resolve`,
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=2, edges=4)
++ Issue #1008 "naive as_of crashes context_resolve"
++ #1008 —RECURRENCE_OF→ BugPattern "naive vs aware datetime at API boundary"
++ #1008 —AFFECTS→ Interface context_resolve`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 2, edge_upserts_applied: 4 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-issue-1008")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "pr-1019",
@@ -181,15 +369,68 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     event_type: "pull_request",
     action: "opened",
     minsAgo: 96,
-  },
-  {
-    suffix: "cli-baseline",
-    status: "done",
-    ingestion_kind: "raw_episode",
-    source_system: "cli",
-    source_channel: "cli",
-    title: "potpie source add repo potpie-ai/pie — baseline ingestion",
-    minsAgo: 140,
+    payload: {
+      number: 1019,
+      title: "refactor(daemon): move daemon into root, drop MCP transport",
+      author: "nndn",
+      state: "open",
+      draft: false,
+      base: "main",
+      head: "refactor/daemon-root",
+      additions: 1210,
+      deletions: 2874,
+      changed_files: 41,
+      labels: ["refactor"],
+      html_url: "https://github.com/potpie-ai/potpie/pull/1019",
+      source_description: "GitHub webhook · potpie-ai/potpie",
+      episode_body:
+        "Moves the long-running daemon out of mcp/ into a root daemon/ package and retires the MCP stdio transport in favour of the HTTP surface. Net −1,664 lines; the MCP-specific session glue goes away entirely. Opened for review as phase two of the distribution split.",
+    },
+    run: {
+      planSummary:
+        "Track PR #1019 as the phase-two daemon extraction: move the daemon component under the new engine layer and mark the MCP stdio transport deprecated.",
+      entityMutations: 4,
+      edgeMutations: 7,
+      work: [
+        {
+          title: "Read GitHub PR",
+          body: `github_get_pull_request(repo="potpie-ai/potpie", number=1019)`,
+          payload: { tool: "github_get_pull_request" },
+        },
+        {
+          title: "Read PR commits",
+          body: `github_get_pull_request_commits(number=1019)`,
+          payload: { tool: "github_get_pull_request_commits" },
+        },
+        {
+          kind: "tool_result",
+          title: "6 commits",
+          body: "move daemon/ to root · delete mcp/transport · rewire CLI entrypoints · docs",
+        },
+        {
+          title: "Searched the graph",
+          body: `context_search("daemon MCP transport")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=4, edges=7)
++ PullRequest #1019 (open)
+~ Component daemon · path mcp/daemon → daemon/
+~ Interface "MCP stdio transport" · lifecycle → deprecated
++ #1019 —MODIFIES→ daemon · —PART_OF→ "Three-layer distribution split"`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 4, edge_upserts_applied: 7 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-pr-1019")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "recon-pie",
@@ -198,7 +439,126 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     source_system: "context_engine_raw",
     source_channel: "agent",
     title: "Backfilled potpie-ai/pie · 9 release-gate journeys",
+    minsAgo: 140,
+    repo: "potpie-ai/pie",
+    steps: EPISODE_STEPS_DONE,
+    payload: {
+      batch_id: "batch_01K0TQZC2W",
+      trigger: "backfill",
+      episode_count: 9,
+      source_description: "context-engine · reconciliation worker",
+      episode_body:
+        "Second pass over potpie-ai/pie after the baseline: replayed the merge history behind the release gate and lifted nine recurring release journeys (gate → verify → publish) into the graph with their owning PRs and flaky verify runs.",
+    },
+    run: {
+      planSummary:
+        "Replay pie's merge history around the release gate, materialise one Journey per release train, and connect gate PRs plus the flaky verify runs already tracked in POT-1911.",
+      episodeCount: 9,
+      entityMutations: 23,
+      edgeMutations: 41,
+      durationSecs: 220,
+      work: [
+        {
+          title: "Checked recent changes",
+          body: `context_recent_changes(repo="potpie-ai/pie", days=30)`,
+          payload: { tool: "context_recent_changes" },
+        },
+        {
+          kind: "tool_result",
+          title: "31 merges in window",
+          body: "release-gate touched by 9 release trains · verify step flaked on 3 of them (POT-1911)",
+        },
+        {
+          title: "Walked git history",
+          body: `sandbox_git_log("gate/", limit=120)`,
+          payload: { tool: "sandbox_git_log" },
+        },
+        {
+          kind: "plan_output",
+          title: "Backfill plan",
+          body: "9 journeys detected (gate → verify → publish). One Journey per release train; link owning PRs; connect flaky verify runs to POT-1911.",
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=23, edges=41)
++ 9 Journey nodes (release trains v0.9.0 … v0.9.3)
++ 9 —VERIFIED_BY→ gate PRs · 3 —FLAKED_ON→ verify (POT-1911)`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 23, edge_upserts_applied: 41 },
+          },
+        },
+        {
+          title: "Finished the batch",
+          body: "finish_batch(processed=9)",
+          payload: { tool: "finish_batch" },
+        },
+      ],
+    },
+  },
+  {
+    suffix: "cli-baseline",
+    status: "done",
+    ingestion_kind: "raw_episode",
+    source_system: "cli",
+    source_channel: "cli",
+    title: "potpie source add repo potpie-ai/pie — baseline ingestion",
     minsAgo: 175,
+    repo: "potpie-ai/pie",
+    steps: EPISODE_STEPS_DONE,
+    payload: {
+      command: "potpie source add repo potpie-ai/pie",
+      cli_version: "1.4.2",
+      source_description: "potpie CLI · nndn@macbook-pro",
+      reference_time: iso(176 * MIN),
+      episode_body:
+        "Registered potpie-ai/pie (main) as a source and ran the baseline ingestion: README, pyproject, module tree, and the release workflow. Proposed 34 entities and 61 edges for the initial map of the pie CLI.",
+    },
+    run: {
+      planSummary:
+        "Baseline potpie-ai/pie: read the docs and module tree, map the CLI's services and features, and backfill the recent pull requests into the graph.",
+      entityMutations: 34,
+      edgeMutations: 61,
+      durationSecs: 260,
+      work: [
+        {
+          title: "Listed sandbox repos",
+          body: "sandbox_list_repos()",
+          payload: { tool: "sandbox_list_repos" },
+        },
+        {
+          title: "Read a file",
+          body: `sandbox_read_file("pie/README.md")`,
+          payload: { tool: "sandbox_read_file" },
+        },
+        {
+          title: "Walked git history",
+          body: "sandbox_git_log(limit=50)",
+          payload: { tool: "sandbox_git_log" },
+        },
+        {
+          kind: "tool_result",
+          title: "50 commits · v0.9.3 tagged 6 days ago",
+          body: "Release cadence roughly weekly; gate/ and publish/ are the highest-churn modules.",
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=34, edges=61)
++ Repository potpie-ai/pie · Service pie-cli
++ 9 Components · 4 Features (release gate, journeys, publish, telemetry)
++ 12 PullRequests and 8 Documents backfilled`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 34, edge_upserts_applied: 61 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-cli-baseline")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "slack-embed",
@@ -208,6 +568,68 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     source_channel: "slack",
     title: "#eng-context · embedded FalkorDB vs hosted Neo4j default",
     minsAgo: 210,
+    steps: EPISODE_STEPS_DONE,
+    payload: {
+      channel: "#eng-context",
+      participants: ["nndn", "dhirenmathur", "Dsantra92"],
+      message_count: 28,
+      permalink: "https://potpie-ai.slack.com/archives/C04QF/p1753128740",
+      source_description: "Slack · #eng-context",
+      record: {
+        type: "decision",
+        visibility: "team",
+        confidence: 0.86,
+        summary:
+          "Local pots default to embedded FalkorDB; hosted Neo4j stays an enterprise opt-in.",
+        details: {
+          rationale:
+            "Zero-install local experience beats managed-graph latency for single-repo pots; the benchmark showed 41ms p50 reads embedded vs 118ms hosted.",
+          decided_by: "Nandan, with Dhiren and Deeptendu concurring",
+          follow_up:
+            "PR #1002 fixes the claim-read invisibility found during the benchmark.",
+        },
+        source_refs: [
+          "slack://eng-context/p1753128740",
+          "potpie-ai/potpie#1002",
+        ],
+      },
+      episode_body:
+        "28-message thread in #eng-context settling the local graph default: embedded FalkorDB wins on cold-start and zero credentials; hosted Neo4j remains for enterprise pots. Benchmarks and the claim-read bug are both captured in the thread.",
+    },
+    run: {
+      planSummary:
+        "Capture the FalkorDB-vs-Neo4j thread as a Decision with its benchmark evidence, and wire it to the claim-visibility fix it motivated.",
+      entityMutations: 1,
+      edgeMutations: 4,
+      work: [
+        {
+          title: "Searched the graph",
+          body: `context_search("FalkorDB Neo4j local default")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          kind: "tool_result",
+          title: "2 matches",
+          body: `Component graph-store · PullRequest #1002 "fix embedded-FalkorDB claim read invisibility"`,
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=1, edges=4)
++ Decision "Embedded FalkorDB is the local default"
++ Decision —SUPPORTED_BY→ Conversation #eng-context · —MOTIVATES→ PR #1002
++ Decision —DECIDED_BY→ Nandan`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 1, edge_upserts_applied: 4 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-slack-embed")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "pr-1002",
@@ -219,6 +641,66 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     event_type: "pull_request",
     action: "opened",
     minsAgo: 300,
+    payload: {
+      number: 1002,
+      title: "fix: claim reads invisible on embedded FalkorDB right after write",
+      author: "Dsantra92",
+      state: "open",
+      base: "main",
+      head: "fix/falkor-claim-visibility",
+      additions: 168,
+      deletions: 42,
+      changed_files: 6,
+      labels: ["bug", "graph-store"],
+      html_url: "https://github.com/potpie-ai/potpie/pull/1002",
+      source_description: "GitHub webhook · potpie-ai/potpie",
+      episode_body:
+        "Claims written in a transaction were invisible to the next read on embedded FalkorDB — the read pool checked out a connection before the write committed. Pins reads-after-write to the writer connection and adds a regression test.",
+    },
+    run: {
+      planSummary:
+        "Ingest the claim-visibility fix: record the read-pool race as a bug pattern, link the fix, and tie both back to the embedded-FalkorDB decision.",
+      entityMutations: 3,
+      edgeMutations: 6,
+      work: [
+        {
+          title: "Read GitHub PR",
+          body: `github_get_pull_request(repo="potpie-ai/potpie", number=1002)`,
+          payload: { tool: "github_get_pull_request" },
+        },
+        {
+          title: "Diffed refs",
+          body: `sandbox_git_diff("main...fix/falkor-claim-visibility")`,
+          payload: { tool: "sandbox_git_diff" },
+        },
+        {
+          kind: "tool_result",
+          title: "6 files changed",
+          body: "graph_store/pool.py +94 −18 · test_claim_visibility.py +61 · docs and changelog",
+        },
+        {
+          title: "Searched the graph",
+          body: `context_search("claim read visibility embedded")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=3, edges=6)
++ Fix "pin post-write reads to the writer connection"
++ BugPattern "read-pool checkout races the commit"
++ #1002 —FIXES→ BugPattern · —AFFECTS→ Component graph-store`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 3, edge_upserts_applied: 6 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-pr-1002")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "sentry-spike",
@@ -228,6 +710,69 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     source_channel: "webhook",
     title: "Sentry · error-rate spike on /api/v1/context/resolve",
     minsAgo: 355,
+    steps: EPISODE_STEPS_DONE,
+    payload: {
+      alert_rule: "context-engine · error rate",
+      project: "context-engine",
+      sentry_issue: "POTPIE-CONTEXT-4Q8",
+      error: "GraphQueryTimeout: traversal exceeded 5000ms",
+      events_in_10m: 214,
+      users_affected: 12,
+      first_seen: iso(365 * MIN),
+      permalink: "https://potpie-ai.sentry.io/issues/POTPIE-CONTEXT-4Q8",
+      source_description: "Sentry webhook · potpie-ai",
+      episode_body:
+        "Sentry fired on /api/v1/context/resolve: 214 GraphQueryTimeout events in ten minutes, all traversals with depth > 3 on the freshly backfilled potpie-ui subtree. Mitigated by capping max traversal depth to 3 in config; the planner fix is tracked in #1014.",
+    },
+    run: {
+      planSummary:
+        "Log the alert, connect it to the resolve interface and the traversal planner, and flag the depth>3 pattern as an open investigation.",
+      entityMutations: 2,
+      edgeMutations: 5,
+      work: [
+        {
+          title: "Searched the graph",
+          body: `context_search("context_resolve timeout traversal depth")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          title: "Looked up file owners",
+          body: `context_file_owners("engine/api/resolve.py")`,
+          payload: { tool: "context_file_owners" },
+        },
+        {
+          kind: "tool_result",
+          title: "2 owners",
+          body: "Deeptendu Santra 61% · Shambhavi Shinde 24% (last 90 days)",
+        },
+        {
+          title: "Checked recent changes",
+          body: `context_recent_changes(service="context-engine", hours=6)`,
+          payload: { tool: "context_recent_changes" },
+        },
+        {
+          kind: "tool_result",
+          title: "No deploys in window",
+          body: "context-engine v1.5.0 rolled out 40h ago · potpie-ui backfill finished 19h ago — depth>3 traversals hit the new subtree",
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=2, edges=5)
++ Alert "GraphQueryTimeout spike on context_resolve"
++ Investigation "depth>3 traversals walk the full episode subtree"
++ Alert —AFFECTS→ Interface context_resolve · Investigation —IMPLICATES→ traversal planner`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 2, edge_upserts_applied: 5 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-sentry-spike")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "pr-ui-437",
@@ -239,6 +784,57 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     event_type: "pull_request",
     action: "closed",
     minsAgo: 420,
+    repo: "potpie-ai/potpie-ui",
+    payload: {
+      number: 437,
+      title: "fix(deps): remediate CVE-2026-53550 in js-yaml",
+      author: "BrhKmr23",
+      merged_by: "nndn",
+      base: "staging",
+      head: "fix/js-yaml-cve",
+      additions: 12,
+      deletions: 9,
+      changed_files: 2,
+      labels: ["dependencies", "security"],
+      html_url: "https://github.com/potpie-ai/potpie-ui/pull/437",
+      source_description: "GitHub webhook · potpie-ai/potpie-ui",
+      episode_body:
+        "Dependabot-driven bump of js-yaml to 4.1.1 clearing CVE-2026-53550 (prototype pollution via crafted anchors). Lockfile-only outside the pinned override; CI and Snyk both green before merge.",
+    },
+    run: {
+      planSummary:
+        "Ingest the js-yaml remediation: record the fix, bump the dependency version, and close the loop on the July dependency sweep (POT-1930).",
+      entityMutations: 2,
+      edgeMutations: 3,
+      work: [
+        {
+          title: "Read GitHub PR",
+          body: `github_get_pull_request(repo="potpie-ai/potpie-ui", number=437)`,
+          payload: { tool: "github_get_pull_request" },
+        },
+        {
+          title: "Searched the graph",
+          body: `context_search("js-yaml CVE prototype pollution")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=2, edges=3)
++ Fix "js-yaml 4.1.1 clears CVE-2026-53550"
+~ Dependency js-yaml · version 4.1.0 → 4.1.1
++ potpie-ui#437 —RESOLVES→ CVE-2026-53550 · —CLOSES_OUT→ POT-1930`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 2, edge_upserts_applied: 3 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-pr-ui-437")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "gitlab-fail",
@@ -250,6 +846,17 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     minsAgo: 460,
     error:
       "401 Unauthorized from gitlab.com: OAuth token expired. Reconnect the integration to resume sync.",
+    payload: {
+      provider: "gitlab",
+      project: "potpie/potpie-mirror",
+      endpoint: "/api/v4/projects/potpie%2Fpotpie-mirror/issues",
+      http_status: 401,
+      gitlab_response:
+        "invalid_token: Token is expired. You can either do re-authorization or token refresh.",
+      source_description: "GitLab poll · gitlab.com/potpie",
+      episode_body:
+        "Issue-sync poll against gitlab.com/potpie/potpie-mirror was rejected with 401 invalid_token before any issues were fetched. Retries are paused until the integration is reconnected; tracked as POT-1974.",
+    },
   },
   {
     suffix: "recon-ontology",
@@ -259,6 +866,55 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     source_channel: "agent",
     title: "Reconciled ontology.py — 24 labels, 26 predicates",
     minsAgo: 520,
+    repo: "potpie-ai/potpie",
+    steps: EPISODE_STEPS_DONE,
+    payload: {
+      batch_id: "batch_01K0SWMR7T",
+      trigger: "windowed_flush",
+      episode_count: 3,
+      source_description: "context-engine · reconciliation worker",
+      episode_body:
+        "Ontology sync after PR #1006: re-read core/ontology.py and refreshed the schema tables — 24 node labels across 8 categories and 26 predicates in 6 families. Two label renames (Doc → Document, Ticket → Issue) migrated with SUPERSEDES links.",
+    },
+    run: {
+      planSummary:
+        "Refresh the graph schema from core/ontology.py: update the label and predicate tables, and migrate the two renamed labels without breaking existing edges.",
+      episodeCount: 3,
+      entityMutations: 12,
+      edgeMutations: 18,
+      work: [
+        {
+          title: "Read a file",
+          body: `sandbox_read_file("core/ontology.py")`,
+          payload: { tool: "sandbox_read_file" },
+        },
+        {
+          title: "Reviewed graph overview",
+          body: "context_graph_overview()",
+          payload: { tool: "context_graph_overview" },
+        },
+        {
+          kind: "tool_result",
+          title: "24 labels · 26 predicates",
+          body: "2 renames pending migration: Doc → Document, Ticket → Issue",
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=12, edges=18)
+~ 24 label rows refreshed across 8 categories
++ Document / Issue supersede Doc / Ticket (SUPERSEDES links)`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 12, edge_upserts_applied: 18 },
+          },
+        },
+        {
+          title: "Marked events reconciled",
+          body: "mark_events_processed(count=3)",
+          payload: { tool: "mark_events_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "pr-999",
@@ -270,6 +926,61 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     event_type: "pull_request",
     action: "closed",
     minsAgo: 610,
+    payload: {
+      number: 999,
+      title: "fix(search): rank infra topology results by query relevance",
+      author: "jdyaberi-pp",
+      merged_by: "dhirenmathur",
+      base: "main",
+      head: "fix/infra-ranking",
+      additions: 210,
+      deletions: 74,
+      changed_files: 8,
+      labels: ["search"],
+      html_url: "https://github.com/potpie-ai/potpie/pull/999",
+      source_description: "GitHub webhook · potpie-ai/potpie",
+      episode_body:
+        "Infra-topology hits were ranked purely by graph centrality, so 'where does the worker deploy' surfaced the ingress map first. Blends BM25 query relevance into the traversal scorer and adds ranking evals over twelve canned infra questions.",
+    },
+    run: {
+      planSummary:
+        "Ingest the ranking fix: link the PR to the semantic-search feature, record the scorer change, and note the new eval fixtures.",
+      entityMutations: 3,
+      edgeMutations: 5,
+      work: [
+        {
+          title: "Read GitHub PR",
+          body: `github_get_pull_request(repo="potpie-ai/potpie", number=999)`,
+          payload: { tool: "github_get_pull_request" },
+        },
+        {
+          title: "Read PR review comments",
+          body: `github_get_pull_request_review_comments(number=999)`,
+          payload: { tool: "github_get_pull_request_review_comments" },
+        },
+        {
+          kind: "tool_result",
+          title: "4 threads resolved",
+          body: "Scorer weights (0.6 relevance / 0.4 centrality) settled after an eval sweep; fixtures committed under evals/infra/.",
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=3, edges=5)
++ Fix "blend BM25 relevance into the traversal scorer"
++ PullRequest #999 —IMPROVES→ Feature semantic-search
++ #999 —AUTHORED_BY→ Jagadeesh · —MERGED_BY→ Dhiren`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 3, edge_upserts_applied: 5 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-pr-999")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "notion-rfc",
@@ -279,6 +990,64 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     source_channel: "notion",
     title: "RFC · three-layer distribution split (product / engine / core)",
     minsAgo: 700,
+    steps: EPISODE_STEPS_DONE,
+    payload: {
+      page: "RFC · Three-layer distribution split",
+      space: "Engineering",
+      author: "dhirenmathur",
+      last_edited_by: "nndn",
+      url: "https://notion.so/potpie/rfc-three-layer-split",
+      source_description: "Notion · Potpie HQ / Engineering",
+      record: {
+        type: "decision",
+        visibility: "org",
+        confidence: 0.92,
+        summary:
+          "Split the distribution into product / engine / core layers with independent release cadences.",
+        details: {
+          status: "Accepted 2026-07-14",
+          motivation:
+            "Core ontology moves slower than the product surface; separate layers let agents pin core while product iterates weekly.",
+          implementation:
+            "Landing via PR #1018; the daemon extraction (#1019) is phase two.",
+        },
+        source_refs: [
+          "notion://engineering/rfc-three-layer-split",
+          "potpie-ai/potpie#1018",
+        ],
+      },
+      episode_body:
+        "Accepted RFC defining the product / engine / core split: core owns ontology and store, engine owns reconciliation and retrieval, product owns the API and UI surfaces. Release cadences decouple; PR #1018 lands phase one.",
+    },
+    run: {
+      planSummary:
+        "Store the accepted RFC as a Decision plus its Document, and connect both to the PRs landing the split.",
+      entityMutations: 2,
+      edgeMutations: 6,
+      work: [
+        {
+          title: "Searched the graph",
+          body: `context_search("distribution layering release cadence")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=2, edges=6)
++ Decision "Three-layer distribution split" (accepted)
++ Document "RFC · Three-layer distribution split"
++ Decision —IMPLEMENTED_BY→ PR #1018, #1019 · —AUTHORED_BY→ Dhiren`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 2, edge_upserts_applied: 6 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-notion-rfc")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "pr-wf-65",
@@ -290,6 +1059,57 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     event_type: "pull_request",
     action: "closed",
     minsAgo: 810,
+    repo: "potpie-ai/potpie-workflows",
+    payload: {
+      number: 65,
+      title: "feat(qa): default the QA agent to multi-batch execution",
+      author: "ASCE-D",
+      merged_by: "nndn",
+      base: "main",
+      head: "feat/qa-multi-batch",
+      additions: 342,
+      deletions: 128,
+      changed_files: 11,
+      labels: ["workflows"],
+      html_url: "https://github.com/potpie-ai/potpie-workflows/pull/65",
+      source_description: "GitHub webhook · potpie-ai/potpie-workflows",
+      episode_body:
+        "The QA workflow now shards long event backlogs into parallel batches by default (previously opt-in). Cuts p95 reconciliation lag on busy pots from 11m to 4m in the staging replay; single-batch stays available via qa.batching=off.",
+    },
+    run: {
+      planSummary:
+        "Record the QA batching default flip and its measured effect on reconciliation lag for busy pots.",
+      entityMutations: 3,
+      edgeMutations: 4,
+      work: [
+        {
+          title: "Read GitHub PR",
+          body: `github_get_pull_request(repo="potpie-ai/potpie-workflows", number=65)`,
+          payload: { tool: "github_get_pull_request" },
+        },
+        {
+          title: "Searched the graph",
+          body: `context_search("QA workflow batching backlog")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=3, edges=4)
++ PullRequest potpie-workflows#65
+~ Feature "QA workflow" · default execution → multi-batch
++ #65 —IMPROVES→ ingestion-worker p95 lag (11m → 4m in staging replay)`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 3, edge_upserts_applied: 4 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-pr-wf-65")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "incident-cert",
@@ -299,6 +1119,68 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     source_channel: "webhook",
     title: "Incident resolved · workflows route TLS cert not issued",
     minsAgo: 960,
+    steps: EPISODE_STEPS_DONE,
+    payload: {
+      incident: "INC-142",
+      severity: "SEV2",
+      started_at: iso(1023 * MIN),
+      resolved_at: iso(960 * MIN),
+      duration_minutes: 63,
+      source_description: "Incident webhook · ops",
+      record: {
+        type: "incident",
+        visibility: "team",
+        summary:
+          "cert-manager stopped issuing the workflows.potpie.ai cert after the ClusterIssuer moved namespaces; the route served the default cert for 63 minutes.",
+        details: {
+          root_cause:
+            "ClusterIssuer reference not updated after cert-manager moved to its own namespace in potpie-k8s-deployments#88.",
+          resolution:
+            "Re-pointed the Ingress annotation and forced re-issue; added a kyverno policy that catches dangling issuer refs.",
+          follow_up: "Runbook 'TLS issuance failures' updated with the new check.",
+        },
+        source_refs: [
+          "potpie-ai/potpie-k8s-deployments#88",
+          "runbook://tls-issuance-failures",
+        ],
+      },
+      episode_body:
+        "SEV2 resolved: workflows.potpie.ai served the default ingress cert for 63 minutes after cert-manager's namespace move orphaned the ClusterIssuer reference. Fixed by re-pointing the issuer and forcing re-issue; a policy check now catches dangling refs.",
+    },
+    run: {
+      planSummary:
+        "File the resolved incident with root cause and remediation, and refresh the TLS runbook link so on-call finds it next time.",
+      entityMutations: 3,
+      edgeMutations: 6,
+      work: [
+        {
+          title: "Searched the graph",
+          body: `context_search("cert-manager TLS workflows ingress")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          kind: "tool_result",
+          title: "2 matches",
+          body: `Runbook "TLS issuance failures" · Repository potpie-ai/potpie-k8s-deployments`,
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=3, edges=6)
++ Incident INC-142 "workflows route served default cert" (SEV2, 63m)
++ INC-142 —CAUSED_BY→ dangling ClusterIssuer ref (k8s-deployments#88)
++ INC-142 —DOCUMENTED_IN→ Runbook "TLS issuance failures"`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 3, edge_upserts_applied: 6 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-incident-cert")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "issue-997",
@@ -310,6 +1192,54 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     event_type: "issues",
     action: "opened",
     minsAgo: 1150,
+    steps: EPISODE_STEPS_DONE,
+    payload: {
+      number: 997,
+      title: "[Feature] Add GitLab CLI integration",
+      author: "yashkrishan",
+      state: "open",
+      labels: ["enhancement", "integrations"],
+      comments: 7,
+      reactions: 14,
+      html_url: "https://github.com/potpie-ai/potpie/issues/997",
+      source_description: "GitHub webhook · potpie-ai/potpie",
+      episode_body:
+        "Most-upvoted open ask: bring the CLI's source-add and sync flows to GitLab (cloud and self-managed). The thread sketches OAuth device flow, MR ingestion, and webhook parity — blocked on the connector token-refresh fix now tracked as POT-1974.",
+    },
+    run: {
+      planSummary:
+        "Record the GitLab integration ask, link it to the proposed connector feature, and mark it blocked on the OAuth refresh bug.",
+      entityMutations: 2,
+      edgeMutations: 3,
+      work: [
+        {
+          title: "Read GitHub issue",
+          body: `github_get_issue(repo="potpie-ai/potpie", number=997)`,
+          payload: { tool: "github_get_issue" },
+        },
+        {
+          title: "Searched the graph",
+          body: `context_search("GitLab connector integration")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=2, edges=3)
++ Issue #997 "[Feature] Add GitLab CLI integration"
++ #997 —PROPOSES→ Feature "GitLab connector"
++ #997 —BLOCKED_BY→ POT-1974 (OAuth refresh)`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 2, edge_upserts_applied: 3 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-issue-997")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "jira-migration",
@@ -319,6 +1249,51 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     source_channel: "jira",
     title: "POT-1930 · remediate high-severity dependency alerts",
     minsAgo: 1320,
+    steps: EPISODE_STEPS_DONE,
+    payload: {
+      key: "POT-1930",
+      summary: "Remediate high-severity dependency alerts across repos",
+      status: "Done",
+      assignee: "Bharath Kumar K",
+      priority: "High",
+      url: "https://potpie.atlassian.net/browse/POT-1930",
+      source_description: "Jira · potpie.atlassian.net",
+      episode_body:
+        "Tracking ticket for the July dependency sweep: torch in potpie, js-yaml in potpie-ui, and two transitive advisories in workflows. All four closed by #1020, potpie-ui#437, and workflows#66 — the Snyk board is clean.",
+    },
+    run: {
+      planSummary:
+        "Close the loop on the dependency sweep: link POT-1930 to the fixes that resolved each advisory.",
+      entityMutations: 1,
+      edgeMutations: 5,
+      work: [
+        {
+          title: "Searched the graph",
+          body: `context_search("dependency alert CVE sweep")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          kind: "tool_result",
+          title: "3 matches",
+          body: `Fix "torch 2.9.1 clears CVE-2025-3000" · Fix "js-yaml 4.1.1 clears CVE-2026-53550" · PullRequest workflows#66`,
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=1, edges=5)
++ Issue POT-1930 "Remediate high-severity dependency alerts"
++ POT-1930 —RESOLVED_BY→ #1020, potpie-ui#437, workflows#66`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 1, edge_upserts_applied: 5 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-jira-migration")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "recon-ui",
@@ -328,6 +1303,56 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     source_channel: "agent",
     title: "Backfilled potpie-ai/potpie-ui · 437 PRs, 431 issues",
     minsAgo: 1500,
+    repo: "potpie-ai/potpie-ui",
+    steps: EPISODE_STEPS_DONE,
+    payload: {
+      batch_id: "batch_01K0R8H3ZD",
+      trigger: "backfill",
+      episode_count: 868,
+      source_description: "context-engine · reconciliation worker",
+      episode_body:
+        "Historical backfill of potpie-ui: 437 pull requests and 431 issues ingested across 18 chunks. Auth, streaming chat, and the workflow editor emerge as the highest-churn components; 61 recurring-bug candidates queued to the inbox for review.",
+    },
+    run: {
+      planSummary:
+        "Backfill potpie-ui's full PR and issue history in 18 chunks, dedupe against the existing graph, and queue low-confidence bug patterns to the inbox instead of writing them directly.",
+      episodeCount: 868,
+      entityMutations: 512,
+      edgeMutations: 1204,
+      durationSecs: 340,
+      work: [
+        {
+          kind: "plan_output",
+          title: "Backfill plan",
+          body: "18 chunks of ~50 PRs · issues threaded by cross-reference · dedupe against the 24 existing potpie-ui nodes",
+        },
+        {
+          title: "Walked git history",
+          body: "sandbox_git_log(limit=2000)",
+          payload: { tool: "sandbox_git_log" },
+        },
+        {
+          kind: "tool_result",
+          title: "2,000 commits",
+          body: "Highest churn: app/(main)/chat · services/AuthService · workflow editor",
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=512, edges=1204)
++ 437 PullRequests · 431 Issues · 9 Person nodes
++ 61 BugPattern candidates → inbox (below auto-write confidence)`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 512, edge_upserts_applied: 1204 },
+          },
+        },
+        {
+          title: "Finished the batch",
+          body: "finish_batch(processed=868)",
+          payload: { tool: "finish_batch" },
+        },
+      ],
+    },
   },
   {
     suffix: "pr-ui-424",
@@ -339,6 +1364,62 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     event_type: "pull_request",
     action: "closed",
     minsAgo: 1720,
+    repo: "potpie-ai/potpie-ui",
+    payload: {
+      number: 424,
+      title: "fix(auth): close open redirect & token leak in the sign-in flow",
+      author: "shmbhvi101",
+      merged_by: "nndn",
+      base: "staging",
+      head: "fix/auth-redirect-token",
+      additions: 96,
+      deletions: 34,
+      changed_files: 5,
+      labels: ["security", "auth"],
+      html_url: "https://github.com/potpie-ai/potpie-ui/pull/424",
+      source_description: "GitHub webhook · potpie-ai/potpie-ui",
+      episode_body:
+        "Closes two sign-in issues: the post-login redirect accepted absolute URLs (open redirect) and the Firebase custom token rode along in the redirect query. Redirects now allow-list relative paths and the token moved into a one-shot httpOnly cookie.",
+    },
+    run: {
+      planSummary:
+        "Ingest the sign-in hardening: record both vulnerabilities as a bug pattern and link the fix to the auth flow it protects.",
+      entityMutations: 3,
+      edgeMutations: 5,
+      work: [
+        {
+          title: "Read GitHub PR",
+          body: `github_get_pull_request(repo="potpie-ai/potpie-ui", number=424)`,
+          payload: { tool: "github_get_pull_request" },
+        },
+        {
+          title: "Read PR review comments",
+          body: `github_get_pull_request_review_comments(number=424)`,
+          payload: { tool: "github_get_pull_request_review_comments" },
+        },
+        {
+          kind: "tool_result",
+          title: "3 threads resolved",
+          body: "Review pushed the token out of the URL entirely — a one-shot httpOnly cookie replaces the query param.",
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=3, edges=5)
++ Fix "allow-list relative redirect targets"
++ BugPattern "secrets ride along in redirect URLs"
++ potpie-ui#424 —FIXES→ open redirect · —HARDENS→ sign-in flow`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 3, edge_upserts_applied: 5 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-pr-ui-424")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "confluence-runbook",
@@ -348,6 +1429,46 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     source_channel: "confluence",
     title: "Runbook · draining the ingestion backlog on Celery",
     minsAgo: 2100,
+    steps: EPISODE_STEPS_DONE,
+    payload: {
+      page: "Runbook · Draining the ingestion backlog on Celery",
+      space: "OPS",
+      author: "jdyaberi-pp",
+      version: 7,
+      url: "https://potpie.atlassian.net/wiki/spaces/OPS/pages/918230",
+      source_description: "Confluence · OPS space",
+      episode_body:
+        "Operational runbook for backlog drains: pause windowed flushes, scale ingestion-worker replicas, replay the DLQ in order, then verify graph convergence. Written after the June backlog incident; the last drill ran clean in 14 minutes.",
+    },
+    run: {
+      planSummary:
+        "Attach the backlog-drain runbook to the ingestion worker and the incident that motivated it.",
+      entityMutations: 2,
+      edgeMutations: 4,
+      work: [
+        {
+          title: "Searched the graph",
+          body: `context_search("ingestion backlog celery drain")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=2, edges=4)
++ Runbook "Draining the ingestion backlog on Celery" (v7)
++ Runbook —OPERATES→ Service ingestion-worker
++ Runbook —LEARNED_FROM→ June backlog incident`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 2, edge_upserts_applied: 4 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-confluence-runbook")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "deploy-aks",
@@ -357,6 +1478,48 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     source_channel: "cli",
     title: "Deploy · context-engine v1.5 to AKS production",
     minsAgo: 2400,
+    repo: "potpie-ai/potpie-k8s-deployments",
+    steps: EPISODE_STEPS_DONE,
+    payload: {
+      command: "potpie deploy context-engine v1.5.0 --env production",
+      version: "v1.5.0",
+      cluster: "aks-prod-eastus2",
+      chart: "context-engine-1.5.0",
+      image_digest: "sha256:9f2c41d8a7…",
+      canary_minutes: 30,
+      duration_seconds: 312,
+      source_description: "potpie CLI · deploy pipeline",
+      episode_body:
+        "Rolled context-engine v1.5.0 to AKS production (aks-prod-eastus2): traversal planner rewrite, batched claim writes, and the new resolve cache. The canary held 30 minutes under 0.1% errors before the full rollout completed in 5m12s.",
+    },
+    run: {
+      planSummary:
+        "Record the production rollout and connect the deployment to the changes it ships.",
+      entityMutations: 2,
+      edgeMutations: 4,
+      work: [
+        {
+          title: "Searched the graph",
+          body: `context_search("context-engine production deploy")`,
+          payload: { tool: "context_search" },
+        },
+        {
+          title: "Updated the graph",
+          body: `apply_graph_mutations(entities=2, edges=4)
++ Deployment context-engine v1.5.0 → Environment production
++ Deployment —SHIPS→ planner rewrite (#994) · batched claim writes (#996)`,
+          payload: {
+            tool: "apply_graph_mutations",
+            counts: { entity_upserts_applied: 2, edge_upserts_applied: 4 },
+          },
+        },
+        {
+          title: "Marked event reconciled",
+          body: `mark_event_processed(event_id="evt-potpie-deploy-aks")`,
+          payload: { tool: "mark_event_processed" },
+        },
+      ],
+    },
   },
   {
     suffix: "webhook-unsupported",
@@ -367,6 +1530,16 @@ const POTPIE_EVENT_SEEDS: DemoEventSeed[] = [
     title: "Rejected payload: unsupported content type",
     minsAgo: 2900,
     error: "Unsupported media type: expected application/json",
+    payload: {
+      content_type: "application/x-www-form-urlencoded",
+      content_length: 1834,
+      remote: "hooks.zapier.com",
+      path: "/api/v1/context/pots/potpie/ingest/raw",
+      body_preview: "payload=%7B%22text%22%3A%22Weekly%20metrics%20digest%20…",
+      source_description: "Inbound webhook",
+      episode_body:
+        "A Zapier hook posted form-encoded data to the raw-ingest endpoint. The payload was rejected before parsing; the sender needs Content-Type: application/json.",
+    },
   },
 ];
 
@@ -387,16 +1560,16 @@ const POTPIE_CONFIG: DemoPotConfig = {
     { key: "semantic-search", name: "Semantic Search" },
   ],
   people: [
-    { id: "demo-user-owner-0001", name: "Nandan", email: "nandan@potpie.ai", login: "nndn" },
-    { id: "demo-user-potpie-02", name: "Deeptendu Santra", email: "deeptendu@potpie.ai", login: "Dsantra92" },
-    { id: "demo-user-potpie-03", name: "Shambhavi Shinde", email: "shambhavi@potpie.ai", login: "shmbhvi101" },
-    { id: "demo-user-potpie-04", name: "Yash Krishan", email: "yash@potpie.ai", login: "yashkrishan" },
-    { id: "demo-user-potpie-05", name: "Deepesh Genani", email: "deepesh@potpie.ai", login: "ASCE-D" },
-    { id: "demo-user-potpie-06", name: "Bharath Kumar K", email: "bharath@potpie.ai", login: "BrhKmr23" },
-    { id: "demo-user-potpie-07", name: "Dhiren Mathur", email: "dhiren@potpie.ai", login: "dhirenmathur" },
-    { id: "demo-user-potpie-08", name: "Jagadeesh Yaberi", email: "jagadeesh@potpie.ai", login: "jdyaberi-pp" },
+    { id: "user-owner-0001", name: "Nandan", email: "nandan@potpie.ai", login: "nndn" },
+    { id: "user-potpie-02", name: "Deeptendu Santra", email: "deeptendu@potpie.ai", login: "Dsantra92" },
+    { id: "user-potpie-03", name: "Shambhavi Shinde", email: "shambhavi@potpie.ai", login: "shmbhvi101" },
+    { id: "user-potpie-04", name: "Yash Krishan", email: "yash@potpie.ai", login: "yashkrishan" },
+    { id: "user-potpie-05", name: "Deepesh Genani", email: "deepesh@potpie.ai", login: "ASCE-D" },
+    { id: "user-potpie-06", name: "Bharath Kumar K", email: "bharath@potpie.ai", login: "BrhKmr23" },
+    { id: "user-potpie-07", name: "Dhiren Mathur", email: "dhiren@potpie.ai", login: "dhirenmathur" },
+    { id: "user-potpie-08", name: "Jagadeesh Yaberi", email: "jagadeesh@potpie.ai", login: "jdyaberi-pp" },
   ],
-  linearTeam: { id: "demo-team-core", name: "Core", key: "POT" },
+  linearTeam: { id: "team-core", name: "Core", key: "POT" },
   // The whole potpie-ai estate, so the pot reads like a real multi-repo org.
   extraRepos: [
     { full: "potpie-ai/potpie-ui", branch: "staging" },
@@ -448,11 +1621,11 @@ const REDIS_CONFIG: DemoPotConfig = {
     { key: "cluster-failover", name: "Cluster Failover" },
   ],
   people: [
-    { id: "demo-user-redis-01", name: "Salvatore Greco", email: "salvatore@redis.dev", login: "sgreco" },
-    { id: "demo-user-redis-02", name: "Yuki Tanaka", email: "yuki@redis.dev", login: "ytanaka" },
-    { id: "demo-user-redis-03", name: "Elena Novak", email: "elena@redis.dev", login: "enovak" },
+    { id: "user-redis-01", name: "Salvatore Greco", email: "salvatore@redis.dev", login: "sgreco" },
+    { id: "user-redis-02", name: "Yuki Tanaka", email: "yuki@redis.dev", login: "ytanaka" },
+    { id: "user-redis-03", name: "Elena Novak", email: "elena@redis.dev", login: "enovak" },
   ],
-  linearTeam: { id: "demo-team-redis", name: "Redis OSS", key: "ROSS" },
+  linearTeam: { id: "team-redis", name: "Redis OSS", key: "ROSS" },
   extraRepos: [{ full: "redis/redis-doc", branch: "master" }],
   scale: 1.35,
   createdMsAgo: 90 * DAY,
@@ -475,11 +1648,11 @@ const KAFKA_CONFIG: DemoPotConfig = {
     { key: "quotas", name: "Client Quotas" },
   ],
   people: [
-    { id: "demo-user-kafka-01", name: "Aisha Khan", email: "aisha@kafka.dev", login: "akhan" },
-    { id: "demo-user-kafka-02", name: "Tomas Berg", email: "tomas@kafka.dev", login: "tberg" },
-    { id: "demo-user-kafka-03", name: "Lin Chen", email: "lin@kafka.dev", login: "lchen" },
+    { id: "user-kafka-01", name: "Aisha Khan", email: "aisha@kafka.dev", login: "akhan" },
+    { id: "user-kafka-02", name: "Tomas Berg", email: "tomas@kafka.dev", login: "tberg" },
+    { id: "user-kafka-03", name: "Lin Chen", email: "lin@kafka.dev", login: "lchen" },
   ],
-  linearTeam: { id: "demo-team-streaming", name: "Streaming", key: "STRM" },
+  linearTeam: { id: "team-streaming", name: "Streaming", key: "STRM" },
   extraRepos: [{ full: "apache/kafka-site", branch: "asf-site" }],
   scale: 1.7,
   createdMsAgo: 150 * DAY,
@@ -554,13 +1727,13 @@ export function isDemoEventId(eventId?: string | null): boolean {
   return DEMO_EVENT_IDS.has(eventId);
 }
 
-// Demo invitation tokens all carry the "demo-token-" sentinel prefix (see
+// Demo invitation tokens all carry the "pot-invite-" sentinel prefix (see
 // `getDemoInvitations` / `getDemoInvitation`). The join flow takes a bare
 // token, so this predicate lets accept/decline short-circuit instead of
 // firing a real (404ing) backend call for a demo invite link.
 export function isDemoInviteToken(token?: string | null): boolean {
   if (!token) return false;
-  return token.startsWith("demo-token-");
+  return token.startsWith("pot-invite-");
 }
 
 // ---- Repositories -----------------------------------------------------------
@@ -568,7 +1741,7 @@ export function isDemoInviteToken(token?: string | null): boolean {
 export function getDemoRepositories(potId: string): PotRepository[] {
   const cfg = configFor(potId);
   const primary: PotRepository = {
-    id: `demo-repo-${cfg.slug}-primary`,
+    id: `repo-${cfg.slug}-primary`,
     repo_name: cfg.primaryRepo,
     owner: cfg.repoOwner,
     repo: cfg.repoName,
@@ -576,14 +1749,14 @@ export function getDemoRepositories(potId: string): PotRepository[] {
     provider_host: "github.com",
     default_branch: cfg.defaultBranch,
     remote_url: `https://github.com/${cfg.primaryRepo}`,
-    external_repo_id: `demo-ext-${cfg.slug}`,
+    external_repo_id: `ext-${cfg.slug}`,
     added_by_user_id: DEMO_OWNER_USER_ID,
     created_at: iso(cfg.createdMsAgo),
   };
   const extras: PotRepository[] = cfg.extraRepos.map((r, idx) => {
     const [owner, repo] = r.full.split("/", 2);
     return {
-      id: `demo-repo-${cfg.slug}-${idx}`,
+      id: `repo-${cfg.slug}-${idx}`,
       repo_name: r.full,
       owner,
       repo,
@@ -591,7 +1764,7 @@ export function getDemoRepositories(potId: string): PotRepository[] {
       provider_host: "github.com",
       default_branch: r.branch,
       remote_url: `https://github.com/${r.full}`,
-      external_repo_id: `demo-ext-${cfg.slug}-${idx}`,
+      external_repo_id: `ext-${cfg.slug}-${idx}`,
       added_by_user_id: DEMO_OWNER_USER_ID,
       created_at: iso(cfg.createdMsAgo - DAY),
     };
@@ -618,7 +1791,7 @@ export function getDemoInvitations(potId: string): PotInvitation[] {
   const cfg = configFor(potId);
   return [
     {
-      id: `demo-invite-${cfg.slug}-1`,
+      id: `inv-${cfg.slug}-1`,
       pot_id: cfg.id,
       email: `newteammate@${cfg.repoOwner}.dev`,
       role: "user",
@@ -628,7 +1801,7 @@ export function getDemoInvitations(potId: string): PotInvitation[] {
       expires_at: new Date(NOW + 12 * DAY).toISOString(),
       created_at: iso(2 * DAY),
       accepted_at: null,
-      token: `demo-token-${cfg.slug}`,
+      token: `pot-invite-${cfg.slug}`,
     },
   ];
 }
@@ -644,9 +1817,9 @@ function repoSource(
 ): PotSource {
   const [owner, repo] = full.split("/", 2);
   return {
-    id: `demo-src-${cfg.slug}-${idSuffix}`,
+    id: `src-${cfg.slug}-${idSuffix}`,
     pot_id: cfg.id,
-    integration_id: `demo-int-${cfg.slug}-github`,
+    integration_id: `int-${cfg.slug}-github`,
     provider: "github",
     source_kind: "repository",
     scope: {
@@ -679,9 +1852,9 @@ export function getDemoSources(potId: string): PotSource[] {
       }),
     ),
     {
-      id: `demo-src-${cfg.slug}-linear`,
+      id: `src-${cfg.slug}-linear`,
       pot_id: cfg.id,
-      integration_id: `demo-int-${cfg.slug}-linear`,
+      integration_id: `int-${cfg.slug}-linear`,
       provider: "linear",
       source_kind: "issue_tracker_team",
       scope: {
@@ -730,7 +1903,7 @@ export function getDemoIntegrations(potId: string): PotIntegration[] {
     updated_at: iso(6 * HOUR),
   };
   return (cfg.integrations ?? DEFAULT_INTEGRATIONS(cfg)).map((p) => ({
-    id: `demo-int-${cfg.slug}-${p.type}`,
+    id: `int-${cfg.slug}-${p.type}`,
     integration_type: p.type,
     provider: p.type,
     ...base,
@@ -750,18 +1923,18 @@ export function getDemoConnectedIntegrations(
   const cfg = configFor(potId);
   return (cfg.integrations ?? DEFAULT_INTEGRATIONS(cfg)).map(
     (p): ConnectedIntegration => ({
-      id: `demo-int-${cfg.slug}-${p.type}`,
-      integration_id: `demo-int-${cfg.slug}-${p.type}`,
+      id: `int-${cfg.slug}-${p.type}`,
+      integration_id: `int-${cfg.slug}-${p.type}`,
       name: p.name,
       type: p.type,
       instanceName: p.instance,
       status: p.status ?? "active",
       lastSync: p.lastSync ?? "Just now",
       errorMessage: p.errorMessage,
-      config: { org_slug: cfg.repoOwner, installation_id: `demo-${cfg.slug}` },
+      config: { org_slug: cfg.repoOwner, installation_id: `inst-${cfg.slug}` },
       orgSlug: cfg.repoOwner,
-      installationId: `demo-${cfg.slug}`,
-      uniqueIdentifier: `demo-${cfg.slug}-${p.type}`,
+      installationId: `inst-${cfg.slug}`,
+      uniqueIdentifier: `inst-${cfg.slug}-${p.type}`,
       createdAt: iso(cfg.createdMsAgo),
       updatedAt: iso(6 * HOUR),
       linkedPotsCount: 1,
@@ -770,6 +1943,30 @@ export function getDemoConnectedIntegrations(
 }
 
 // ---- Events -----------------------------------------------------------------
+
+type DemoStepSeed = {
+  kind: string;
+  status: "done" | "processing" | "queued";
+};
+
+type DemoWorkSeed = {
+  // Defaults to "tool_call" — the dominant kind on a real run.
+  kind?: "tool_call" | "tool_result" | "plan_output" | "prompt" | "error";
+  title: string;
+  body?: string;
+  payload?: Record<string, unknown>;
+};
+
+type DemoRunSeed = {
+  planSummary: string;
+  episodeCount?: number;
+  entityMutations?: number;
+  edgeMutations?: number;
+  // Wall-clock length of the run; work events are spaced across it. Running
+  // runs ignore this and pace work from start up to "just now" instead.
+  durationSecs?: number;
+  work: DemoWorkSeed[];
+};
 
 type DemoEventSeed = {
   suffix: string;
@@ -782,6 +1979,14 @@ type DemoEventSeed = {
   action?: string;
   minsAgo: number;
   error?: string | null;
+  // Rich fixtures — the Potpie pot hand-writes these; templated pots may
+  // omit them and fall back to the generic shapes below.
+  repo?: string | null; // repo_name override (default: primary repo for github)
+  payload?: Record<string, unknown>; // merged as { name: title, ...payload }
+  steps?: DemoStepSeed[];
+  run?: DemoRunSeed;
+  stepDone?: number;
+  stepTotal?: number;
 };
 
 function defaultEventSeeds(cfg: DemoPotConfig): DemoEventSeed[] {
@@ -805,6 +2010,28 @@ function defaultEventSeeds(cfg: DemoPotConfig): DemoEventSeed[] {
       source_channel: "agent",
       title: `Reconciling ${cfg.services[0]} service map`,
       minsAgo: 4,
+      steps: [
+        { kind: "read_context", status: "done" },
+        { kind: "apply_graph_mutations", status: "processing" },
+      ],
+      run: {
+        planSummary: `Update the ${cfg.services[0]} service map and link the new feature nodes.`,
+        episodeCount: 2,
+        entityMutations: 9,
+        edgeMutations: 14,
+        work: [
+          {
+            title: "Searched the graph",
+            body: `context_search("${cfg.features[0].name}")`,
+            payload: { tool: "context_search" },
+          },
+          {
+            title: "Updated the graph",
+            body: "apply_graph_mutations(entities=9, edges=14)",
+            payload: { tool: "apply_graph_mutations" },
+          },
+        ],
+      },
     },
     {
       suffix: "raw-note",
@@ -861,16 +2088,79 @@ function buildEvents(cfg: DemoPotConfig): PotEvent[] {
   const seeds: DemoEventSeed[] = cfg.eventSeeds ?? defaultEventSeeds(cfg);
 
   return seeds.map((s, idx) => {
-    const eventId = `demo-evt-${cfg.slug}-${s.suffix}`;
+    const eventId = `evt-${cfg.slug}-${s.suffix}`;
     DEMO_EVENT_IDS.add(eventId);
-    const receivedAt = iso(s.minsAgo * MIN);
-    const completedAt =
-      s.status === "done" || s.status === "failed"
-        ? iso((s.minsAgo - 1) * MIN)
-        : null;
-    const isRecon = s.ingestion_kind === "agent_reconciliation";
+    const receivedAgoMs = s.minsAgo * MIN;
+
+    // Reconciliation run: the agent picks the event up shortly after it
+    // lands, work events pace through the run, and completion stamps both
+    // the run and the event. Offsets are "ms ago" — later moments are
+    // therefore *smaller* numbers.
+    let runs: PotReconciliationRun[] | undefined;
+    let runCompletedAgoMs: number | null = null;
+    if (s.run) {
+      const runStatus =
+        s.status === "processing"
+          ? "running"
+          : s.status === "failed"
+            ? "failed"
+            : "succeeded";
+      const startedAgoMs = receivedAgoMs - 75_000;
+      const count = s.run.work.length;
+      const plannedMs = (s.run.durationSecs ?? count * 24 + 30) * 1000;
+      // A running run can only have burned the time since it started —
+      // pace its work into that window so nothing lands in the future.
+      const spanMs =
+        runStatus === "running"
+          ? Math.max(15_000, startedAgoMs - 10_000)
+          : plannedMs;
+      const stepMs = spanMs / (count + 1);
+      if (runStatus !== "running") {
+        runCompletedAgoMs = startedAgoMs - spanMs;
+      }
+      runs = [
+        {
+          id: `run-${cfg.slug}-${s.suffix}`,
+          attempt_number: 1,
+          status: runStatus,
+          agent_name: "reconciliation-agent",
+          agent_version: "2026.07.1",
+          toolset_version: "12",
+          plan_summary: s.run.planSummary,
+          episode_count: s.run.episodeCount ?? 1,
+          entity_mutation_count: s.run.entityMutations ?? null,
+          edge_mutation_count: s.run.edgeMutations ?? null,
+          error: s.status === "failed" ? (s.error ?? null) : null,
+          started_at: iso(startedAgoMs),
+          completed_at:
+            runCompletedAgoMs != null ? iso(runCompletedAgoMs) : null,
+          work_events: s.run.work.map((w, wi) => ({
+            id: `we-${cfg.slug}-${s.suffix}-${wi + 1}`,
+            sequence: wi + 1,
+            event_kind: w.kind ?? "tool_call",
+            title: w.title,
+            body: w.body ?? null,
+            payload: w.payload ?? null,
+            created_at: iso(startedAgoMs - Math.round((wi + 1) * stepMs)),
+          })),
+        },
+      ];
+    }
+
+    const episodeSteps: PotEpisodeStep[] | undefined = s.steps?.map(
+      (st, si) => ({
+        sequence: si + 1,
+        step_kind: st.kind,
+        status: st.status,
+        attempt_count: 1,
+        applied_at: st.status === "done" ? iso(receivedAgoMs - 2 * MIN) : null,
+        error: null,
+      }),
+    );
+
+    const receivedAt = iso(receivedAgoMs);
     return {
-      id: `demo-evt-row-${cfg.slug}-${idx}`,
+      id: `evt-row-${cfg.slug}-${idx}`,
       event_id: eventId,
       status: s.status,
       lifecycle_status: s.status,
@@ -880,76 +2170,29 @@ function buildEvents(cfg: DemoPotConfig): PotEvent[] {
       source_channel: s.source_channel,
       event_type: s.event_type ?? null,
       action: s.action ?? null,
-      repo_name: s.source_system === "github" ? cfg.primaryRepo : null,
+      repo_name:
+        s.repo !== undefined
+          ? s.repo
+          : s.source_system === "github"
+            ? cfg.primaryRepo
+            : null,
       provider: s.source_system,
       received_at: receivedAt,
       submitted_at: receivedAt,
-      completed_at: completedAt,
+      completed_at:
+        s.status === "done" || s.status === "failed"
+          ? iso(runCompletedAgoMs ?? receivedAgoMs - MIN)
+          : null,
       error: s.error ?? null,
-      payload: { name: s.title, source: s.source_channel },
+      payload: s.payload
+        ? { name: s.title, ...s.payload }
+        : { name: s.title, source: s.source_channel },
       metadata: { demo: true },
-      step_total: s.status === "processing" ? 6 : undefined,
-      step_done: s.status === "processing" ? 3 : undefined,
+      step_total: s.stepTotal ?? (s.status === "processing" ? 6 : undefined),
+      step_done: s.stepDone ?? (s.status === "processing" ? 3 : undefined),
       step_error: 0,
-      episode_steps: isRecon
-        ? [
-            {
-              sequence: 1,
-              step_kind: "read_context",
-              status: "done",
-              attempt_count: 1,
-              applied_at: iso((s.minsAgo + 1) * MIN),
-              error: null,
-            },
-            {
-              sequence: 2,
-              step_kind: "apply_graph_mutations",
-              status: "processing",
-              attempt_count: 1,
-              applied_at: null,
-              error: null,
-            },
-          ]
-        : undefined,
-      reconciliation_runs: isRecon
-        ? [
-            {
-              id: `demo-run-${cfg.slug}-${idx}`,
-              attempt_number: 1,
-              status: "processing",
-              agent_name: "reconciliation-agent",
-              agent_version: "2026.07.1",
-              toolset_version: "12",
-              plan_summary: `Update the ${cfg.services[0]} service map and link the new feature nodes.`,
-              episode_count: 2,
-              entity_mutation_count: 9,
-              edge_mutation_count: 14,
-              error: null,
-              started_at: iso((s.minsAgo + 2) * MIN),
-              completed_at: null,
-              work_events: [
-                {
-                  id: `demo-we-${cfg.slug}-${idx}-1`,
-                  sequence: 1,
-                  event_kind: "tool_call",
-                  title: "Searched the graph",
-                  body: `context_search("${cfg.features[0].name}")`,
-                  payload: { tool: "context_search" },
-                  created_at: iso((s.minsAgo + 2) * MIN),
-                },
-                {
-                  id: `demo-we-${cfg.slug}-${idx}-2`,
-                  sequence: 2,
-                  event_kind: "tool_call",
-                  title: "Updated the graph",
-                  body: "apply_graph_mutations(entities=9, edges=14)",
-                  payload: { tool: "apply_graph_mutations" },
-                  created_at: iso((s.minsAgo + 1) * MIN),
-                },
-              ],
-            },
-          ]
-        : undefined,
+      episode_steps: episodeSteps,
+      reconciliation_runs: runs,
     };
   });
 }
@@ -962,11 +2205,66 @@ const DEMO_EVENTS_BY_POT: Record<string, PotEvent[]> = {
   [DEMO_KAFKA_POT_ID]: buildEvents(KAFKA_CONFIG),
 };
 
-export function getDemoEventPage(potId: string): PotEventPage {
-  return {
-    items: DEMO_EVENTS_BY_POT[potId] ?? DEMO_EVENTS_BY_POT[DEMO_POTPIE_POT_ID],
-    next_cursor: null,
-  };
+// Statuses the UI's filter values expand to. The console filters on the
+// UI-facing family ("done", "error") while fixtures use lifecycle statuses.
+const DEMO_STATUS_FAMILIES: Record<string, ReadonlySet<string>> = {
+  done: new Set(["done", "reconciled"]),
+  error: new Set(["error", "failed"]),
+  queued: new Set(["queued", "received"]),
+  processing: new Set(["processing"]),
+};
+
+export function getDemoEventPage(
+  potId: string,
+  options: {
+    status?: string[];
+    source_system?: string[];
+    from_date?: string;
+    to_date?: string;
+    q?: string;
+  } = {},
+): PotEventPage {
+  const all =
+    DEMO_EVENTS_BY_POT[potId] ?? DEMO_EVENTS_BY_POT[DEMO_POTPIE_POT_ID];
+  // Mirror the backend contract closely enough for the console to feel
+  // real: status families, source_system, date range, and free-text search
+  // over the title + episode body.
+  const q = options.q?.trim().toLowerCase();
+  const from = options.from_date ? new Date(options.from_date).getTime() : null;
+  const to = options.to_date ? new Date(options.to_date).getTime() : null;
+  const items = all.filter((ev) => {
+    if (options.status && options.status.length > 0) {
+      const status = ev.lifecycle_status || ev.status;
+      const matches = options.status.some((s) =>
+        (DEMO_STATUS_FAMILIES[s] ?? new Set([s])).has(status),
+      );
+      if (!matches) return false;
+    }
+    if (
+      options.source_system &&
+      options.source_system.length > 0 &&
+      !options.source_system.includes(ev.source_system ?? "")
+    ) {
+      return false;
+    }
+    const ts = ev.received_at ? new Date(ev.received_at).getTime() : null;
+    if (from != null && ts != null && ts < from) return false;
+    if (to != null && ts != null && ts > to) return false;
+    if (q) {
+      const p = (ev.payload ?? {}) as Record<string, unknown>;
+      const hay = [
+        typeof p.name === "string" ? p.name : "",
+        typeof p.episode_body === "string" ? p.episode_body : "",
+        ev.repo_name ?? "",
+        ev.source_system ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  return { items, next_cursor: null };
 }
 
 export function getDemoEvent(eventId: string): PotEvent {
@@ -995,7 +2293,7 @@ export function getDemoIngestPipeline(potId: string): PotIngestPipeline {
     window_minutes: 5,
     min_batch_size: null,
     open_batch: {
-      batch_id: `demo-batch-${potId.slice(0, 8)}`,
+      batch_id: `batch-${potId.slice(0, 8)}`,
       created_at: iso(90_000),
       event_count: 2,
       window_deadline: new Date(NOW + 3 * MIN).toISOString(),
@@ -1702,8 +3000,8 @@ function buildGenericTimeline(cfg: DemoPotConfig): TimelineActivity[] {
     summary: string,
     personIdx: number,
   ): TimelineActivity => ({
-    id: `activity:demo:${cfg.slug}-${idx}`,
-    activity_key: `activity:demo:${cfg.slug}-${idx}`,
+    id: `activity:ingest:${cfg.slug}-${idx}`,
+    activity_key: `activity:ingest:${cfg.slug}-${idx}`,
     timestamp: iso(msAgo),
     verb_class: verb,
     title,
@@ -1795,7 +3093,7 @@ export function getDemoPotTimeline(
 function demoSearchResults(cfg: DemoPotConfig, query: string): ContextSearchResult[] {
   return [
     {
-      uuid: `demo-fact-${cfg.slug}-1`,
+      uuid: `fact-${cfg.slug}-1`,
       name: `${cfg.features[0].name} design`,
       summary: `${cfg.features[0].name} was introduced to ${cfg.blurb.toLowerCase()} The rollout landed behind a feature flag in ${cfg.services[0]}.`,
       fact: null,
@@ -1805,7 +3103,7 @@ function demoSearchResults(cfg: DemoPotConfig, query: string): ContextSearchResu
       valid_at: iso(30 * DAY),
     },
     {
-      uuid: `demo-fact-${cfg.slug}-2`,
+      uuid: `fact-${cfg.slug}-2`,
       name: `${cfg.services[1]} ownership`,
       summary: `${cfg.people[0].name} owns ${cfg.services[1]} and reviews changes to the ${cfg.features[1].name} path.`,
       fact: null,
@@ -1815,7 +3113,7 @@ function demoSearchResults(cfg: DemoPotConfig, query: string): ContextSearchResu
       valid_at: iso(12 * DAY),
     },
     {
-      uuid: `demo-fact-${cfg.slug}-3`,
+      uuid: `fact-${cfg.slug}-3`,
       name: `Recent change · ${query || cfg.features[2].name}`,
       summary: `The most recent merged PR hardened ${cfg.services[2]} persistence and added regression tests.`,
       fact: null,
@@ -1906,7 +3204,7 @@ export function getDemoContextGraphResult<T = unknown>(
 
 export function getDemoRawIngestionResult(potId: string): RawIngestionResult {
   return {
-    event_id: `demo-evt-adhoc-${Math.random().toString(36).slice(2, 10)}`,
+    event_id: `evt-adhoc-${Math.random().toString(36).slice(2, 10)}`,
     status: "queued",
     pot_id: potId,
     error: null,
@@ -1919,7 +3217,7 @@ export function getDemoInvitation(
 ): PotInvitation {
   const cfg = configFor(potId);
   return {
-    id: `demo-invite-${cfg.slug}-${Math.random().toString(36).slice(2, 8)}`,
+    id: `inv-${cfg.slug}-${Math.random().toString(36).slice(2, 8)}`,
     pot_id: potId,
     email,
     role: "user",
@@ -1929,15 +3227,15 @@ export function getDemoInvitation(
     expires_at: new Date(NOW + 14 * DAY).toISOString(),
     created_at: new Date().toISOString(),
     accepted_at: null,
-    token: `demo-token-${Math.random().toString(36).slice(2, 14)}`,
+    token: `pot-invite-${Math.random().toString(36).slice(2, 14)}`,
   };
 }
 
-// Resolve the pot a demo invite link points at from its "demo-token-<slug>"
+// Resolve the pot a demo invite link points at from its "pot-invite-<slug>"
 // token, falling back to the first demo pot for the random-suffix tokens
 // minted by `getDemoInvitation`.
 function demoPotForToken(token: string): Pot {
-  const slug = token.replace(/^demo-token-/, "");
+  const slug = token.replace(/^pot-invite-/, "");
   return DEMO_POTS.find((p) => p.slug === slug) ?? DEMO_POTS[0];
 }
 

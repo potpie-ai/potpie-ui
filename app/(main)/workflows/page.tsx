@@ -40,10 +40,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useProFeatureError } from "@/lib/hooks/useProFeatureError";
-import { ProFeatureModal } from "@/components/Layouts/ProFeatureModal";
-import { isWorkflowsBackendAccessible } from "@/lib/utils/backendAccessibility";
+import {
+  DEMO_TRIGGERS,
+  DEMO_WORKFLOWS,
+  DEMO_WORKFLOW_AGENTS,
+  isDemoWorkflowId,
+} from "@/lib/mock/demoWorkflows";
 import { toast } from "sonner";
 import { parseApiError } from "@/lib/utils";
 
@@ -172,52 +174,22 @@ const templates = [
 ];
 
 const Workflows = () => {
-  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
-  const [triggers, setTriggers] = useState<Trigger[]>([]);
+  const [availableAgents, setAvailableAgents] = useState<Agent[]>(
+    DEMO_WORKFLOW_AGENTS
+  );
+  const [triggers, setTriggers] = useState<Trigger[]>(DEMO_TRIGGERS);
   const [openAccordionId, setOpenAccordionId] = useState<string | null>(null);
-  const [backendAccessible, setBackendAccessible] = useState<boolean | null>(null);
-  const { isModalOpen, setIsModalOpen, handleError } = useProFeatureError();
-
-  // Check backend accessibility on mount
-  useEffect(() => {
-    const checkBackend = async () => {
-      const accessible = await isWorkflowsBackendAccessible();
-      setBackendAccessible(accessible);
-      if (!accessible) {
-        // Backend not accessible, show modal immediately
-        setIsModalOpen(true);
-      }
-    };
-    checkBackend();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
-
-  const handleModalCancel = () => {
-    // Redirect away from workflows if backend is not accessible
-    if (backendAccessible === false) {
-      router.push("/");
-    }
-  };
 
   async function fetchData() {
-    // Check if backend is accessible before fetching
-    const accessible = await isWorkflowsBackendAccessible();
-    if (!accessible) {
-      // Backend not accessible, don't fetch data
-      setLoading(false);
-      return;
-    }
-    
     setLoading(true);
     try {
-      const workflows = await WorkflowService.getWorkflowsList();
+      const remoteWorkflows = await WorkflowService.getWorkflowsList();
 
       // Skip validation flow - set all workflows as valid by default
-      const workflowsWithValidation = workflows.map((workflow) => ({
+      const workflowsWithValidation = remoteWorkflows.map((workflow) => ({
         ...workflow,
         validation: {
           is_valid: true, // Skip validation - assume all workflows are valid
@@ -226,29 +198,38 @@ const Workflows = () => {
         },
       }));
 
-      setWorkflows(
-        workflowsWithValidation.sort(
+      // Demo workflows stay pinned at the top of the list
+      setWorkflows([
+        ...DEMO_WORKFLOWS,
+        ...workflowsWithValidation.sort(
           (a: any, b: any) =>
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        )
-      );
-
-      // Fetch custom agents using getAgentList
-      const customAgents = await AgentService.getAgentList();
-      setAvailableAgents(
-        customAgents.map((agent: any) => ({ id: agent.id, name: agent.name }))
-      );
-      const _triggers = await WorkflowService.getAllTriggers();
-      setTriggers(_triggers);
+        ),
+      ]);
     } catch (error) {
-      if (handleError(error)) {
-        // Pro feature error was handled, modal is shown
-        return;
-      }
-      // Other errors - could show toast or handle differently
-      console.error("Error fetching workflows data:", error);
+      console.warn(
+        "Workflows backend unavailable, showing built-in workflows only:",
+        error
+      );
+      setWorkflows(DEMO_WORKFLOWS);
     } finally {
       setLoading(false);
+    }
+
+    try {
+      // Fetch custom agents using getAgentList
+      const customAgents = await AgentService.getAgentList();
+      setAvailableAgents([
+        ...DEMO_WORKFLOW_AGENTS,
+        ...customAgents.map((agent: any) => ({
+          id: agent.id,
+          name: agent.name,
+        })),
+      ]);
+      const _triggers = await WorkflowService.getAllTriggers();
+      setTriggers([...DEMO_TRIGGERS, ..._triggers]);
+    } catch (error) {
+      console.warn("Could not fetch agents/triggers metadata:", error);
     }
   }
 
@@ -257,6 +238,10 @@ const Workflows = () => {
   }, []);
 
   const handleDeleteWorkflow = (workflow: Workflow) => {
+    if (isDemoWorkflowId(workflow.id)) {
+      toast.info(`"${workflow.title}" is a sample workflow and can't be deleted.`);
+      return;
+    }
     if (confirm("Are you sure you want to delete this workflow?")) {
       WorkflowService.deleteWorkflow(workflow.id)
         .then(() => {
@@ -265,28 +250,26 @@ const Workflows = () => {
           );
         })
         .catch((error) => {
-          const wasHandled = handleError(error);
-          if (!wasHandled) {
-            // Non-pro feature error - surface to user
-            console.error("Error deleting workflow:", error);
-            const errorMessage = parseApiError(error);
-            toast.error(
-              `Failed to delete workflow "${workflow.title}" (${workflow.id})`,
-              {
-                description: errorMessage,
-              }
-            );
-          }
+          console.error("Error deleting workflow:", error);
+          const errorMessage = parseApiError(error);
+          toast.error(
+            `Failed to delete workflow "${workflow.title}" (${workflow.id})`,
+            {
+              description: errorMessage,
+            }
+          );
         });
     }
   };
 
   const handlePause = async (workflow: Workflow, index: number) => {
     try {
-      if (workflow.is_paused) {
-        await WorkflowService.resumeWorkflow(workflow.id);
-      } else {
-        await WorkflowService.pauseWorkflow(workflow.id);
+      if (!isDemoWorkflowId(workflow.id)) {
+        if (workflow.is_paused) {
+          await WorkflowService.resumeWorkflow(workflow.id);
+        } else {
+          await WorkflowService.pauseWorkflow(workflow.id);
+        }
       }
 
       const updatedWorkflows = workflows.map((w, i) =>
@@ -295,20 +278,15 @@ const Workflows = () => {
 
       setWorkflows(updatedWorkflows);
     } catch (error) {
-      const wasHandled = handleError(error);
-      if (!wasHandled) {
-        // Non-pro feature error - surface to user
-        console.error("Error pausing/resuming workflow:", error);
-        const errorMessage = parseApiError(error);
-        const action = workflow.is_paused ? "resume" : "pause";
-        toast.error(
-          `Failed to ${action} workflow "${workflow.title}" (${workflow.id})`,
-          {
-            description: errorMessage,
-          }
-        );
-      }
-      // Error has been handled and displayed to user, no need to re-throw
+      console.error("Error pausing/resuming workflow:", error);
+      const errorMessage = parseApiError(error);
+      const action = workflow.is_paused ? "resume" : "pause";
+      toast.error(
+        `Failed to ${action} workflow "${workflow.title}" (${workflow.id})`,
+        {
+          description: errorMessage,
+        }
+      );
     }
   };
 
@@ -827,11 +805,6 @@ const Workflows = () => {
           </Card>
         )}
       </div>
-      <ProFeatureModal 
-        open={isModalOpen} 
-        onOpenChange={setIsModalOpen}
-        onCancel={handleModalCancel}
-      />
     </div>
   );
 };

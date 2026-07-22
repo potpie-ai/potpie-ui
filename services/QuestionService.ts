@@ -317,7 +317,7 @@ export default class QuestionService {
       if (options.consumeStream !== false && options.onEvent) {
         connectDemoQuestionsStream(options);
       }
-      return { runId: initial.run_id || "demo-question-run" };
+      return { runId: initial.run_id || "question-run-01" };
     }
     if (isVectorDemoRecipeId(recipeId)) {
       if (options.consumeStream !== false && options.onEvent) {

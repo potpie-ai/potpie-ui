@@ -1149,7 +1149,7 @@ export default class ChatService {
     branchName?: string | null,
     attachmentIds?: string[]
   ) {
-    if (repoName === "redis" && branchName === "stream-dlq-demo") {
+    if (repoName === "redis" && branchName === "feature/stream-dlq") {
       return createDemoConversation();
     }
     if (repoName === "redis" && branchName === VECTOR_DEMO_BRANCH) {

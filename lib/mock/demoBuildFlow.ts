@@ -184,7 +184,7 @@ export function getDemoRecipe(): Recipe {
     status: getDemoRecipeStatus(),
     created_at: "2026-04-14T10:05:00.000Z",
     repo_name: "redis",
-    branch_name: "stream-dlq-demo",
+    branch_name: "feature/stream-dlq",
     current_question_task_id: "2bb0d3e7-1b9a-4d52-80b4-e3d0d7c7c8ab",
     current_spec_task_id: "6b6d1965-6d9a-4fae-8a5e-15a261146ea7",
     current_plan_task_id: "9d9a3d6d-1f8b-4275-83f7-28c8be31df7d",
@@ -218,7 +218,7 @@ export function getDemoRecipeDetails(): RecipeDetailsResponse {
     project_id: DEMO_PROJECT_ID,
     user_prompt: getDemoRecipe().user_prompt,
     repo_name: "redis",
-    branch_name: "stream-dlq-demo",
+    branch_name: "feature/stream-dlq",
     questions_and_answers: DEMO_QUESTIONS.questions.map((question) => ({
       question_id: question.id,
       question: question.question,
@@ -236,23 +236,23 @@ const DEMO_QUESTIONS: RecipeQuestionsResponse = {
   questions: [
     {
       id: "q1",
-      question: "Which scope should ship in the first demo cut of `XDLQ`?",
+      question: "Which scope should ship in the first cut of `XDLQ`?",
       expected_answer_type: "mcq",
       multiple_choice: false,
       options: [
         { label: "MOVE, LIST, INFO, REPLAY only", description: "Prioritize core quarantine workflow." },
         { label: "Full family including PURGE", description: "Show the full operator lifecycle end to end." },
-        { label: "MOVE and INFO only", description: "Keep the demo very small." },
+        { label: "MOVE and INFO only", description: "Keep the initial surface minimal." },
       ],
       answer_recommendation: {
         idx: 1,
-        reasoning: "The plan explicitly calls out `PURGE` as part of the operator lifecycle, and it demos well.",
+        reasoning: "The plan explicitly calls out `PURGE` as part of the operator lifecycle, and it completes the operator story end to end.",
       },
       context_refs: [{ path: "STREAM_DLQ_IMPLEMENTATION_PLAN.md", type: "doc" }],
     },
     {
       id: "q2",
-      question: "How should dead-lettered entries interact with `XPENDING` during the demo?",
+      question: "How should dead-lettered entries interact with `XPENDING` once they are quarantined?",
       expected_answer_type: "mcq",
       multiple_choice: false,
       options: [
@@ -268,7 +268,7 @@ const DEMO_QUESTIONS: RecipeQuestionsResponse = {
     },
     {
       id: "q3",
-      question: "What metadata should the demo show for DLQ entries?",
+      question: "What metadata should be surfaced for DLQ entries?",
       expected_answer_type: "mcq",
       multiple_choice: true,
       options: [
@@ -309,7 +309,7 @@ const DEMO_SPECIFICATION: SpecificationOutput = {
     janus_analysis:
       "The highest-value operator narrative is fail -> quarantine -> inspect -> replay. The feature should read like a serious Redis addition that spans command parsing, stream internals, introspection, replication, persistence, and tests.",
     qa_answers:
-      "The demo should ship the full lifecycle including `PURGE`, keep dead-lettered entries out of active `XPENDING` flows, surface rich metadata in `LIST` and `INFO`, and keep the implementation group-scoped instead of creating a separate DLQ stream key.",
+      "The first cut should ship the full lifecycle including `PURGE`, keep dead-lettered entries out of active `XPENDING` flows, surface rich metadata in `LIST` and `INFO`, and keep the implementation group-scoped instead of creating a separate DLQ stream key.",
     research_findings:
       "The implementation handoff recommends consumer-group scoped DLQ state, deterministic per-ID status replies, replay that preserves original entry IDs, skip semantics for `XCLAIM`/`XAUTOCLAIM`, and focused persistence and replication validation.",
     scope_guardrails:
@@ -1575,7 +1575,7 @@ export function getDemoQuestionsResponse(): RecipeQuestionsResponse {
 export function submitDemoAnswers(): SubmitRecipeAnswersResponse {
   updateState((current) => ({ ...current, answersSubmitted: true }));
   return {
-    message: "Answers accepted for Redis DLQ demo recipe.",
+    message: "Answers accepted for the Redis DLQ recipe.",
     recipe_id: DEMO_RECIPE_ID,
     new_status: "ANSWERS_SUBMITTED",
   };
@@ -1623,9 +1623,9 @@ export function getDemoSpecChatResponse(message: string): SpecChatResponse {
   return {
     intent: "modify",
     message:
-      "Updated the specification to emphasize the demo narrative around quarantine visibility, replay safety, and operator observability.",
+      "Updated the specification to emphasize quarantine visibility, replay safety, and operator observability.",
     explanation:
-      "Updated the specification to emphasize the demo narrative around quarantine visibility, replay safety, and operator observability.",
+      "Updated the specification to emphasize quarantine visibility, replay safety, and operator observability.",
     spec_output: specOutput as unknown as SpecChatResponse["spec_output"],
     undo_token: "",
     next_actions: ["Review the revised summary", "Generate the plan"],
@@ -1685,7 +1685,7 @@ export function submitDemoTaskSplitting(): SubmitTaskSplittingResponse {
   return {
     task_splitting_id: DEMO_TASK_SPLITTING_ID,
     status: "SUBMITTED",
-    message: "Demo code generation queued successfully.",
+    message: "Code generation queued successfully.",
   };
 }
 
@@ -1717,9 +1717,9 @@ export function getDemoTaskSplittingStatus(): TaskSplittingStatusResponse {
     pr_status: prStatus,
     pr_error_message: null,
     pr_url: state.prComplete ? DEMO_PR_URL : null,
-    branch_name: "stream-dlq-demo",
+    branch_name: "feature/stream-dlq",
     base_branch: "unstable",
-    head_sha: "d34db33fdlqdemo",
+    head_sha: "d34db33f41c7a02",
     pr_number: state.prComplete ? 8 : null,
     agent_activity: state.codegenStarted
       ? [
@@ -1786,7 +1786,7 @@ export function createDemoPullRequest(): CreatePullRequestResponse {
   return {
     task_splitting_id: DEMO_TASK_SPLITTING_ID,
     status: "IN_PROGRESS",
-    message: "Creating pull request for Redis DLQ demo branch.",
+    message: "Creating pull request for the Redis DLQ branch.",
     pr_url: null,
   };
 }
@@ -1794,7 +1794,7 @@ export function createDemoPullRequest(): CreatePullRequestResponse {
 export function getDemoConversationMessages(): LoadedMessage[] {
   return [
     {
-      id: "demo-msg-1",
+      id: "msg-1",
       text:
         "Walk me through the Redis DLQ implementation. I want to understand why this is modeled inside the consumer group instead of as a side stream.",
       sender: "user",
@@ -1805,7 +1805,7 @@ export function getDemoConversationMessages(): LoadedMessage[] {
       thinking: null,
     },
     {
-      id: "demo-msg-2",
+      id: "msg-2",
       text:
         "The implementation keeps DLQ state scoped to the consumer group so dead-lettering remains a property of how a specific group failed to process a message. That lets Redis preserve stream IDs, keep replay explicit, and avoid broadening the keyspace with a second stream just for quarantine bookkeeping.",
       sender: "agent",
@@ -1814,7 +1814,7 @@ export function getDemoConversationMessages(): LoadedMessage[] {
       attachments: [],
       tool_calls: [
         {
-          call_id: "demo-tool-1",
+          call_id: "tool-call-1",
           event_type: "call",
           tool_name: "ReadFile",
           tool_response: "",
@@ -1825,7 +1825,7 @@ export function getDemoConversationMessages(): LoadedMessage[] {
           is_complete: true,
         },
         {
-          call_id: "demo-tool-1",
+          call_id: "tool-call-1",
           event_type: "result",
           tool_name: "ReadFile",
           tool_response:
@@ -1844,7 +1844,7 @@ export function getDemoConversationMessages(): LoadedMessage[] {
 }
 
 const DEMO_CHAT_REPLY =
-  "For the Redis DLQ demo, the mocked patch keeps dead-letter state scoped to the consumer group, gives operators explicit `MOVE`, `LIST`, `INFO`, `REPLAY`, and `PURGE` flows, keeps quarantined entries out of normal claim and pending paths, and preserves replay semantics so a fixed worker can safely reactivate messages without losing auditability.";
+  "The Redis DLQ patch keeps dead-letter state scoped to the consumer group, gives operators explicit `MOVE`, `LIST`, `INFO`, `REPLAY`, and `PURGE` flows, keeps quarantined entries out of normal claim and pending paths, and preserves replay semantics so a fixed worker can safely reactivate messages without losing auditability.";
 
 export function createDemoConversation() {
   return { conversation_id: DEMO_CONVERSATION_ID };
@@ -1876,7 +1876,7 @@ export function streamDemoConversationReply(
 
     onAbort = () => {
       cleanup();
-      reject(new Error("Demo conversation stream aborted"));
+      reject(new Error("Conversation stream aborted"));
     };
 
     if (signal?.aborted) {
@@ -1896,7 +1896,7 @@ export function streamDemoConversationReply(
           resolve({
             message: current,
             citations: [],
-            sessionId: "demo-session",
+            sessionId: "sess-dlq-01",
           });
         }
       }, 280 * (index + 1));
@@ -1986,7 +1986,7 @@ export function connectDemoSpecStream(options: {
       { delay: 14620, eventType: "chunk", data: { content: "\nNow I’m translating that into requirements for command parsing, DLQ metadata storage, replay semantics, claim-path behavior, XINFO visibility, and persistence correctness across AOF/RDB boundaries.\n\nThe goal is to make the handoff read like something an engineer could implement without needing a follow-up design sync." } },
       { delay: 17520, eventType: "progress", data: { step: "Structuring", message: "Converting the workflow into detailed functional requirements, non-functional guardrails, data models, interface contracts, and file impact callouts." } },
       { delay: 17880, eventType: "tool_call_start", data: { tool: "bash", call_id: "spec-bash-1" } },
-      { delay: 20480, eventType: "tool_call_end", data: { tool: "bash", call_id: "spec-bash-1", result: "Executed `git diff unstable...stream-dlq-demo -- src/t_stream.c src/stream.h src/server.h src/commands.def src/commands/xdlq*.json src/commands/xinfo-stream.json tests/unit/type/stream-dlq.tcl src/aof.c src/rdb.c src/rdb.h src/redis-check-rdb.c && python scripts/summarize_stream_changes.py --feature stream-dlq --include-tests --include-persistence --include-command-docs --format spec-outline` to verify the handoff covers the actual file footprint." } },
+      { delay: 20480, eventType: "tool_call_end", data: { tool: "bash", call_id: "spec-bash-1", result: "Executed `git diff unstable...feature/stream-dlq -- src/t_stream.c src/stream.h src/server.h src/commands.def src/commands/xdlq*.json src/commands/xinfo-stream.json tests/unit/type/stream-dlq.tcl src/aof.c src/rdb.c src/rdb.h src/redis-check-rdb.c && python scripts/summarize_stream_changes.py --feature stream-dlq --include-tests --include-persistence --include-command-docs --format spec-outline` to verify the handoff covers the actual file footprint." } },
       { delay: 21020, eventType: "chunk", data: { content: "\nI’m also making sure the spec doesn’t flatten everything into one requirement. Runtime semantics, observability, persistence, and validation each need their own acceptance criteria so the implementation can be reviewed phase by phase instead of as one opaque patch." } },
       { delay: 23940, eventType: "progress", data: { step: "Tradeoff analysis", message: "Reviewing what should remain intentionally out of scope for the first release so the spec feels production-ready without overreaching." } },
       { delay: 24320, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "spec-kg-3" } },
@@ -2000,7 +2000,7 @@ export function connectDemoSpecStream(options: {
       { delay: 35440, eventType: "chunk", data: { content: "\nAt this point the handoff is no longer just saying \"add DLQ support.\" It is spelling out command-level contracts, group-scoped storage rules, lifecycle semantics, persistence guarantees, observability fields, and the validation coverage needed to keep the feature safe in Redis." } },
       { delay: 38680, eventType: "progress", data: { step: "Polish", message: "Expanding the file impact, acceptance criteria, and operator-facing notes so the spec reads like a production handoff." } },
       { delay: 39040, eventType: "tool_call_start", data: { tool: "bash", call_id: "spec-bash-2" } },
-      { delay: 41720, eventType: "tool_call_end", data: { tool: "bash", call_id: "spec-bash-2", result: "Executed `python scripts/plan_dependency_check.py --feature stream-dlq --emit-requirements && git diff --stat unstable...stream-dlq-demo` to sanity-check that the spec sections match the final implementation surfaces and sequencing assumptions." } },
+      { delay: 41720, eventType: "tool_call_end", data: { tool: "bash", call_id: "spec-bash-2", result: "Executed `python scripts/plan_dependency_check.py --feature stream-dlq --emit-requirements && git diff --stat unstable...feature/stream-dlq` to sanity-check that the spec sections match the final implementation surfaces and sequencing assumptions." } },
       { delay: 42340, eventType: "chunk", data: { content: "\nThe final pass is polishing success metrics, keeping reply shapes deterministic where they need to be, preserving explicit replay semantics, and making the spec read like a handoff that can survive implementation review, QA review, and persistence review without hidden assumptions." } },
       { delay: 45640, eventType: "progress", data: { step: "Packaging", message: "Assembling the final spec payload with detailed requirements, architecture notes, data models, interfaces, guardrails, and complete file impact." } },
       { delay: 48800, eventType: "end", data: { message: "Spec generation complete" } },
@@ -2047,23 +2047,23 @@ export function connectDemoQuestionsStream(options: {
       { delay: 11520, eventType: "tool_call_end", data: { tool: "read_files", call_id: "qna-read-batch-4", result: "Re-read docs, persistence notes, and lifecycle tests to make sure the default answers line up with the eventual plan and implementation story." } },
       { delay: 11680, eventType: "tool_call_end", data: { tool: "read_files", call_id: "qna-read-batch-5", result: "Read `src/commands.def`, `src/commands/xdlq-help.json`, and `src/commands/xdlq-list.json` to determine which choices should be locked in the QnA versus deferred into the spec." } },
       { delay: 12320, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-2" } },
-      { delay: 14440, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-2", result: "Validated that `PURGE` belongs in the first demo cut, replay should preserve original IDs while remaining explicit, and quarantine visibility should be exposed through summary fields instead of hidden state." } },
+      { delay: 14440, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-2", result: "Validated that `PURGE` belongs in the first cut, replay should preserve original IDs while remaining explicit, and quarantine visibility should be exposed through summary fields instead of hidden state." } },
       { delay: 15020, eventType: "chunk", data: { content: "\nAt this stage I’m not trying to maximize the number of questions. I’m trying to reduce uncertainty. If a decision does not materially affect parser scope, operator UX, state shape, or persistence semantics, it should probably not slow the user down in the QnA screen." } },
       { delay: 18100, eventType: "progress", data: { step: "Cross-checking", message: "Running long verification passes against touched files so the recommended answers look justified by real implementation surfaces." } },
       { delay: 18480, eventType: "tool_call_start", data: { tool: "bash", call_id: "qna-bash-1" } },
-      { delay: 21420, eventType: "tool_call_end", data: { tool: "bash", call_id: "qna-bash-1", result: "Executed `git diff unstable...stream-dlq-demo -- src/t_stream.c src/stream.h src/server.h src/commands/*.json src/commands.def tests/unit/type/stream-dlq.tcl src/aof.c src/rdb.c src/rdb.h src/redis-check-rdb.c && python scripts/summarize_stream_changes.py --include-dlq --include-persistence --include-docs --format markdown` to verify the touched files and keep the recommended answers consistent with the intended patch footprint." } },
+      { delay: 21420, eventType: "tool_call_end", data: { tool: "bash", call_id: "qna-bash-1", result: "Executed `git diff unstable...feature/stream-dlq -- src/t_stream.c src/stream.h src/server.h src/commands/*.json src/commands.def tests/unit/type/stream-dlq.tcl src/aof.c src/rdb.c src/rdb.h src/redis-check-rdb.c && python scripts/summarize_stream_changes.py --include-dlq --include-persistence --include-docs --format markdown` to verify the touched files and keep the recommended answers consistent with the intended patch footprint." } },
       { delay: 21980, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-3" } },
       { delay: 24220, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-3", result: "Confirmed that the most important choices to pre-answer are feature scope, DLQ treatment in pending/claim workflows, required metadata visibility, and persistence/reload fidelity." } },
       { delay: 24820, eventType: "chunk", data: { content: "\nThe result is converging toward a short but credible set: one question to lock feature scope, one to lock how DLQ interacts with `XPENDING` and claim paths, one to lock what operators must be able to inspect, and one constraint-oriented question that anchors the design to native Streams behavior." } },
       { delay: 28180, eventType: "progress", data: { step: "More synthesis", message: "Doing one more graph pass so the defaults feel deliberate rather than auto-filled." } },
       { delay: 28560, eventType: "tool_call_start", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-4" } },
-      { delay: 30920, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-4", result: "Linked command docs, stream internals, replay semantics, and persistence notes to justify why the demo can confidently preselect the recommended answers without presenting unnecessary branches." } },
+      { delay: 30920, eventType: "tool_call_end", data: { tool: "ask_knowledge_graph_queries", call_id: "qna-kg-4", result: "Linked command docs, stream internals, replay semantics, and persistence notes to justify why the recommended answers can be confidently preselected without presenting unnecessary branches." } },
       { delay: 31540, eventType: "tool_call_start", data: { tool: "read_files", call_id: "qna-read-batch-6" } },
       { delay: 33120, eventType: "tool_call_end", data: { tool: "read_files", call_id: "qna-read-batch-6", result: "Revisited `tests/unit/type/stream-dlq.tcl`, `src/commands/xinfo-stream.json`, and `src/aof.c` to sharpen wording around operator visibility, replay safety, and reload correctness." } },
       { delay: 33720, eventType: "chunk", data: { content: "\nI’m now tightening the copy of each question so it reads like something a real engineering lead would ask: broad enough to express a design choice, but specific enough that the answer obviously constrains the spec and plan that follow." } },
       { delay: 37040, eventType: "progress", data: { step: "Final drafting", message: "Converting the research into a compact pre-answered QnA set with recommendation-backed defaults." } },
       { delay: 37420, eventType: "tool_call_start", data: { tool: "bash", call_id: "qna-bash-2" } },
-      { delay: 40240, eventType: "tool_call_end", data: { tool: "bash", call_id: "qna-bash-2", result: "Executed `python scripts/question_coverage_check.py --feature stream-dlq --with-defaults --emit-json && git diff --stat unstable...stream-dlq-demo` to verify that the chosen questions cover command surface, semantics, observability, and persistence without redundant prompts." } },
+      { delay: 40240, eventType: "tool_call_end", data: { tool: "bash", call_id: "qna-bash-2", result: "Executed `python scripts/question_coverage_check.py --feature stream-dlq --with-defaults --emit-json && git diff --stat unstable...feature/stream-dlq` to verify that the chosen questions cover command surface, semantics, observability, and persistence without redundant prompts." } },
       { delay: 40860, eventType: "chunk", data: { content: "\nPrepared the final recommendation-backed set so the QnA review can move straight to spec generation while still feeling like the system genuinely read the repository, compared alternatives, and narrowed down only the decisions that matter." } },
       { delay: 44120, eventType: "progress", data: { step: "Packaging", message: "Marking recommendation-backed answers as the initial state and packaging the stream payload for the QnA screen." } },
       { delay: 47020, eventType: "chunk", data: { content: "\nPrepared four focused questions with default answers already selected so the review can move straight to spec generation." } },
@@ -2105,7 +2105,7 @@ export function connectDemoPlanStream(options: {
       { delay: 8620, eventType: "chunk", data: { content: "\nPhase 1 is the design lock: freeze `MOVE`, `LIST`, `INFO`, `REPLAY`, `PURGE`, and `HELP`; define per-ID mutating replies; and make sure the feature story reads consistently in command docs, tests, and parser behavior." } },
       { delay: 10440, eventType: "progress", data: { step: "Phase 2", message: "Drafting parser wiring and early validation before internal state changes." } },
       { delay: 10840, eventType: "tool_call_start", data: { tool: "bash", call_id: "plan-bash-1" } },
-      { delay: 12680, eventType: "tool_call_end", data: { tool: "bash", call_id: "plan-bash-1", result: "Executed `git diff unstable...stream-dlq-demo -- src/t_stream.c src/commands.def src/commands/xdlq*.json tests/unit/type/stream-dlq.tcl src/aof.c src/rdb.c src/redis-check-rdb.c && python scripts/summarize_stream_changes.py --group-by-phase --include-docs --include-tests --include-persistence` to verify that parser work should be isolated before DLQ state and reload logic." } },
+      { delay: 12680, eventType: "tool_call_end", data: { tool: "bash", call_id: "plan-bash-1", result: "Executed `git diff unstable...feature/stream-dlq -- src/t_stream.c src/commands.def src/commands/xdlq*.json tests/unit/type/stream-dlq.tcl src/aof.c src/rdb.c src/redis-check-rdb.c && python scripts/summarize_stream_changes.py --group-by-phase --include-docs --include-tests --include-persistence` to verify that parser work should be isolated before DLQ state and reload logic." } },
       { delay: 13120, eventType: "tool_call_start", data: { tool: "phase_builder", call_id: "plan-phase-1" } },
       { delay: 14240, eventType: "tool_call_end", data: { tool: "phase_builder", call_id: "plan-phase-1", result: "Phase 1 drafted around top-level `xdlqCommand` dispatch, command-table registration, and focused syntax/error-path tests." } },
       { delay: 14640, eventType: "chunk", data: { content: "\nPhase 2 is parser wiring: make the command family real and discoverable, add low-level validation, and lock syntax behavior before deeper stream state is introduced." } },
@@ -2129,7 +2129,7 @@ export function connectDemoPlanStream(options: {
       { delay: 30340, eventType: "tool_call_start", data: { tool: "phase_builder", call_id: "plan-phase-5" } },
       { delay: 31420, eventType: "tool_call_end", data: { tool: "phase_builder", call_id: "plan-phase-5", result: "Phase 5 drafted around final `xdlq*.json` docs, HELP polish, and keeping generated command metadata aligned with the shipped command family." } },
       { delay: 31840, eventType: "tool_call_start", data: { tool: "bash", call_id: "plan-bash-2" } },
-      { delay: 33340, eventType: "tool_call_end", data: { tool: "bash", call_id: "plan-bash-2", result: "Executed `python scripts/plan_dependency_check.py --feature stream-dlq --validate-order --emit-mermaid && git diff --stat unstable...stream-dlq-demo` to verify the six-phase ordering and diagram support against the actual file-change footprint." } },
+      { delay: 33340, eventType: "tool_call_end", data: { tool: "bash", call_id: "plan-bash-2", result: "Executed `python scripts/plan_dependency_check.py --feature stream-dlq --validate-order --emit-mermaid && git diff --stat unstable...feature/stream-dlq` to verify the six-phase ordering and diagram support against the actual file-change footprint." } },
       { delay: 33820, eventType: "chunk", data: { content: "\nPhase 6 is release polish: finish command docs, align generated metadata, and make the fail -> inspect -> replay -> purge story discoverable without relying on implementation context.\n\nI’m now attaching verification criteria, file-change callouts, and diagrams so each phase reads like a handoff an engineer could execute sequentially." } },
       { delay: 35620, eventType: "progress", data: { step: "Finalizing", message: "Assembling the six phases, per-phase plan items, diagrams, dependencies, and verification criteria into the final phased plan." } },
       { delay: 36800, eventType: "end", data: { message: "Plan generation complete" } },
@@ -2166,7 +2166,7 @@ export function connectDemoCodegenStream(options: {
       { delay: 4840, eventType: "chunk", data: { content: "Executing the approved Redis DLQ rollout layer by layer.\n\nStarting with command contracts and parser-local wiring so the new `XDLQ` family becomes concrete before deeper consumer-group state changes are introduced." } },
       { delay: 6500, eventType: "progress", data: { step: "Layer 1", message: "Generating command docs, command-table metadata, and top-level parser dispatch." } },
       { delay: 6800, eventType: "tool_call_start", data: { tool: "bash", call_id: "codegen-bash-1" } },
-      { delay: 8620, eventType: "tool_call_end", data: { tool: "bash", call_id: "codegen-bash-1", result: "Executed `git diff unstable...stream-dlq-demo -- src/t_stream.c src/commands.def src/commands/xdlq*.json && python scripts/summarize_stream_changes.py --phase parser --with-docs` to verify the command-surface patch set before applying edits." } },
+      { delay: 8620, eventType: "tool_call_end", data: { tool: "bash", call_id: "codegen-bash-1", result: "Executed `git diff unstable...feature/stream-dlq -- src/t_stream.c src/commands.def src/commands/xdlq*.json && python scripts/summarize_stream_changes.py --phase parser --with-docs` to verify the command-surface patch set before applying edits." } },
       { delay: 9100, eventType: "tool_call_start", data: { tool: "edit_files", call_id: "codegen-edit-layer-1" } },
       { delay: 10480, eventType: "tool_call_end", data: { tool: "edit_files", call_id: "codegen-edit-layer-1", result: "Updated `src/commands.def`, added `xdlq*.json` command docs, and wired `xdlqCommand` dispatch inside `src/t_stream.c`." } },
       { delay: 10920, eventType: "state_update", data: { codegenStage: 0 } },
@@ -2189,7 +2189,7 @@ export function connectDemoCodegenStream(options: {
       { delay: 23720, eventType: "chunk", data: { content: "\nLayer 3 complete: the operator workflow now reads end to end, and the Redis surfaces touched by quarantine semantics, introspection, and replay all agree on the same lifecycle." } },
       { delay: 25340, eventType: "progress", data: { step: "Layer 4", message: "Hardening AOF rewrite, RDB reload, and validation-tool support." } },
       { delay: 25680, eventType: "tool_call_start", data: { tool: "bash", call_id: "codegen-bash-2" } },
-      { delay: 27300, eventType: "tool_call_end", data: { tool: "bash", call_id: "codegen-bash-2", result: "Executed `python scripts/plan_dependency_check.py --feature stream-dlq --phase persistence && git diff --stat unstable...stream-dlq-demo -- src/aof.c src/rdb.c src/rdb.h src/redis-check-rdb.c` to validate persistence ordering and exact file impact." } },
+      { delay: 27300, eventType: "tool_call_end", data: { tool: "bash", call_id: "codegen-bash-2", result: "Executed `python scripts/plan_dependency_check.py --feature stream-dlq --phase persistence && git diff --stat unstable...feature/stream-dlq -- src/aof.c src/rdb.c src/rdb.h src/redis-check-rdb.c` to validate persistence ordering and exact file impact." } },
       { delay: 27700, eventType: "tool_call_start", data: { tool: "edit_files", call_id: "codegen-edit-layer-4" } },
       { delay: 29120, eventType: "tool_call_end", data: { tool: "edit_files", call_id: "codegen-edit-layer-4", result: "Added AOF reconstruction helpers, introduced stream-v6 persistence support, and updated `redis-check-rdb` to recognize the new encoding." } },
       { delay: 29480, eventType: "tool_call_start", data: { tool: "run_tests", call_id: "codegen-tests-layer-4" } },

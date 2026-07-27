@@ -1,7 +1,9 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
-import { 
-  getAuth, 
-  Auth, 
+import {
+  getAuth,
+  initializeAuth,
+  inMemoryPersistence,
+  Auth,
   onIdTokenChanged as firebaseOnIdTokenChanged,
   onAuthStateChanged as firebaseOnAuthStateChanged,
   signInWithPopup as firebaseSignInWithPopup,
@@ -74,8 +76,10 @@ function initializeMockFirebase() {
     initializeApp({ apiKey: "fake-key", authDomain: "fake.firebaseapp.com", projectId: "fake-project" }) : 
     getApps()[0];
   
-  // Get the real auth instance
-  auth = getAuth(firebase_app);
+  // Use inMemoryPersistence so Firebase never reads/writes auth state to IndexedDB.
+  // Without this, Firebase tries to restore a previously-persisted mock user from storage
+  // and calls _stopProactiveRefresh() on the plain JSON object, which fails.
+  auth = initializeAuth(firebase_app, { persistence: inMemoryPersistence });
   db = getFirestore(firebase_app);
   
   // Create a mock user

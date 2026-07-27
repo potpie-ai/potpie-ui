@@ -238,6 +238,9 @@ export const generateMockUser = () => {
       displayName: "Local Dev User",
       emailVerified: true,
     }),
+    // Internal Firebase SDK methods required when setting auth.currentUser directly
+    _stopProactiveRefresh: () => {},
+    _startProactiveRefresh: () => {},
   };
 };
 

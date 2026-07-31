@@ -495,7 +495,11 @@ const Signup = () => {
                         type={showPassword ? "text" : "password"}
                         placeholder="••••••••••"
                         autoComplete="new-password"
-                        aria-describedby="password-requirements"
+                        aria-describedby={
+                          form.formState.errors.password
+                            ? "password-requirements password-validation-error"
+                            : "password-requirements"
+                        }
                         aria-invalid={Boolean(form.formState.errors.password)}
                         {...form.register("password")}
                         className="w-full bg-transparent text-sm text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none"
@@ -510,7 +514,12 @@ const Signup = () => {
                       </button>
                     </div>
                     {form.formState.errors.password && (
-                      <p className="text-sm text-red-600">{form.formState.errors.password.message}</p>
+                      <p
+                        id="password-validation-error"
+                        className="text-sm text-red-600"
+                      >
+                        {form.formState.errors.password.message}
+                      </p>
                     )}
                     <div id="password-requirements" className="space-y-2 pt-1">
                       <div className="flex items-center justify-between text-xs">

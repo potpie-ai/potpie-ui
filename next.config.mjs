@@ -4,9 +4,9 @@
 export const HSTS_HEADER_VALUE =
   "max-age=31536000; includeSubDomains; preload";
 
-/** Remediation FW004 / CWE-1021 */
+/** Remediation FW004 / CWE-1021 — DENY ≡ CSP frame-ancestors 'none'. */
 export const X_FRAME_OPTIONS_VALUE = "DENY";
-export const CSP_FRAME_ANCESTORS = "frame-ancestors 'self'";
+export const CSP_FRAME_ANCESTORS = "frame-ancestors 'none'";
 
 /**
  * @param {{ nodeEnv?: string | undefined }} [options]

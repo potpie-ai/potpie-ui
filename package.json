@@ -2,11 +2,15 @@
   "name": "potpie",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:unit": "node --test tests/*.test.mjs && node --experimental-strip-types --test lib/auth/password-policy.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.2.5",

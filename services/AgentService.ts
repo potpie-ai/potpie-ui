@@ -3,6 +3,9 @@ import getHeaders from "@/app/utils/headers.util";
 import { CustomAgentsFormValues } from "@/lib/Schema";
 import { parseApiError } from "@/lib/utils";
 
+/** Server-defined list scopes (FW003). Client privilege flags are not used. */
+export type AgentListMode = "runtime" | "owned";
+
 export default class AgentService {
   static async getAgentTypes() {
     const headers = await getHeaders();
@@ -12,6 +15,9 @@ export default class AgentService {
         `${baseUrl}/api/v1/list-available-agents/`,
         {
           headers: headers,
+          params: {
+            mode: "runtime" satisfies AgentListMode,
+          },
         }
       );
       return response.data;
@@ -21,35 +27,21 @@ export default class AgentService {
     }
   }
 
-  static async getAgentList(includePublic = false, includeShared = false) {
+  static async getAgentList(_includePublic = false, _includeShared = false) {
     const headers = await getHeaders();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     try {
-      console.log("Fetching agent list with params:", {
-        includePublic,
-        includeShared,
-      });
+      // Management view: only agents owned by the authenticated user.
+      // Legacy includePublic/includeShared args are ignored (server enforces mode).
       const response: any = await axios.get(
         `${baseUrl}/api/v1/list-available-agents/`,
         {
           params: {
-            list_system_agents: false,
-            include_public: includePublic,
-            include_shared: includeShared,
+            mode: "owned" satisfies AgentListMode,
           },
           headers: headers,
         }
       );
-      console.log("Agent list response:", response.data);
-
-      // Log visibility information for each agent
-      if (response.data && Array.isArray(response.data)) {
-        response.data.forEach((agent: any) => {
-          console.log(
-            `Agent ${agent.id} (${agent.name}) visibility: ${agent.visibility}`
-          );
-        });
-      }
 
       return response.data;
     } catch (error) {

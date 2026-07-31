@@ -66,7 +66,7 @@ function getUserFriendlyMessage(message: string): string {
   }
   
   if (lowerMessage.includes('weak password') || lowerMessage.includes('password is too weak')) {
-    return 'Password is too weak. Please use a stronger password (at least 6 characters).';
+    return 'Use 15 or more characters with uppercase, lowercase, a number, and a special character.';
   }
 
   // SSO/Provider errors
@@ -153,7 +153,7 @@ function getUserFriendlyMessage(message: string): string {
   }
   
   if (lowerMessage.includes('auth/weak-password')) {
-    return 'Password is too weak. Please use a stronger password.';
+    return 'Use 15 or more characters with uppercase, lowercase, a number, and a special character.';
   }
   
   if (lowerMessage.includes('auth/invalid-email')) {
@@ -218,4 +218,3 @@ export function getUserFriendlyProviderName(providerType: string): string {
   
   return providerMap[providerType] || providerType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
-

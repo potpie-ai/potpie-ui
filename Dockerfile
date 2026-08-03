@@ -1,11 +1,14 @@
-FROM node:18-alpine AS base
+FROM node:22-alpine AS base
 
 FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Install pnpm globally
-RUN npm install -g pnpm
+# Pin pnpm to v9: lockfileVersion 9.0 + package.json pnpm.overrides.
+# Unpinned "pnpm" resolves to v11+, which ignores package.json#pnpm and
+# fails CI with ERR_PNPM_IGNORED_BUILDS for native postinstall scripts.
+RUN npm install -g pnpm@9
+ENV CI=true
 
 # Copy the package.json and pnpm-lock.yaml files
 COPY package.json pnpm-lock.yaml ./
@@ -17,7 +20,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 COPY next.config.mjs ./
-RUN npm install -g pnpm
+RUN npm install -g pnpm@9
 
 ARG NEXT_PUBLIC_FIREBASE_API_KEY
 ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN

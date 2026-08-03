@@ -1,6 +1,6 @@
 "use client";
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff } from "lucide-react";
+import { CheckCircle2, Circle, Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
 import React from "react";
 import Link from "next/link";
@@ -20,10 +20,11 @@ import AuthService from "@/services/AuthService";
 import axios from "axios";
 import posthog from "posthog-js";
 import { authClient } from '@/lib/sso/unified-auth';
+import { evaluatePassword, passwordSchema } from "@/lib/auth/password-policy";
 
 const formSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(6, { message: "Password must be at least 6 characters" }),
+  password: passwordSchema,
 });
 
 const Signup = () => {
@@ -149,6 +150,25 @@ const Signup = () => {
       password: "",
     },
   });
+  const password = form.watch("password");
+  const passwordEvaluation = evaluatePassword(password);
+  const passwordStrengthPercentage = password
+    ? (passwordEvaluation.metRequirementCount /
+        passwordEvaluation.requirements.length) *
+      100
+    : 0;
+  const passwordStrengthColor =
+    passwordEvaluation.strength === "Strong"
+      ? "bg-[#24713B]"
+      : passwordEvaluation.strength === "Fair"
+        ? "bg-[#D97706]"
+        : "bg-[#DC2626]";
+  const passwordStrengthTextColor =
+    passwordEvaluation.strength === "Strong"
+      ? "text-[#24713B]"
+      : passwordEvaluation.strength === "Fair"
+        ? "text-[#A85D00]"
+        : "text-[#B91C1C]";
 
   const handleSSONeedsLinking = (response: SSOLoginResponse) => {
     setLinkingData(response);
@@ -474,6 +494,13 @@ const Signup = () => {
                       <input
                         type={showPassword ? "text" : "password"}
                         placeholder="••••••••••"
+                        autoComplete="new-password"
+                        aria-describedby={
+                          form.formState.errors.password
+                            ? "password-requirements password-validation-error"
+                            : "password-requirements"
+                        }
+                        aria-invalid={Boolean(form.formState.errors.password)}
                         {...form.register("password")}
                         className="w-full bg-transparent text-sm text-[#022D2C] placeholder:text-[#A6AFA9] focus:outline-none"
                       />
@@ -487,8 +514,54 @@ const Signup = () => {
                       </button>
                     </div>
                     {form.formState.errors.password && (
-                      <p className="text-sm text-red-600">{form.formState.errors.password.message}</p>
+                      <p
+                        id="password-validation-error"
+                        className="text-sm text-red-600"
+                      >
+                        {form.formState.errors.password.message}
+                      </p>
                     )}
+                    <div id="password-requirements" className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#656969]">Password strength</span>
+                        <span
+                          className={password ? passwordStrengthTextColor : "text-[#8A8E8B]"}
+                          aria-live="polite"
+                        >
+                          {password ? passwordEvaluation.strength : "Not entered"}
+                        </span>
+                      </div>
+                      <div
+                        role="progressbar"
+                        aria-label="Password strength"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={passwordStrengthPercentage}
+                        className="h-1.5 w-full overflow-hidden rounded-full bg-[#E5E7E6]"
+                      >
+                        <div
+                          className={`h-full rounded-full transition-[width] duration-200 ${passwordStrengthColor}`}
+                          style={{ width: `${passwordStrengthPercentage}%` }}
+                        />
+                      </div>
+                      <ul className="grid grid-cols-2 gap-x-3 gap-y-1">
+                        {passwordEvaluation.requirements.map((requirement) => (
+                          <li
+                            key={requirement.id}
+                            className={`flex items-center gap-1.5 text-xs ${
+                              requirement.isMet ? "text-[#24713B]" : "text-[#656969]"
+                            }`}
+                          >
+                            {requirement.isMet ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            ) : (
+                              <Circle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            )}
+                            <span>{requirement.label}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
 
                   <p className="mt-4 text-xs text-[#656969] text-center">

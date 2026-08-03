@@ -303,10 +303,38 @@ const Signup = () => {
         password: data.password,
         displayName: data.email.split("@")[0],
       });
-      const userCredential = await signInWithCustomToken(
-        auth,
-        registered.customToken,
-      );
+
+      // Account may already exist in Firebase after register-email succeeds.
+      // If automatic sign-in fails, recover via sign-in (which calls /signup).
+      let userCredential;
+      try {
+        userCredential = await signInWithCustomToken(
+          auth,
+          registered.customToken,
+        );
+      } catch (signInError: any) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("Post-registration sign-in failed:", signInError);
+        }
+        const recoverParams = new URLSearchParams();
+        recoverParams.set("registered", "1");
+        const recoverEmail = registered.email || data.email;
+        if (recoverEmail) recoverParams.set("email", recoverEmail);
+        const urlSearchParams = new URLSearchParams(window.location.search);
+        const plan = (
+          urlSearchParams.get("plan") ||
+          urlSearchParams.get("PLAN") ||
+          ""
+        ).toLowerCase();
+        const prompt = urlSearchParams.get("prompt") || "";
+        const agent_id =
+          urlSearchParams.get("agent_id") || redirectAgent_id || "";
+        if (plan) recoverParams.set("plan", plan);
+        if (prompt) recoverParams.set("prompt", prompt);
+        if (agent_id) recoverParams.set("agent_id", agent_id);
+        router.push(`/sign-in?${recoverParams.toString()}`);
+        return;
+      }
       const user = userCredential.user;
 
       // Call signup API

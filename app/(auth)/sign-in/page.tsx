@@ -97,6 +97,29 @@ export default function Signin() {
     },
   });
 
+  // Recovery from sign-up: Firebase account was created but custom-token
+  // sign-in failed. Email/password sign-in below still calls /signup to
+  // reconcile the app user record when it does not exist yet.
+  React.useEffect(() => {
+    const justRegistered = searchParams.get("registered") === "1";
+    const emailFromQuery = searchParams.get("email");
+    if (emailFromQuery) {
+      form.setValue("email", emailFromQuery);
+    }
+    if (!justRegistered) {
+      return;
+    }
+    toast.info(
+      "Your account was created. Sign in with your email and password to finish setup.",
+    );
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("registered");
+    const qs = next.toString();
+    router.replace(qs ? `/sign-in?${qs}` : "/sign-in");
+    // Intentionally run once on mount for this recovery redirect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const githubProvider = new GithubAuthProvider();
   githubProvider.addScope("read:org");
   githubProvider.addScope("user:email");

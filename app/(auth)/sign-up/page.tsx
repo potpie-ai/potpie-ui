@@ -13,7 +13,7 @@ import type { SSOLoginResponse } from '@/types/auth';
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signInWithCustomToken } from "firebase/auth";
+import { signInWithPopup, GoogleAuthProvider, signInWithCustomToken } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { validateWorkEmail } from "@/lib/utils/emailValidation";
 import AuthService from "@/services/AuthService";
@@ -296,8 +296,17 @@ const Signup = () => {
 
     setIsLoading(true);
     try {
-      // Create user with Firebase
-      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      // FW001: backend validates policy and creates the Firebase user.
+      // Weak passwords never reach Firebase createUser.
+      const registered = await AuthService.registerEmailPassword({
+        email: data.email,
+        password: data.password,
+        displayName: data.email.split("@")[0],
+      });
+      const userCredential = await signInWithCustomToken(
+        auth,
+        registered.customToken,
+      );
       const user = userCredential.user;
 
       // Call signup API
@@ -360,7 +369,10 @@ const Signup = () => {
         form.setError("email", { message: "Email already in use" });
       } else if (error.code === "auth/weak-password") {
         toast.error(friendlyError);
-        form.setError("password", { message: "Password is too weak" });
+        form.setError("password", {
+          message:
+            "Use 15 or more characters with uppercase, lowercase, a number, and a special character.",
+        });
       } else {
         toast.error(friendlyError);
       }

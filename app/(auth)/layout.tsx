@@ -10,6 +10,7 @@ import {
 } from "@/lib/auth/cli-callback";
 import { cliSuccessPath } from "@/lib/auth/cli-success";
 import { buildVSCodeCallbackUrl } from "@/lib/auth/vscode-callback";
+import { getSafeInternalPath } from "@/lib/auth/safe-redirect";
 import { toast } from "@/components/ui/sonner";
 
 export default function AuthLayout({
@@ -101,13 +102,13 @@ export default function AuthLayout({
         !window.location.pathname.startsWith("/link-github") &&
         !window.location.pathname.startsWith("/cli-success")
       ) {
+        // Only ever follow same-origin internal paths — never an attacker-
+        // supplied absolute URL (open redirect, potpie-ai/potpie#596).
+        const safePath = getSafeInternalPath(redirectUrl, "/");
         if (process.env.NODE_ENV === "development") {
-          console.log(
-            "redirecting to",
-            redirectUrl ? decodeURIComponent(redirectUrl) : "/",
-          );
+          console.log("redirecting to", safePath);
         }
-        router.push(redirectUrl ? decodeURIComponent(redirectUrl) : "/");
+        router.push(safePath);
       }
     }
   }, [user, source, redirectUrl, redirect_uri, agent_id, cliCallback, router]);

@@ -45,3 +45,4 @@ package-lock.json
 .vscode/
 thoughts/
 .claude/
+.pnpm-store/

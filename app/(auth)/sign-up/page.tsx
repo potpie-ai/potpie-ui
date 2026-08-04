@@ -13,7 +13,7 @@ import type { SSOLoginResponse } from '@/types/auth';
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signInWithCustomToken } from "firebase/auth";
+import { signInWithPopup, GoogleAuthProvider, signInWithCustomToken } from "firebase/auth";
 import { auth } from "@/configs/Firebase-config";
 import { validateWorkEmail } from "@/lib/utils/emailValidation";
 import AuthService from "@/services/AuthService";
@@ -296,8 +296,45 @@ const Signup = () => {
 
     setIsLoading(true);
     try {
-      // Create user with Firebase
-      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      // FW001: backend validates policy and creates the Firebase user.
+      // Weak passwords never reach Firebase createUser.
+      const registered = await AuthService.registerEmailPassword({
+        email: data.email,
+        password: data.password,
+        displayName: data.email.split("@")[0],
+      });
+
+      // Account may already exist in Firebase after register-email succeeds.
+      // If automatic sign-in fails, recover via sign-in (which calls /signup).
+      let userCredential;
+      try {
+        userCredential = await signInWithCustomToken(
+          auth,
+          registered.customToken,
+        );
+      } catch (signInError: any) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("Post-registration sign-in failed:", signInError);
+        }
+        const recoverParams = new URLSearchParams();
+        recoverParams.set("registered", "1");
+        const recoverEmail = registered.email || data.email;
+        if (recoverEmail) recoverParams.set("email", recoverEmail);
+        const urlSearchParams = new URLSearchParams(window.location.search);
+        const plan = (
+          urlSearchParams.get("plan") ||
+          urlSearchParams.get("PLAN") ||
+          ""
+        ).toLowerCase();
+        const prompt = urlSearchParams.get("prompt") || "";
+        const agent_id =
+          urlSearchParams.get("agent_id") || redirectAgent_id || "";
+        if (plan) recoverParams.set("plan", plan);
+        if (prompt) recoverParams.set("prompt", prompt);
+        if (agent_id) recoverParams.set("agent_id", agent_id);
+        router.push(`/sign-in?${recoverParams.toString()}`);
+        return;
+      }
       const user = userCredential.user;
 
       // Call signup API
@@ -360,7 +397,10 @@ const Signup = () => {
         form.setError("email", { message: "Email already in use" });
       } else if (error.code === "auth/weak-password") {
         toast.error(friendlyError);
-        form.setError("password", { message: "Password is too weak" });
+        form.setError("password", {
+          message:
+            "Use 15 or more characters with uppercase, lowercase, a number, and a special character.",
+        });
       } else {
         toast.error(friendlyError);
       }

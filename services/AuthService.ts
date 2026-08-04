@@ -21,12 +21,62 @@ interface SignupResponse {
   needs_github_linking?: boolean;
 }
 
+interface RegisterEmailResponse {
+  uid: string;
+  email: string;
+  customToken: string;
+}
+
 interface CheckEmailResponse {
   has_sso?: boolean;
 }
 
 export default class AuthService {
   private static baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
+  /**
+   * FW001: Create Firebase email/password user via backend after policy checks.
+   * Weak passwords are rejected by the API and never sent to Firebase.
+   */
+  static async registerEmailPassword(params: {
+    email: string;
+    password: string;
+    displayName?: string;
+  }): Promise<RegisterEmailResponse> {
+    try {
+      const response = await axios.post<RegisterEmailResponse>(
+        `${this.baseUrl}/api/v1/auth/register-email`,
+        {
+          email: params.email,
+          password: params.password,
+          display_name: params.displayName,
+        },
+      );
+      return response.data;
+    } catch (error: any) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error("Register email API error:", error);
+      }
+      const status = error.response?.status;
+      const errorMessage =
+        error.response?.data?.error ||
+        error.response?.data?.details ||
+        error.message ||
+        "Account creation failed";
+      const err = new Error(errorMessage) as Error & {
+        status?: number;
+        code?: string;
+      };
+      err.status = status;
+      if (status === 400 && typeof errorMessage === "string" && /15 or more/i.test(errorMessage)) {
+        err.code = "auth/weak-password";
+      }
+      if (status === 409) {
+        err.code = "auth/email-already-in-use";
+      }
+      throw err;
+    }
+  }
 
   /**
    * Sign up or sign in with email/password

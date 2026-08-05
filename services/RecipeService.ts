@@ -1,5 +1,6 @@
 import axios from "axios";
 import getHeaders from "@/app/utils/headers.util";
+import { getDemoRecipe } from "@/lib/mock/demoBuildFlow";
 
 export interface Recipe {
   id: string;
@@ -55,13 +56,14 @@ export default class RecipeService {
       // Normalize the response - API returns { recipes: [...] }
       const recipes = response.data.recipes || [];
       // Map id to recipe_id for backward compatibility
-      return recipes.map((recipe: any) => ({
+      const normalizedRecipes = recipes.map((recipe: any) => ({
         ...recipe,
         recipe_id: recipe.id || recipe.recipe_id,
       }));
+      return [getDemoRecipe(), ...normalizedRecipes];
     } catch (error) {
       console.error("Error fetching recipes:", error);
-      throw new Error("Failed to fetch recipes");
+      return [getDemoRecipe()];
     }
   }
 

@@ -1,6 +1,11 @@
 import axios, { AxiosError } from "axios";
 import getHeaders from "@/app/utils/headers.util";
 import { RecipeQuestionsResponse } from "@/lib/types/spec";
+import {
+  connectDemoQuestionsStream,
+  getDemoQuestionsResponse,
+  isDemoRecipeId,
+} from "@/lib/mock/demoBuildFlow";
 
 /** Normalized option for UI (supports both string and {label, description} formats) */
 export interface MCQOption {
@@ -264,6 +269,9 @@ export default class QuestionService {
   static async getRecipeQuestions(
     recipeId: string
   ): Promise<RecipeQuestionsResponse> {
+    if (isDemoRecipeId(recipeId)) {
+      return getDemoQuestionsResponse();
+    }
     if (!recipeId?.trim()) {
       throw new Error("Recipe ID is required");
     }
@@ -295,6 +303,13 @@ export default class QuestionService {
       signal?: AbortSignal;
     }
   ): Promise<{ runId: string }> {
+    if (isDemoRecipeId(recipeId)) {
+      const initial = getDemoQuestionsResponse();
+      if (options.consumeStream !== false && options.onEvent) {
+        connectDemoQuestionsStream(options);
+      }
+      return { runId: initial.run_id || "demo-question-run" };
+    }
     const headers = await getHeaders();
     const url = `${this.RECIPES_URL}/${recipeId}/questions/generate-stream${options.streamTokens ? "?stream_tokens=true" : ""}`;
     const response = await fetch(url, {
@@ -376,6 +391,10 @@ export default class QuestionService {
       signal?: AbortSignal;
     }
   ): void {
+    if (isDemoRecipeId(recipeId)) {
+      connectDemoQuestionsStream(options);
+      return;
+    }
     const url = `${this.RECIPES_URL}/${recipeId}/questions/stream?run_id=${encodeURIComponent(runId)}${options.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`;
     console.log("[QuestionService.connectQuestionsStream] Connecting to:", url);
     getHeaders().then((headers) => {

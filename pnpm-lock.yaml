@@ -28,6 +28,7 @@ overrides:
   websocket-driver: 0.7.5
   next: 15.5.21
   nanoid@>=4.0.0 <5.1.16: 5.1.16
+  mermaid@>=11.0.0-alpha.1 <11.16.1: 11.16.1
 
 importers:
 

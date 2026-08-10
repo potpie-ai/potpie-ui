@@ -27,6 +27,7 @@ overrides:
   '@opentelemetry/core': 2.8.0
   websocket-driver: 0.7.5
   next: 15.5.21
+  nanoid@>=4.0.0 <5.1.16: 5.1.16
 
 importers:
 
@@ -4107,8 +4108,8 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
-  nanoid@5.1.6:
-    resolution: {integrity: sha512-c7+7RQ+dMB5dPwwCp4ee1/iV/q2P6aK1mTZcfr1BTuVlyW9hJYiMPybJCcnBlQtuSmTIWNeazm/zqNoZSSElBg==}
+  nanoid@5.1.16:
+    resolution: {integrity: sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ==}
     engines: {node: ^18 || >=20}
     hasBin: true
 
@@ -5372,7 +5373,7 @@ snapshots:
       '@radix-ui/react-use-escape-keydown': 1.1.1(@types/react@18.3.27)(react@18.3.1)
       assistant-cloud: 0.1.15
       assistant-stream: 0.3.0
-      nanoid: 5.1.6
+      nanoid: 5.1.16
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
       react-textarea-autosize: 8.5.9(@types/react@18.3.27)(react@18.3.1)
@@ -7613,13 +7614,13 @@ snapshots:
   assistant-stream@0.2.47:
     dependencies:
       '@standard-schema/spec': 1.1.0
-      nanoid: 5.1.6
+      nanoid: 5.1.16
       secure-json-parse: 4.1.0
 
   assistant-stream@0.3.0:
     dependencies:
       '@standard-schema/spec': 1.1.0
-      nanoid: 5.1.6
+      nanoid: 5.1.16
       secure-json-parse: 4.1.0
 
   ast-types-flow@0.0.8: {}
@@ -9612,7 +9613,7 @@ snapshots:
 
   nanoid@3.3.16: {}
 
-  nanoid@5.1.6: {}
+  nanoid@5.1.16: {}
 
   napi-postinstall@0.3.4: {}
 

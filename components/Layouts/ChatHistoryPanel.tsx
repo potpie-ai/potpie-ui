@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import ChatService from "@/services/ChatService";
 import RecipeService from "@/services/RecipeService";
 import { getRecipeRedirectUrl } from "@/lib/utils/recipeRedirect";
+import { getRecipeDisplayTitle } from "@/lib/utils/recipeDisplay";
 import { setChat } from "@/lib/state/Reducers/chat";
 import { AppDispatch } from "@/lib/state/store";
 import { Visibility } from "@/lib/Constants";
@@ -158,7 +159,7 @@ export function ChatHistoryPanel() {
   });
 
   const { data: recipes = [], isLoading: recipesLoading } = useQuery({
-    queryKey: ["all-recipes"],
+    queryKey: ["all-recipes", user?.email ?? null],
     queryFn: () => RecipeService.getAllRecipes(0, 100),
     staleTime: 60000,
     retry: false,
@@ -183,7 +184,7 @@ export function ChatHistoryPanel() {
           ...recipe,
           id,
           type: "recipe",
-          title: recipe.user_prompt,
+          title: getRecipeDisplayTitle(recipe),
           repository: recipe.repo_name,
           branch: recipe.branch_name,
           project_id: recipe.project_id,

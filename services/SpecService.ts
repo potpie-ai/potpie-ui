@@ -21,6 +21,17 @@ import {
   SpecChatRequest,
   SpecChatResponse,
 } from "@/lib/types/spec";
+import {
+  connectDemoSpecStream,
+  DEMO_SPEC_RUN_ID,
+  getDemoQuestionsResponse,
+  getDemoRecipeDetails,
+  getDemoSpecChatResponse,
+  getDemoSpecStatus,
+  isDemoRecipeId,
+  startDemoSpecGeneration,
+  submitDemoAnswers,
+} from "@/lib/mock/demoBuildFlow";
 
 export default class SpecService {
   private static readonly BASE_URL = process.env.NEXT_PUBLIC_WORKFLOWS_URL;
@@ -165,6 +176,9 @@ export default class SpecService {
   static async getRecipeQuestions(
     recipeId: string,
   ): Promise<RecipeQuestionsResponse> {
+    if (isDemoRecipeId(recipeId)) {
+      return getDemoQuestionsResponse();
+    }
     try {
       const headers = await getHeaders();
       const response = await axios.get<RecipeQuestionsResponse>(
@@ -187,6 +201,9 @@ export default class SpecService {
     recipeId: string,
     answers: Record<string, string>,
   ): Promise<SubmitRecipeAnswersResponse> {
+    if (isDemoRecipeId(recipeId)) {
+      return submitDemoAnswers();
+    }
     try {
       console.log("[SpecService] Submitting answers for recipe:", recipeId);
       const headers = await getHeaders();
@@ -213,6 +230,9 @@ export default class SpecService {
   static async triggerSpecGeneration(
     recipeId: string,
   ): Promise<TriggerSpecGenerationResponse> {
+    if (isDemoRecipeId(recipeId)) {
+      return startDemoSpecGeneration();
+    }
     try {
       console.log("[SpecService] Triggering spec generation for recipe:", recipeId);
       const headers = await getHeaders();
@@ -237,6 +257,9 @@ export default class SpecService {
    * Response: { recipe_id, status, created_at } (same shape as triggerSpecGeneration).
    */
   static async regenerateSpec(recipeId: string): Promise<TriggerSpecGenerationResponse> {
+    if (isDemoRecipeId(recipeId)) {
+      return startDemoSpecGeneration();
+    }
     try {
       console.log("[SpecService] Regenerating spec for recipe:", recipeId);
       const headers = await getHeaders();
@@ -266,6 +289,9 @@ export default class SpecService {
   static async getSpecProgressByRecipeId(
     recipeId: string,
   ): Promise<SpecStatusResponse> {
+    if (isDemoRecipeId(recipeId)) {
+      return getDemoSpecStatus();
+    }
     try {
       const headers = await getHeaders();
       const response = await axios.get<SpecStatusResponse>(
@@ -296,6 +322,13 @@ export default class SpecService {
       signal?: AbortSignal;
     }
   ): Promise<{ runId: string }> {
+    if (isDemoRecipeId(recipeId)) {
+      startDemoSpecGeneration();
+      if (options.consumeStream !== false && options.onEvent) {
+        connectDemoSpecStream(options);
+      }
+      return { runId: DEMO_SPEC_RUN_ID };
+    }
     const headers = await getHeaders();
     const url = `${this.API_BASE}/${recipeId}/spec/generate-stream${options.streamTokens ? "?stream_tokens=true" : ""}`;
     const response = await fetch(url, {
@@ -404,6 +437,10 @@ export default class SpecService {
       signal?: AbortSignal;
     }
   ): void {
+    if (isDemoRecipeId(recipeId)) {
+      connectDemoSpecStream(options);
+      return;
+    }
     const url = `${this.API_BASE}/${recipeId}/spec/stream?run_id=${encodeURIComponent(runId)}${options.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`;
     getHeaders()
       .then((headers) => {
@@ -475,6 +512,9 @@ export default class SpecService {
     recipeId: string,
     request: SpecChatRequest,
   ): Promise<SpecChatResponse> {
+    if (isDemoRecipeId(recipeId)) {
+      return getDemoSpecChatResponse(request.message);
+    }
     try {
       const headers = await getHeaders();
       const response = await axios.post<{
@@ -517,6 +557,9 @@ export default class SpecService {
   static async getRecipeDetails(
     recipeId: string,
   ): Promise<RecipeDetailsResponse> {
+    if (isDemoRecipeId(recipeId)) {
+      return getDemoRecipeDetails();
+    }
     try {
       const headers = await getHeaders();
       // Use the new recipe API endpoint that returns { recipe: {...} }

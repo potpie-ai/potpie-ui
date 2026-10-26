@@ -9,10 +9,20 @@
 //
 // Layout is computed ONCE per structure change and then frozen. d3-force is
 // used purely as a headless solver — synchronous ticks at build time, then
-// discarded — so there is no live simulation, no post-settle animation and
-// no reheat when data changes. Dragging a node simply moves it (and pins it
-// there); its edges follow via a canvas repaint while the rest of the
-// composition stays put.
+// discarded — so there is no live simulation and no reheat when data
+// changes. Dragging a node simply moves it (and pins it there); its edges
+// follow via a canvas repaint while the rest of the composition stays put.
+//
+// Motion layer: on top of the frozen layout every disc carries a render-only
+// offset (ox/oy) that is never fed back into the layout. It sums a slow
+// per-node float (each disc drifts a few screen px on its own phase, hubs
+// less than leaves) and a damped spring (neighbours lean after a dragged node
+// and ripple outward from a click, then settle back to their seats). One rAF
+// loop owns it: it writes the offset into each disc's inner float <g> and
+// repaints the edge canvas in the same frame, so edges stay attached. The
+// float pauses while a pan/zoom rides the composited layer (its clock stops,
+// so nothing jumps on resume), and prefers-reduced-motion turns the whole
+// layer off.
 //
 // Layout shape: hub-and-ring via a spanning-forest backbone. A pot graph is
 // dense (~6 edges per node), and with six links tugging every node toward six
@@ -36,7 +46,8 @@
 //   relationship labels, selection emphasis, frontier dashes — redrawn as a
 //   whole on pan/zoom/selection. Redraws are rAF-batched and land in the
 //   same frame as the SVG transform write, so the two layers never shear.
-//   Edges outside the viewport are culled per draw.
+//   Edges outside the viewport are culled per draw, and resting edges are
+//   batched into one path per tint, so a redraw is a handful of strokes.
 // - <svg> (top): node discs only (disc + type icon + caption). React mounts
 //   them once per structure; drag positions and selection styling are written
 //   straight to the DOM through element refs, never via re-render. Icons and
@@ -63,17 +74,22 @@
 // Hidden edges are also skipped by click hit-testing.
 //
 // Interactions
-// - drag background / wheel: pan + zoom (double-click background re-fits)
-// - drag node: reposition; the node stays pinned where you drop it (Neo4j
-//   behaviour); nothing else reflows
-// - hover node: after a short dwell a floating card shows quick details
-//   (name, type, category, connections, expand hints); any gesture hides it
+// - drag background / wheel: pan + zoom (double-click background re-fits);
+//   the dot grid behind the graph pans at a fraction of the speed (parallax)
+// - drag node: the disc lifts and repositions; the node stays pinned where
+//   you drop it (Neo4j behaviour); neighbours only lean after it on springs
+//   and settle back, nothing reflows
+// - hover node: the disc lifts and every one of its edges previews in its
+//   relationship colour; after a short dwell a floating card shows quick
+//   details (name, type, category, connections, expand hints); any gesture
+//   hides the card
 // - click node: select — every one of its edges (including resting-hidden
-//   ones) lights up in its relationship colour and everything outside the
-//   one-hop neighbourhood fades
+//   ones) lights up in its relationship colour with particles flowing
+//   source → target, everything outside the one-hop neighbourhood fades, a
+//   ring pings around the disc and its neighbours ripple outward
 // - click edge: select — the edge and its two endpoints light up
-// - double-click node: expand neighbours
-// - edges are neutral grey until a selection involves them (no hover effects)
+// - double-click node: expand neighbours (newcomers pop in)
+// - resting edges carry a faint tint of their leaf end's category colour
 // - a "+N" badge marks nodes with hidden neighbours (double-click reveals);
 //   a grey "N" badge counts edges not drawn at rest (click to show them)
 
@@ -176,6 +192,29 @@ type LayoutNode = SimulationNodeDatum & {
   labels: string[];
   category: string | null;
   icon: LucideIcon;
+  /** Render-only motion offset (float + spring); never fed into the layout. */
+  ox: number;
+  oy: number;
+  /** Float phase (radians) and amplitude factor — hubs drift less. */
+  phase: number;
+  amp: number;
+  /** Entrance pop delay (ms); the disc reads it once, when it mounts. */
+  enterDelay: number;
+};
+
+/** Damped spring displacement (world units) behind tug and ripple motion. */
+type Spring = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  /** Rest target — the drag tug moves it; 0,0 means "settle home". */
+  tx: number;
+  ty: number;
+  /** Pending ripple kick, applied once performance.now() reaches `at`. */
+  at: number;
+  kx: number;
+  ky: number;
 };
 
 type LayoutEdge = {
@@ -193,13 +232,22 @@ type LayoutEdge = {
   resting: boolean;
   /** Rest length for the link force (ring radius for backbone links). */
   dist: number;
+  /** Offset (0-1) so flow particles on sibling edges don't march in step. */
+  phase: number;
+  /** Resting tint: the leaf end's category colour (the child, on backbone). */
+  rest: string;
 };
 
 type ViewTransform = { k: number; x: number; y: number };
 
-/** DOM handles for one node disc (group, selection halo, edge-count hint). */
+/**
+ * DOM handles for one node disc: the outer group (layout position + fades),
+ * the inner float group (motion offset), the selection halo and the
+ * edge-count hint.
+ */
 type NodeEls = {
   g: SVGGElement | null;
+  float: SVGGElement | null;
   halo: SVGCircleElement | null;
   hint: SVGGElement | null;
 };
@@ -233,6 +281,39 @@ const ARROW_HALF_WIDTH = 3;
 const LOOP_R = 13;
 const EDGE_LABEL_FONT =
   '7.5px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
+// Motion layer (render-only offsets on top of the frozen layout).
+/** Float amplitude in *screen* px, so the drift reads the same at any zoom. */
+const FLOAT_AMP = 3.2;
+/** Seconds per float cycle (each node runs at its own phase). */
+const FLOAT_PERIOD = 6.5;
+/**
+ * Float ticks run at ~12fps: the drift moves well under half a pixel per
+ * tick, so more frames would buy nothing but repaints of the node layer.
+ */
+const FLOAT_FRAME_MS = 80;
+/** Springs, particles and the fade-in are capped at ~60fps. */
+const BUSY_FRAME_MS = 15;
+/** The float settles after this long without a pointer over the graph. */
+const FLOAT_IDLE_MS = 45_000;
+/** Screen-px margin around the container that still floats. */
+const FLOAT_MARGIN = 60;
+// Underdamped spring (ζ ≈ 0.55): one soft overshoot, then it settles.
+const SPRING_K = 170;
+const SPRING_DAMP = 14;
+/** Share of a drag's travel a degree-0 neighbour leans after it. */
+const TUG = 0.18;
+/** Cap on the tug lean (world px) so a long drag never yanks a ring apart. */
+const TUG_MAX = 70;
+/** Click ripple kick (screen px/s) and its spread delay (ms per world px). */
+const RIPPLE_KICK = 120;
+const RIPPLE_DELAY = 0.45;
+/** Flow particle speed along emphasised edges (world px/s). */
+const PARTICLE_SPEED = 95;
+/** Resting edges fade in over this window after the first paint (ms). */
+const EDGE_FADE_IN = [200, 900] as const;
+/** The dot grid pans at this fraction of the graph's speed (depth cue). */
+const PARALLAX = 0.35;
+const DOT_GAP = 22;
 
 // Chrome colours the theme tokens can't reach (canvas/SVG paint raw hex).
 // Node fills always arrive per-element from the ontology palette; edges rest
@@ -244,6 +325,8 @@ const CHROME = {
     captionOnFill: "#ffffff",
     edge: "#cbd5e1",
     edgeLabel: "#94a3b8",
+    /** Opacity of the leaf-colour tint on resting edges. */
+    restAlpha: 0.34,
   },
   dark: {
     halo: "#0b1516",
@@ -251,6 +334,7 @@ const CHROME = {
     captionOnFill: "#ffffff",
     edge: "#475569",
     edgeLabel: "#94a3b8",
+    restAlpha: 0.42,
   },
 };
 
@@ -265,6 +349,21 @@ function shadeHex(hex: string, f: number): string {
   const ch = (shift: number) =>
     clamp(Math.round(((n >> shift) & 0xff) * f), 0, 255);
   return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, "0")}`;
+}
+
+/** Stable 0-1 hash of a string (FNV-1a) — seeds per-node motion phases. */
+function hash01(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967296;
+}
+
+/** SVG id for the per-fill shadow gradient (fills are #rrggbb). */
+function shadowId(fill: string): string {
+  return `pgc-shadow-${fill.replace(/[^a-z0-9]/gi, "")}`;
 }
 
 /** Perceived luminance (0-255) of an #rrggbb colour. */
@@ -348,10 +447,12 @@ type EdgeGeo =
     };
 
 function edgeGeometry(edge: LayoutEdge): EdgeGeo {
-  const sx = edge.source.x ?? 0;
-  const sy = edge.source.y ?? 0;
-  const tx = edge.target.x ?? 0;
-  const ty = edge.target.y ?? 0;
+  // Rendered positions: layout plus the motion offset, so edges stay pinned
+  // to the floating discs.
+  const sx = (edge.source.x ?? 0) + edge.source.ox;
+  const sy = (edge.source.y ?? 0) + edge.source.oy;
+  const tx = (edge.target.x ?? 0) + edge.target.ox;
+  const ty = (edge.target.y ?? 0) + edge.target.oy;
 
   if (edge.source.id === edge.target.id) {
     // Self-loop: a small circle hung off the node's top-right.
@@ -417,6 +518,50 @@ function edgeGeometry(edge: LayoutEdge): EdgeGeo {
   };
 }
 
+/** Append an edge's curve (or self-loop) and its arrowhead to the paths. */
+function traceEdge(line: Path2D, tips: Path2D, geo: EdgeGeo) {
+  if (geo.loop) {
+    line.moveTo(geo.cx + LOOP_R, geo.cy);
+    line.arc(geo.cx, geo.cy, LOOP_R, 0, Math.PI * 2);
+    return;
+  }
+  line.moveTo(geo.sx, geo.sy);
+  line.quadraticCurveTo(geo.cpx, geo.cpy, geo.ex, geo.ey);
+  // Arrowhead at the target rim.
+  tips.moveTo(geo.tipX, geo.tipY);
+  tips.lineTo(
+    geo.ex - geo.u1y * ARROW_HALF_WIDTH,
+    geo.ey + geo.u1x * ARROW_HALF_WIDTH,
+  );
+  tips.lineTo(
+    geo.ex + geo.u1y * ARROW_HALF_WIDTH,
+    geo.ey - geo.u1x * ARROW_HALF_WIDTH,
+  );
+  tips.closePath();
+}
+
+/** Point at parameter u along a non-loop edge's quadratic curve. */
+function curvePoint(
+  geo: Extract<EdgeGeo, { loop: false }>,
+  u: number,
+): [number, number] {
+  const v = 1 - u;
+  return [
+    v * v * geo.sx + 2 * v * u * geo.cpx + u * u * geo.ex,
+    v * v * geo.sy + 2 * v * u * geo.cpy + u * u * geo.ey,
+  ];
+}
+
+/** The node's spring, created at rest (so it starts with no visible jump). */
+function springFor(springs: Map<LayoutNode, Spring>, n: LayoutNode): Spring {
+  let s = springs.get(n);
+  if (!s) {
+    s = { x: 0, y: 0, vx: 0, vy: 0, tx: 0, ty: 0, at: 0, kx: 0, ky: 0 };
+    springs.set(n, s);
+  }
+  return s;
+}
+
 /** Squared-distance-free point-to-segment distance. */
 function distToSegment(
   px: number,
@@ -451,8 +596,11 @@ export default function PotGraphCanvas({
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  /** Lit edges, particles and the selection ping, above the resting edges. */
+  const fxCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const rootGRef = useRef<SVGGElement | null>(null);
+  const dotsRef = useRef<HTMLDivElement | null>(null);
 
   const layoutNodesRef = useRef<LayoutNode[]>([]);
   const layoutEdgesRef = useRef<LayoutEdge[]>([]);
@@ -481,6 +629,22 @@ export default function PotGraphCanvas({
   const rasterRef = useRef<ViewTransform>({ k: 1, x: 0, y: 0 });
   const wheelCommitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const captionsVisibleRef = useRef(true);
+
+  // Motion layer state (see the header). Springs are keyed by node object and
+  // dropped on rebuild; neighbours come from every edge, not just the backbone.
+  const reducedMotionRef = useRef(false);
+  const springsRef = useRef(new Map<LayoutNode, Spring>());
+  const neighboursRef = useRef(new Map<string, LayoutNode[]>());
+  /** Disc under the cursor — its edges preview in relationship colour. */
+  const hoverIdRef = useRef<string | null>(null);
+  /** A disc just dropped from a drag — eased back into its float by a spring. */
+  const releasedRef = useRef<LayoutNode | null>(null);
+  /** While a selection/search fade is up, only these discs keep floating. */
+  const floatOnlyRef = useRef<Set<string> | null>(null);
+  /** Last pointer activity over the graph — an unattended graph stops drifting. */
+  const lastActiveRef = useRef(0);
+  /** performance.now() of the first visible build (drives the edge fade-in). */
+  const enteredAtRef = useRef(0);
 
   // Bumped when the layout arrays are rebuilt so React re-renders the node
   // structure; positions are final by then and never pass through state. Also
@@ -515,6 +679,9 @@ export default function PotGraphCanvas({
     node: LayoutNode;
     startX: number;
     startY: number;
+    /** Layout position at press — the tug leans neighbours by the travel. */
+    x0: number;
+    y0: number;
     rect: DOMRect;
     moved: boolean;
   } | null>(null);
@@ -552,8 +719,8 @@ export default function PotGraphCanvas({
       const t = viewRef.current;
       setHover({
         node,
-        x: (node.x ?? 0) * t.k + t.x,
-        y: (node.y ?? 0) * t.k + t.y,
+        x: ((node.x ?? 0) + node.ox) * t.k + t.x,
+        y: ((node.y ?? 0) + node.oy) * t.k + t.y,
         rk: node.r * t.k,
       });
     }, 180);
@@ -569,12 +736,16 @@ export default function PotGraphCanvas({
   // ---- Canvas edge painter --------------------------------------------------
 
   /**
-   * Repaint every (visible) edge. Selection emphasis, fades, frontier dashes
-   * and relationship labels are all decided here per draw, so a repaint is
-   * the single answer to "anything edge-related changed".
+   * Repaint one edge layer. "base" holds every resting edge (batched by
+   * tint) plus frontier dashes and their labels; "fx", stacked above it,
+   * holds the lit edges (selection + hover) with their flow particles and
+   * the selection ping. Selection emphasis, fades and relationship labels
+   * are all decided here per draw, so a repaint of both layers is the single
+   * answer to "anything edge-related changed" — while the motion loop can
+   * replay just "fx" every frame to animate particles cheaply.
    */
-  const drawEdges = useCallback(() => {
-    const canvas = canvasRef.current;
+  const paintEdges = useCallback((layer: "base" | "fx") => {
+    const canvas = layer === "base" ? canvasRef.current : fxCanvasRef.current;
     if (!canvas) return;
     const { w, h } = sizeRef.current;
     if (!w || !h) return;
@@ -600,27 +771,68 @@ export default function PotGraphCanvas({
 
     // Selection emphasis: node selection lights its whole neighbourhood, edge
     // selection lights just that edge. An active search overrides both fades.
+    // A hovered (or dragged) disc previews its edges in relationship colour
+    // without fading anything else.
     const nodeId = selectedIdRef.current;
     const edgeId = selectedEdgeIdRef.current;
+    const hoverId =
+      hoverIdRef.current ??
+      (dragRef.current?.moved ? dragRef.current.node.id : null);
     const search = searchRef.current;
     const hasFocus = nodeId !== null || edgeId !== null;
     const palette = chromeRef.current;
     const drawAll = edgeModeRef.current === "all";
     const labelsEverywhere =
       labelTypeRef.current === "all" || t.k >= LABEL_ZOOM;
+    const motion = !reducedMotionRef.current;
+    const now = performance.now();
+    const fadeIn = motion
+      ? clamp(
+          (now - enteredAtRef.current - EDGE_FADE_IN[0]) / EDGE_FADE_IN[1],
+          0,
+          1,
+        )
+      : 1;
+    // Particles stay a readable screen size at any zoom.
+    const particleR = clamp(2.2 / Math.sqrt(t.k), 1.6, 5);
 
     ctx.lineJoin = "round";
+    ctx.lineCap = "round";
     ctx.font = EDGE_LABEL_FONT;
     ctx.textAlign = "center";
+
+    // Resting edges are batched into one path per (tint, alpha) pair, so a
+    // dense pot strokes a handful of paths instead of thousands, and spokes
+    // converging on a hub don't stack their opacity. Frontier and lit edges
+    // paint individually on top of them; labels go last, over everything.
+    const batches = new Map<
+      string,
+      { color: string; alpha: number; line: Path2D; tips: Path2D }
+    >();
+    const singles: {
+      e: LayoutEdge;
+      geo: EdgeGeo;
+      alpha: number;
+      lit: boolean;
+      emphasized: boolean;
+    }[] = [];
+    const labels: typeof singles = [];
 
     for (const e of layoutEdgesRef.current) {
       const emphasized =
         edgeId === e.id ||
         (nodeId !== null &&
           (e.source.id === nodeId || e.target.id === nodeId));
-      // "key" mode: an edge outside the resting set only paints while a
-      // selection involves it (before geometry — this is the hot skip).
-      if (!drawAll && !e.resting && !emphasized) continue;
+      const hovered =
+        !emphasized &&
+        hoverId !== null &&
+        (e.source.id === hoverId || e.target.id === hoverId);
+      const lit = emphasized || hovered;
+      // Each edge belongs to exactly one layer (before geometry — the hot
+      // skip). "key" mode: an unlit edge outside the resting set never
+      // paints.
+      if ((layer === "fx") !== lit) continue;
+      if (!drawAll && !e.resting && !lit) continue;
 
       const geo = edgeGeometry(e);
 
@@ -642,62 +854,127 @@ export default function PotGraphCanvas({
           continue;
       }
 
-      const stroke = emphasized ? e.fill : palette.edge;
-
       let alpha = 1;
       if (search) {
         alpha =
           search.has(e.source.id) && search.has(e.target.id) ? 1 : 0.06;
       } else if (hasFocus && !emphasized) {
-        alpha = 0.12;
+        alpha = hovered ? 0.7 : 0.12;
       }
+      alpha *= fadeIn;
+
+      // Lit edges take their relationship colour and frontier links stay
+      // dashed grey; everything else rests as a faint tint of its leaf
+      // end's category colour.
+      if (lit || e.frontier) {
+        singles.push({ e, geo, alpha, lit, emphasized });
+      } else {
+        const a = alpha * palette.restAlpha;
+        const key = `${e.rest}|${a.toFixed(3)}`;
+        let batch = batches.get(key);
+        if (!batch) {
+          batch = {
+            color: e.rest,
+            alpha: a,
+            line: new Path2D(),
+            tips: new Path2D(),
+          };
+          batches.set(key, batch);
+        }
+        traceEdge(batch.line, batch.tips, geo);
+      }
+      // Skip label paint for near-invisible edges (search/selection fades).
+      if ((labelsEverywhere || emphasized) && alpha > 0.5)
+        labels.push({ e, geo, alpha, lit, emphasized });
+    }
+
+    ctx.lineWidth = 1.3;
+    for (const batch of batches.values()) {
+      ctx.globalAlpha = batch.alpha;
+      ctx.strokeStyle = batch.color;
+      ctx.fillStyle = batch.color;
+      ctx.stroke(batch.line);
+      ctx.fill(batch.tips);
+    }
+
+    for (const { e, geo, alpha, lit, emphasized } of singles) {
+      const stroke = lit ? e.fill : palette.edge;
+      const line = new Path2D();
+      const tips = new Path2D();
+      traceEdge(line, tips, geo);
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = stroke;
-      ctx.lineWidth = emphasized ? 2.4 : 1.3;
+      ctx.fillStyle = stroke;
+      ctx.lineWidth = emphasized ? 2.4 : lit ? 1.9 : 1.3;
       ctx.setLineDash(e.frontier ? [4, 4] : []);
+      ctx.stroke(line);
+      ctx.setLineDash([]);
+      ctx.fill(tips);
 
-      if (geo.loop) {
-        ctx.beginPath();
-        ctx.arc(geo.cx, geo.cy, LOOP_R, 0, Math.PI * 2);
-        ctx.stroke();
-      } else {
-        ctx.beginPath();
-        ctx.moveTo(geo.sx, geo.sy);
-        ctx.quadraticCurveTo(geo.cpx, geo.cpy, geo.ex, geo.ey);
-        ctx.stroke();
-        // Arrowhead at the target rim.
-        ctx.setLineDash([]);
-        ctx.fillStyle = stroke;
-        ctx.beginPath();
-        ctx.moveTo(geo.tipX, geo.tipY);
-        ctx.lineTo(
-          geo.ex - geo.u1y * ARROW_HALF_WIDTH,
-          geo.ey + geo.u1x * ARROW_HALF_WIDTH,
-        );
-        ctx.lineTo(
-          geo.ex + geo.u1y * ARROW_HALF_WIDTH,
-          geo.ey - geo.u1x * ARROW_HALF_WIDTH,
-        );
-        ctx.closePath();
-        ctx.fill();
+      // Flow particles: lit edges show their direction as soft dots
+      // travelling source → target, fading in and out at the rims.
+      if (lit && motion && alpha > 0.5 && !geo.loop) {
+        const len = Math.hypot(geo.ex - geo.sx, geo.ey - geo.sy);
+        const count = len > 320 ? 2 : 1;
+        const travel = (now / 1000) * (PARTICLE_SPEED / Math.max(len, 60));
+        for (let i = 0; i < count; i++) {
+          const u = (travel + e.phase + i / count) % 1;
+          const [px, py] = curvePoint(geo, u);
+          const fade = alpha * Math.sin(Math.PI * u);
+          ctx.globalAlpha = fade * 0.22;
+          ctx.beginPath();
+          ctx.arc(px, py, particleR * 2.3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = fade;
+          ctx.beginPath();
+          ctx.arc(px, py, particleR, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
+    }
 
-      // Skip label paint for near-invisible edges (search/selection fades).
-      if ((labelsEverywhere || emphasized) && alpha > 0.5) {
-        ctx.save();
-        ctx.translate(geo.labelX, geo.labelY);
-        ctx.rotate((geo.labelAngle * Math.PI) / 180);
-        ctx.setLineDash([]);
-        ctx.lineWidth = 2.5;
-        ctx.strokeStyle = palette.halo;
-        ctx.strokeText(e.label, 0, 0);
-        ctx.fillStyle = emphasized ? e.fill : palette.edgeLabel;
-        ctx.fillText(e.label, 0, 0);
-        ctx.restore();
+    for (const { e, geo, alpha, emphasized } of labels) {
+      ctx.globalAlpha = alpha;
+      ctx.save();
+      ctx.translate(geo.labelX, geo.labelY);
+      ctx.rotate((geo.labelAngle * Math.PI) / 180);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = palette.halo;
+      ctx.strokeText(e.label, 0, 0);
+      ctx.fillStyle = emphasized ? e.fill : palette.edgeLabel;
+      ctx.fillText(e.label, 0, 0);
+      ctx.restore();
+    }
+
+    // Selection ping: a ring that keeps expanding off the selected disc.
+    // It lives here, not in the SVG, so it never repaints the node layer.
+    if (layer === "fx" && nodeId !== null && motion) {
+      const n = layoutNodesRef.current.find((m) => m.id === nodeId);
+      if (n) {
+        const u = (now % 1900) / 1900;
+        const grow = 1 - (1 - Math.min(1, u / 0.75)) ** 3;
+        ctx.globalAlpha = 0.55 * (1 - grow);
+        ctx.strokeStyle = n.fill;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(
+          (n.x ?? 0) + n.ox,
+          (n.y ?? 0) + n.oy,
+          (n.r + 3) * (1 + 0.7 * grow),
+          0,
+          Math.PI * 2,
+        );
+        ctx.stroke();
       }
     }
     ctx.globalAlpha = 1;
   }, []);
+
+  /** Repaint both edge layers. */
+  const drawEdges = useCallback(() => {
+    paintEdges("base");
+    paintEdges("fx");
+  }, [paintEdges]);
 
   const rafRef = useRef(0);
   const scheduleDraw = useCallback(() => {
@@ -716,6 +993,23 @@ export default function PotGraphCanvas({
     },
     [],
   );
+
+  // Hover preview: the disc's edges light up on entry (no dwell); the
+  // details card keeps its own dwell timer.
+  const onNodeEnter = useCallback(
+    (node: LayoutNode) => {
+      hoverIdRef.current = node.id;
+      scheduleDraw();
+      onNodeHoverStart(node);
+    },
+    [scheduleDraw, onNodeHoverStart],
+  );
+
+  const onNodeLeave = useCallback(() => {
+    hoverIdRef.current = null;
+    scheduleDraw();
+    clearHover();
+  }, [scheduleDraw, clearHover]);
 
   // ---- Node styling (imperative) --------------------------------------------
 
@@ -747,6 +1041,9 @@ export default function PotGraphCanvas({
       }
     }
     const hasFocus = nodeId !== null || edgeSelected;
+    // A faded disc's drift is barely visible, and moving it re-rasters its
+    // opacity group — so under a fade only the lit discs keep floating.
+    floatOnlyRef.current = search ?? (hasFocus ? activeNodes : null);
 
     const nodeEls = nodeElsRef.current;
     for (const n of layoutNodesRef.current) {
@@ -783,6 +1080,25 @@ export default function PotGraphCanvas({
     }
   }, []);
 
+  // Parallax dot grid: pans at a fraction of the graph's speed and zooms
+  // more gently than it, so the graph reads as floating above the surface.
+  // The pan rides a composited transform; only a zoom repaints the pattern.
+  const dotGapRef = useRef(DOT_GAP);
+  const applyParallax = useCallback(() => {
+    const el = dotsRef.current;
+    if (!el) return;
+    const t = viewRef.current;
+    const gap = DOT_GAP * clamp(t.k ** 0.4, 0.7, 1.4);
+    if (Math.abs(gap - dotGapRef.current) > 0.25) {
+      dotGapRef.current = gap;
+      el.style.backgroundSize = `${gap}px ${gap}px`;
+    }
+    const g = dotGapRef.current;
+    const sx = (((t.x * PARALLAX) % g) + g) % g;
+    const sy = (((t.y * PARALLAX) % g) + g) % g;
+    el.style.transform = `translate3d(${sx - g}px, ${sy - g}px, 0)`;
+  }, []);
+
   /**
    * Rasterise the node layer at the current view: bake the world transform
    * into the root <g> attribute (this is the expensive SVG repaint of every
@@ -799,8 +1115,9 @@ export default function PotGraphCanvas({
     const svg = svgRef.current;
     if (svg) svg.style.transform = "";
     applyCaptionLod();
+    applyParallax();
     scheduleDraw();
-  }, [applyCaptionLod, scheduleDraw]);
+  }, [applyCaptionLod, applyParallax, scheduleDraw]);
 
   /**
    * Live view update: express the delta between the current view and the
@@ -831,8 +1148,9 @@ export default function PotGraphCanvas({
     const svg = svgRef.current;
     if (svg) svg.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
     applyCaptionLod();
+    applyParallax();
     scheduleDraw();
-  }, [applyCaptionLod, commitRaster, scheduleDraw]);
+  }, [applyCaptionLod, applyParallax, commitRaster, scheduleDraw]);
 
   const fitToView = useCallback(() => {
     const { w, h } = sizeRef.current;
@@ -915,6 +1233,9 @@ export default function PotGraphCanvas({
       cache.set(n.id, { x: n.x, y: n.y, fx: n.fx, fy: n.fy });
     }
     const firstBuild = cache.size === 0;
+    // Discs that stay mounted keep their DOM float offset, so their new
+    // layout nodes start from it (edges stay attached until the next tick).
+    const mounted = new Map(layoutNodesRef.current.map((n) => [n.id, n]));
 
     const degree = new Map<string, number>();
     for (const e of edges) {
@@ -951,6 +1272,12 @@ export default function PotGraphCanvas({
         labels,
         category,
         icon: iconForNode(labels, category),
+        ox: mounted.get(n.id)?.ox ?? 0,
+        oy: mounted.get(n.id)?.oy ?? 0,
+        phase: hash01(n.id) * Math.PI * 2,
+        // Hubs are heavier: they drift about half as far as a leaf does.
+        amp: frontier ? 1.1 : clamp(1.25 - (r - 16) / 36, 0.55, 1.2),
+        enterDelay: 0,
         x: old?.x,
         y: old?.y,
         fx: old?.fx ?? undefined,
@@ -983,6 +1310,15 @@ export default function PotGraphCanvas({
       addNeighbour(e.source, e.target);
       addNeighbour(e.target, e.source);
     }
+    // The motion layer's tug and ripple reach every linked disc.
+    springsRef.current.clear();
+    releasedRef.current = null;
+    neighboursRef.current = new Map(
+      Array.from(neighbours, ([id, set]) => [
+        id,
+        Array.from(set, (m) => byId.get(m)!),
+      ]),
+    );
     const outranks = (a: LayoutNode, b: LayoutNode) =>
       a.degree > b.degree || (a.degree === b.degree && a.id > b.id);
     // Prefer the smallest neighbour that is still a clear hub (≥2× degree):
@@ -1197,6 +1533,8 @@ export default function PotGraphCanvas({
           dist: backbone
             ? (seatOf.get(child!.id)?.dist ?? CROSS_LINK_DISTANCE)
             : CROSS_LINK_DISTANCE,
+          phase: hash01(e.id),
+          rest: (child ?? (s.degree <= t.degree ? s : t)).fill,
         };
       });
 
@@ -1294,6 +1632,32 @@ export default function PotGraphCanvas({
     // Drop the solver's internal handles so nothing keeps ticking state alive.
     solver.force("link", null).force("charge", null).force("collide", null);
 
+    // Entrance: the first visible build blooms outward from its centre (the
+    // stagger follows distance, so rings open after their hubs); later
+    // newcomers — expands, filter toggles — just pop in with a small jitter.
+    // Discs read the delay once, at mount, so it never replays.
+    if (nodeElsRef.current.size === 0) {
+      enteredAtRef.current = performance.now();
+      let cx = 0;
+      let cy = 0;
+      for (const n of layoutNodes) {
+        cx += n.x ?? 0;
+        cy += n.y ?? 0;
+      }
+      cx /= layoutNodes.length || 1;
+      cy /= layoutNodes.length || 1;
+      let maxD = 1;
+      for (const n of layoutNodes)
+        maxD = Math.max(maxD, Math.hypot((n.x ?? 0) - cx, (n.y ?? 0) - cy));
+      for (const n of layoutNodes) {
+        const d = Math.hypot((n.x ?? 0) - cx, (n.y ?? 0) - cy);
+        n.enterDelay = Math.round((d / maxD) * 650 + hash01(`${n.id}~`) * 90);
+      }
+    } else {
+      for (const n of layoutNodes)
+        n.enterDelay = Math.round(hash01(`${n.id}~`) * 120);
+    }
+
     if (firstBuild) needsFitRef.current = true;
     else if (!userMovedRef.current) needsFitRef.current = true;
     // A pending focus request owns the camera: skip the auto-fit so the
@@ -1344,6 +1708,9 @@ export default function PotGraphCanvas({
     labelTypeRef.current = labelType;
     edgeModeRef.current = edgeMode;
     searchRef.current = searchIds ?? null;
+    // Anything that restyles the graph (selection, search, new structure)
+    // counts as activity and wakes a settled float.
+    lastActiveRef.current = performance.now();
     applyHighlight();
   }, [
     selectedId,
@@ -1370,6 +1737,158 @@ export default function PotGraphCanvas({
     ro.observe(el);
     return () => ro.disconnect();
   }, [fitToView, scheduleDraw]);
+
+  // ---- Motion loop ----------------------------------------------------------
+
+  // Drives the float, the springs, the edge fade-in and the flow particles.
+  // Each frame writes the changed offsets and repaints the edge canvas in
+  // that same frame, so edges never trail their discs. The float ticks at
+  // ~12fps; springs, particles and the fade-in at up to ~60fps.
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    reducedMotionRef.current = mq.matches;
+    lastActiveRef.current = performance.now();
+    const onMotionPref = () => {
+      reducedMotionRef.current = mq.matches;
+      scheduleDraw();
+    };
+    mq.addEventListener("change", onMotionPref);
+
+    const omega = (2 * Math.PI) / FLOAT_PERIOD;
+    let raf = 0;
+    let last = performance.now();
+    let lastFloat = last;
+    /** Float clock — stands still while a gesture holds the view. */
+    let floatT = 0;
+    /** Zoom the float amplitude follows, eased so a zoom never snaps it. */
+    let ampK = viewRef.current.k;
+
+    const frame = (now: number) => {
+      raf = requestAnimationFrame(frame);
+      const nodes = layoutNodesRef.current;
+      const reduced = reducedMotionRef.current;
+      const springs = springsRef.current;
+      if (reduced) springs.clear();
+      const lit =
+        selectedIdRef.current !== null ||
+        selectedEdgeIdRef.current !== null ||
+        hoverIdRef.current !== null ||
+        Boolean(dragRef.current?.moved);
+      const entering =
+        now - enteredAtRef.current < EDGE_FADE_IN[0] + EDGE_FADE_IN[1];
+      const busy = springs.size > 0 || (!reduced && (lit || entering));
+      // An unattended graph settles (no repaints, no battery); the next
+      // pointer move picks the drift up where it stopped.
+      const floatTick =
+        now - lastFloat >= FLOAT_FRAME_MS &&
+        now - lastActiveRef.current < FLOAT_IDLE_MS;
+      const busyTick = busy && now - last >= BUSY_FRAME_MS;
+      if (!nodes.length || (!floatTick && !busyTick)) return;
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+
+      const t = viewRef.current;
+      const r = rasterRef.current;
+      if (floatTick) {
+        // A pan/zoom in flight rides the composited layer; offset writes
+        // would force the re-raster it exists to avoid, so the clock holds.
+        if (t.k === r.k && t.x === r.x && t.y === r.y)
+          floatT += Math.min(0.1, (now - lastFloat) / 1000);
+        lastFloat = now;
+        ampK += (t.k - ampK) * 0.25;
+      }
+      const amp = reduced ? 0 : FLOAT_AMP / Math.max(ampK, 0.25);
+
+      for (const [n, s] of springs) {
+        if (s.at && now >= s.at) {
+          s.vx += s.kx;
+          s.vy += s.ky;
+          s.at = 0;
+        }
+        s.vx += (SPRING_K * (s.tx - s.x) - SPRING_DAMP * s.vx) * dt;
+        s.vy += (SPRING_K * (s.ty - s.y) - SPRING_DAMP * s.vy) * dt;
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        if (
+          !s.at &&
+          !s.tx &&
+          !s.ty &&
+          Math.abs(s.x) + Math.abs(s.y) < 0.05 &&
+          Math.abs(s.vx) + Math.abs(s.vy) < 0.5
+        )
+          springs.delete(n);
+      }
+
+      // Only discs on screen float: every moved disc repaints the node layer,
+      // so the bleed margin stays still (its discs keep their last offset,
+      // and the canvas reads the same values, so edges stay attached).
+      const { w, h } = sizeRef.current;
+      const pad = FLOAT_MARGIN / t.k;
+      const x0 = -t.x / t.k - pad;
+      const y0 = -t.y / t.k - pad;
+      const x1 = (w - t.x) / t.k + pad;
+      const y1 = (h - t.y) / t.k + pad;
+      const dragged = dragRef.current?.moved ? dragRef.current.node : null;
+      const floatOnly = floatOnlyRef.current;
+      const els = nodeElsRef.current;
+      let wrote = false;
+      for (const n of nodes) {
+        const s = springs.get(n);
+        if (!floatTick && !s && n !== releasedRef.current) continue;
+        if (floatOnly && !floatOnly.has(n.id) && !s) continue;
+        const x = n.x ?? 0;
+        const y = n.y ?? 0;
+        if (!s && (x < x0 || x > x1 || y < y0 || y > y1)) continue;
+        let ox = 0;
+        let oy = 0;
+        if (n !== dragged) {
+          const a = amp * n.amp;
+          ox = a * 0.65 * Math.sin(omega * 0.77 * floatT + n.phase);
+          oy = a * Math.sin(omega * floatT + n.phase * 1.618);
+          if (n === releasedRef.current) {
+            // Dropped disc: absorb the gap to its float into a spring so it
+            // eases back into the drift instead of snapping.
+            releasedRef.current = null;
+            const rs = springFor(springs, n);
+            rs.x = n.ox - ox;
+            rs.y = n.oy - oy;
+          }
+          const sp = springs.get(n);
+          if (sp) {
+            ox += sp.x;
+            oy += sp.y;
+          }
+        }
+        if (Math.abs(ox - n.ox) < 0.02 && Math.abs(oy - n.oy) < 0.02) continue;
+        n.ox = ox;
+        n.oy = oy;
+        els
+          .get(n.id)
+          ?.float?.setAttribute(
+            "transform",
+            `translate(${ox.toFixed(2)},${oy.toFixed(2)})`,
+          );
+        wrote = true;
+      }
+
+      if (wrote || springs.size > 0 || (entering && !reduced)) {
+        // This frame's repaint supersedes any draw already queued for it.
+        if (rafRef.current) {
+          cancelAnimationFrame(rafRef.current);
+          rafRef.current = 0;
+        }
+        drawEdges();
+      } else if (busyTick) {
+        // Nothing moved: only the particles and the ping need a new frame.
+        paintEdges("fx");
+      }
+    };
+    raf = requestAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(raf);
+      mq.removeEventListener("change", onMotionPref);
+    };
+  }, [drawEdges, paintEdges, scheduleDraw]);
 
   // Wheel zoom around the cursor. React's synthetic onWheel is passive, so the
   // listener is attached manually to be able to preventDefault page scroll.
@@ -1485,12 +2004,32 @@ export default function PotGraphCanvas({
         node,
         startX: e.clientX,
         startY: e.clientY,
+        x0: node.x ?? 0,
+        y0: node.y ?? 0,
         rect,
         moved: false,
       };
     },
     [cancelFocusAnim, clearHover],
   );
+
+  /** Kick every neighbour outward on a spring, delayed by distance (a wave). */
+  const rippleFrom = useCallback((node: LayoutNode) => {
+    if (reducedMotionRef.current) return;
+    const kick = RIPPLE_KICK / viewRef.current.k;
+    const now = performance.now();
+    for (const m of neighboursRef.current.get(node.id) ?? []) {
+      const dx = (m.x ?? 0) - (node.x ?? 0);
+      const dy = (m.y ?? 0) - (node.y ?? 0);
+      const d = Math.hypot(dx, dy) || 1;
+      // Heavier hubs barely budge; leaves bounce.
+      const v = kick / (1 + m.degree / 10);
+      const s = springFor(springsRef.current, m);
+      s.at = now + d * RIPPLE_DELAY;
+      s.kx = (dx / d) * v;
+      s.ky = (dy / d) * v;
+    }
+  }, []);
 
   const onNodePointerMove = useCallback(
     (e: React.PointerEvent<SVGGElement>) => {
@@ -1501,6 +2040,9 @@ export default function PotGraphCanvas({
         Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 4
       )
         return;
+      const g = nodeElsRef.current.get(drag.node.id)?.g;
+      // The disc lifts while it is carried (CSS keys off data-drag).
+      if (!drag.moved) g?.setAttribute("data-drag", "");
       drag.moved = true;
       userMovedRef.current = true;
       const t = viewRef.current;
@@ -1511,9 +2053,22 @@ export default function PotGraphCanvas({
       drag.node.y = y;
       drag.node.fx = x;
       drag.node.fy = y;
-      nodeElsRef.current
-        .get(drag.node.id)
-        ?.g?.setAttribute("transform", `translate(${x},${y})`);
+      g?.setAttribute("transform", `translate(${x},${y})`);
+      // Neighbours lean after it on springs — a share of the travel, less for
+      // heavier hubs, capped — and settle home on release. Their layout
+      // positions never change.
+      if (!reducedMotionRef.current) {
+        const dx = x - drag.x0;
+        const dy = y - drag.y0;
+        const len = Math.hypot(dx, dy) || 1;
+        for (const m of neighboursRef.current.get(drag.node.id) ?? []) {
+          const lean =
+            Math.min((len * TUG) / (1 + m.degree / 6), TUG_MAX) / len;
+          const s = springFor(springsRef.current, m);
+          s.tx = dx * lean;
+          s.ty = dy * lean;
+        }
+      }
       scheduleDraw();
     },
     [scheduleDraw],
@@ -1525,11 +2080,26 @@ export default function PotGraphCanvas({
       if (!drag) return;
       dragRef.current = null;
       e.currentTarget.releasePointerCapture(e.pointerId);
-      // A press that never travelled is a click: select. A real drag leaves
-      // fx/fy set so the node stays pinned where it was dropped.
-      if (!drag.moved) onSelect(drag.node.id);
+      // A press that never travelled is a click: select (and ripple the
+      // neighbourhood). A real drag leaves fx/fy set so the node stays
+      // pinned where it was dropped; its neighbours spring home and the disc
+      // itself eases back into its float.
+      if (!drag.moved) {
+        onSelect(drag.node.id);
+        rippleFrom(drag.node);
+        return;
+      }
+      nodeElsRef.current.get(drag.node.id)?.g?.removeAttribute("data-drag");
+      for (const m of neighboursRef.current.get(drag.node.id) ?? []) {
+        const s = springsRef.current.get(m);
+        if (s) {
+          s.tx = 0;
+          s.ty = 0;
+        }
+      }
+      releasedRef.current = drag.node;
     },
-    [onSelect],
+    [onSelect, rippleFrom],
   );
 
   const onBackgroundPointerDown = useCallback(
@@ -1603,21 +2173,41 @@ export default function PotGraphCanvas({
   }, []);
 
   const raster = rasterRef.current;
+  // The first structure commit fades the pre-settled composition in (under
+  // the discs' own pop-in) instead of popping a fully-formed graph onto the
+  // screen. The dot grid sits outside the fade so the surface never blinks.
+  const fade: React.CSSProperties = {
+    opacity: structureVersion > 0 ? 1 : 0,
+    transition: "opacity 400ms ease",
+  };
+  // One soft shadow gradient per category colour: a tinted drop shadow on
+  // light surfaces, a glow in the disc's own colour on dark ones.
+  const fills = Array.from(new Set(layoutNodesRef.current.map((n) => n.fill)));
 
   return (
     <div
       ref={containerRef}
       className="relative h-full w-full cursor-grab active:cursor-grabbing"
-      // The first structure commit fades the pre-settled composition in
-      // instead of popping a fully-formed graph onto the screen.
-      style={{
-        opacity: structureVersion > 0 ? 1 : 0,
-        transition: "opacity 400ms ease",
+      onPointerMove={() => {
+        lastActiveRef.current = performance.now();
       }}
     >
+      <div
+        ref={dotsRef}
+        aria-hidden
+        className="pot-dots pointer-events-none absolute"
+        style={{ inset: -64, willChange: "transform" }}
+      />
       <canvas
         ref={canvasRef}
         className="pointer-events-none absolute inset-0 h-full w-full"
+        style={fade}
+        aria-hidden
+      />
+      <canvas
+        ref={fxCanvasRef}
+        className="pointer-events-none absolute inset-0 h-full w-full"
+        style={fade}
         aria-hidden
       />
       <svg
@@ -1629,6 +2219,7 @@ export default function PotGraphCanvas({
         // element won't stretch between opposing insets — it collapses to
         // its intrinsic 300x150 instead.
         style={{
+          ...fade,
           top: -BLEED,
           left: -BLEED,
           width: `calc(100% + ${BLEED * 2}px)`,
@@ -1646,6 +2237,28 @@ export default function PotGraphCanvas({
         onPointerUp={onBackgroundPointerUp}
         onDoubleClick={fitToView}
       >
+        <defs>
+          {/* Top-left sheen: one shared overlay that turns the flat discs
+              into soft spheres without touching their category colour. */}
+          <radialGradient id="pgc-sheen" cx="0.36" cy="0.3" r="0.72">
+            <stop offset="0" stopColor="#fff" stopOpacity={dark ? 0.2 : 0.34} />
+            <stop offset="0.55" stopColor="#fff" stopOpacity={0.05} />
+            <stop offset="1" stopColor="#fff" stopOpacity={0} />
+          </radialGradient>
+          {fills.map((fill) => {
+            const color = dark ? fill : shadeHex(fill, 0.45);
+            return (
+              <radialGradient key={fill} id={shadowId(fill)}>
+                <stop
+                  offset="0.55"
+                  stopColor={color}
+                  stopOpacity={dark ? 0.34 : 0.24}
+                />
+                <stop offset="1" stopColor={color} stopOpacity={0} />
+              </radialGradient>
+            );
+          })}
+        </defs>
         <g
           ref={rootGRef}
           transform={`translate(${raster.x + BLEED},${raster.y + BLEED}) scale(${raster.k})`}
@@ -1663,8 +2276,8 @@ export default function PotGraphCanvas({
               onPointerMove={onNodePointerMove}
               onPointerUp={onNodePointerUp}
               onExpand={onExpand}
-              onHoverStart={onNodeHoverStart}
-              onHoverEnd={clearHover}
+              onHoverStart={onNodeEnter}
+              onHoverEnd={onNodeLeave}
             />
           ))}
         </g>
@@ -1682,6 +2295,32 @@ export default function PotGraphCanvas({
         svg[data-captions="off"] .gc-caption { display: none; }
         svg[data-captions="off"] .gc-edgehint { display: none; }
         svg[data-edgehints="off"] .gc-edgehint { display: none; }
+        /* Disc micro-motion. .gc-lift scales about the disc centre (its
+           parent's origin); the shadow stays behind on the layout position,
+           so a lifted or floating disc visibly rises off it. */
+        @media (prefers-reduced-motion: no-preference) {
+          .gc-lift {
+            transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+            animation: gc-pop 560ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+            animation-delay: var(--gc-delay, 0ms);
+          }
+          .gc-shadow {
+            transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              opacity 260ms ease;
+            animation: gc-fade 700ms ease-out backwards;
+            animation-delay: var(--gc-delay, 0ms);
+          }
+          .gc-node:hover .gc-lift { transform: scale(1.1); }
+          .gc-node:hover .gc-shadow { transform: scale(1.14); opacity: 0.8; }
+          .gc-node:active .gc-lift {
+            transform: scale(0.94);
+            transition-duration: 90ms;
+          }
+          .gc-node[data-drag] .gc-lift { transform: scale(1.14); }
+          .gc-node[data-drag] .gc-shadow { transform: scale(1.26); opacity: 0.65; }
+        }
+        @keyframes gc-pop { from { transform: scale(0.15); opacity: 0; } }
+        @keyframes gc-fade { from { opacity: 0; } }
       `}</style>
     </div>
   );
@@ -1719,7 +2358,15 @@ const NodeDisc = memo(function NodeDisc({
   onHoverStart: (node: LayoutNode) => void;
   onHoverEnd: () => void;
 }) {
-  const els = useRef<NodeEls>({ g: null, halo: null, hint: null }).current;
+  const els = useRef<NodeEls>({
+    g: null,
+    float: null,
+    halo: null,
+    hint: null,
+  }).current;
+  // Captured at mount: a rebuild hands this disc a new delay, but its pop-in
+  // has already played and must not replay.
+  const enterDelay = useRef(node.enterDelay).current;
 
   // Layout effect: the canvas restyles in a layout effect right after
   // structure changes and needs the registry full by then.
@@ -1750,7 +2397,8 @@ const NodeDisc = memo(function NodeDisc({
         els.g = el;
       }}
       transform={`translate(${node.x ?? 0},${node.y ?? 0})`}
-      className="cursor-pointer transition-opacity duration-150"
+      className="gc-node cursor-pointer transition-opacity duration-150"
+      style={{ "--gc-delay": `${enterDelay}ms` } as React.CSSProperties}
       onPointerDown={(e) => onPointerDown(node, e)}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -1761,90 +2409,117 @@ const NodeDisc = memo(function NodeDisc({
         onExpand(node.id);
       }}
     >
-      {/* Selection / edge-endpoint halo — applyHighlight toggles it. */}
+      {/* Soft shadow, pinned to the layout position (outside the float). */}
       <circle
+        r={node.r * 1.32}
+        cy={node.r * 0.22}
+        fill={`url(#${shadowId(node.fill)})`}
+        className="gc-shadow pointer-events-none"
+      />
+      {/* Float group: the motion loop writes the drift/spring offset here. */}
+      <g
         ref={(el) => {
-          els.halo = el;
+          els.float = el;
         }}
-        r={node.r + 7}
-        fill={node.fill}
-        opacity={0.3}
-        style={{ display: "none" }}
-      />
-      <circle
-        r={node.r}
-        fill={node.fill}
-        stroke={rim}
-        strokeWidth={2}
-        strokeDasharray={node.frontier ? "3.5 3" : undefined}
-      />
-      {/* gc-caption: hides with the captions below the readability zoom. */}
-      <TypeIcon
-        x={-iconSize / 2}
-        y={contentTop}
-        width={iconSize}
-        height={iconSize}
-        strokeWidth={2.25}
-        color={captionColor}
-        aria-hidden
-        className="gc-caption pointer-events-none"
-      />
-      <text
-        textAnchor="middle"
-        fontSize={node.fontSize}
-        fontWeight={600}
-        fill={captionColor}
-        className="gc-caption pointer-events-none"
       >
-        {node.lines.map((line, i) => (
-          <tspan key={i} x={0} y={firstDy + i * lineHeight} dy="0.35em">
-            {line}
-          </tspan>
-        ))}
-      </text>
-      {node.hidden > 0 ? (
-        <g
-          transform={`translate(${badgeOffset},${badgeOffset})`}
-          className="pointer-events-none"
-        >
-          <circle r={8.5} fill={halo} stroke={rim} strokeWidth={1.25} />
+        {/* Lift group: CSS pop-in, hover lift, press and carry scale. */}
+        <g className="gc-lift">
+          {/* Selection / edge-endpoint halo — applyHighlight toggles it. */}
+          <circle
+            ref={(el) => {
+              els.halo = el;
+            }}
+            r={node.r + 7}
+            fill={node.fill}
+            opacity={0.3}
+            style={{ display: "none" }}
+          />
+          <circle
+            r={node.r}
+            fill={node.fill}
+            stroke={rim}
+            strokeWidth={1.5}
+            strokeDasharray={node.frontier ? "3.5 3" : undefined}
+          />
+          <circle
+            r={node.r}
+            fill="url(#pgc-sheen)"
+            className="pointer-events-none"
+          />
+          {/* gc-caption: hides with the captions below the readability zoom. */}
+          <TypeIcon
+            x={-iconSize / 2}
+            y={contentTop}
+            width={iconSize}
+            height={iconSize}
+            strokeWidth={2.25}
+            color={captionColor}
+            aria-hidden
+            className="gc-caption pointer-events-none"
+          />
           <text
             textAnchor="middle"
-            dy="0.35em"
-            fontSize={7.5}
-            fontWeight={700}
-            fill={captionFallback}
-            className="font-mono"
-          >
-            +{node.hidden > 99 ? "99" : node.hidden}
-          </text>
-        </g>
-      ) : null}
-      {/* Grey twin of the neighbour badge: edges "key" mode isn't drawing.
-          applyHighlight hides it while this node is selected; CSS hides it in
-          "all" mode and below caption zoom. */}
-      {node.extraEdges > 0 ? (
-        <g
-          ref={(el) => {
-            els.hint = el;
-          }}
-          transform={`translate(${-badgeOffset},${badgeOffset})`}
-          className="gc-edgehint pointer-events-none"
-        >
-          <circle r={8} fill={halo} stroke={edgeChrome} strokeWidth={1.25} />
-          <text
-            textAnchor="middle"
-            dy="0.35em"
-            fontSize={7}
+            fontSize={node.fontSize}
             fontWeight={600}
-            fill={captionFallback}
-            opacity={0.75}
-            className="font-mono"
+            fill={captionColor}
+            className="gc-caption pointer-events-none"
           >
-            {node.extraEdges > 99 ? "99+" : node.extraEdges}
+            {node.lines.map((line, i) => (
+              <tspan key={i} x={0} y={firstDy + i * lineHeight} dy="0.35em">
+                {line}
+              </tspan>
+            ))}
           </text>
+          {node.hidden > 0 ? (
+            <g
+              transform={`translate(${badgeOffset},${badgeOffset})`}
+              className="pointer-events-none"
+            >
+              <circle r={8.5} fill={halo} stroke={rim} strokeWidth={1.25} />
+              <text
+                textAnchor="middle"
+                dy="0.35em"
+                fontSize={7.5}
+                fontWeight={700}
+                fill={captionFallback}
+                className="font-mono"
+              >
+                +{node.hidden > 99 ? "99" : node.hidden}
+              </text>
+            </g>
+          ) : null}
+          {/* Grey twin of the neighbour badge: edges "key" mode isn't drawing.
+              applyHighlight hides it while this node is selected; CSS hides it in
+              "all" mode and below caption zoom. */}
+          {node.extraEdges > 0 ? (
+            <g
+              ref={(el) => {
+                els.hint = el;
+              }}
+              transform={`translate(${-badgeOffset},${badgeOffset})`}
+              className="gc-edgehint pointer-events-none"
+            >
+              <circle
+                r={8}
+                fill={halo}
+                stroke={edgeChrome}
+                strokeWidth={1.25}
+              />
+              <text
+                textAnchor="middle"
+                dy="0.35em"
+                fontSize={7}
+                fontWeight={600}
+                fill={captionFallback}
+                opacity={0.75}
+                className="font-mono"
+              >
+                {node.extraEdges > 99 ? "99+" : node.extraEdges}
+              </text>
+            </g>
+          ) : null}
         </g>
-      ) : null}
+      </g>
     </g>
   );
 });

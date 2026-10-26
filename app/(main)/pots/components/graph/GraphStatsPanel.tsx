@@ -46,8 +46,10 @@ export default function GraphStatsPanel({
   const trimmed = nodeCount < totalNodeCount || edgeCount < totalEdgeCount;
   return (
     <GlassPanel className={cn("flex items-center gap-0.5 p-1.5", className)}>
+      {/* Counts stack on two lines so the pill fits the 21rem right rail
+          instead of wrapping word by word. */}
       <span
-        className="px-2 font-mono text-[11px] text-muted-foreground"
+        className="flex flex-col whitespace-nowrap px-2 font-mono text-[10.5px] leading-tight text-muted-foreground"
         title={
           trimmed
             ? "Rendered / loaded — the canvas starts from the most-connected core; double-click nodes to reveal more"
@@ -56,9 +58,22 @@ export default function GraphStatsPanel({
               : "Nodes and edges currently on the canvas"
         }
       >
-        {trimmed
-          ? `${nodeCount}/${totalNodeCount} nodes · ${edgeCount}/${totalEdgeCount} edges`
-          : `${nodeCount.toLocaleString()} nodes · ${edgeCount.toLocaleString()} edges`}
+        <span>
+          <span className="font-medium text-foreground">
+            {trimmed
+              ? `${nodeCount.toLocaleString()}/${totalNodeCount.toLocaleString()}`
+              : nodeCount.toLocaleString()}
+          </span>{" "}
+          nodes
+        </span>
+        <span>
+          <span className="font-medium text-foreground">
+            {trimmed
+              ? `${edgeCount.toLocaleString()}/${totalEdgeCount.toLocaleString()}`
+              : edgeCount.toLocaleString()}
+          </span>{" "}
+          edges
+        </span>
       </span>
 
       {trimmable ? (

@@ -952,9 +952,10 @@ function GraphWorkspace({
           overflow clip stops the canvas's absolutely-positioned layers from
           painting over the (static-positioned) panel. */}
       <div className="relative min-w-0 flex-1 overflow-hidden">
-        {/* Base dot grid behind the canvas; the error/empty states bring their
-          own faded grid via EmptyState, so skip it there. */}
-        {canvasState === "loading" || canvasState === "ready" ? (
+        {/* Base dot grid behind the loading skeleton; the ready canvas paints
+          its own parallax grid, and the error/empty states bring their own
+          faded grid via EmptyState. */}
+        {canvasState === "loading" ? (
           <div className="pot-dots absolute inset-0" aria-hidden />
         ) : null}
 

@@ -69,6 +69,8 @@ This repository contains the **User Interface** for the Potpie platform.
 
 ## Quick Start
 
+Requires Node.js 22.6.0 or later. Use pnpm for dependency installation and scripts.
+
 ```bash
 # 1. Clone the repository
 git clone https://github.com/potpie-ai/potpie-ui.git
